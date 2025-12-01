@@ -54,7 +54,8 @@ namespace CrystalTerror
             this.PluginInterface.UiBuilder.OpenMainUi += this.OpenMainUi;
 
             // Register chat commands to open the window
-            this.CommandManager?.AddHandler("/crystaline", new CommandInfo(this.OnOpenCommand) { HelpMessage = "Open the CrystalTerror window." });
+            this.CommandManager?.AddHandler("/crystal", new CommandInfo(this.OnOpenCommand) { HelpMessage = "Open the CrystalTerror window." });
+            this.CommandManager?.AddHandler("/crystals", new CommandInfo(this.OnOpenCommand) { HelpMessage = "Open the CrystalTerror window." });
             this.CommandManager?.AddHandler("/ct", new CommandInfo(this.OnOpenCommand) { HelpMessage = "Open the CrystalTerror window." });
             this.CommandManager?.AddHandler("/ctdump", new CommandInfo(this.OnDumpCommand) { HelpMessage = "Copy raw inventory to clipboard." });
 
@@ -71,7 +72,8 @@ namespace CrystalTerror
             this.PluginInterface.UiBuilder.OpenMainUi -= this.OpenMainUi;
             if (this.CommandManager != null)
             {
-                this.CommandManager.RemoveHandler("/crystaline");
+                this.CommandManager.RemoveHandler("/crystal");
+                this.CommandManager.RemoveHandler("/crystals");
                 this.CommandManager.RemoveHandler("/ct");
                 this.CommandManager.RemoveHandler("/ctdump");
             }
