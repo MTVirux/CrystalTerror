@@ -1,0 +1,17 @@
+<Project Sdk="Dalamud.NET.Sdk/13.0.0">
+  <PropertyGroup>
+    <AssemblyName>CrystalTerror</AssemblyName>
+    <Authors>MTVirux</Authors>
+    <Description>Crystal inventory tracker for shards/crystals/clusters.</Description>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <TargetFramework>net9.0-windows</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="CrystalTerror.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,20 @@
+{
+  "Author": "MTVirux",
+  "DalamudApiLevel": 13,
+  "Id": "CrystalTerror",
+  "Name": "Crystal Terror",
+  "Punchline": "Track your shards, crystals and clusters across player and retainers",
+  "Description": "Shows a table with counts of shards, crystals and clusters in player inventory and retainer pages. Commands: /crystaline, /ct - open the plugin window.",
+  "RepositoryUrl": "https://github.com/MTVirux/CrystalTerror",
+  "Tags": [
+    "Inventory",
+    "Account",
+    "Tracking",
+    "Crystal",
+    "Shards",
+    "Clusters",
+    "Management",
+    "Terror",
+    "CT"
+  ]
+}
