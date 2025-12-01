@@ -22,11 +22,11 @@ namespace CrystalTerror
                 if (obj is string s) return s;
                 var t = obj.GetType();
 
-                // Special-case Lumina Excel row types: try to find a Name-like property and extract recursively
+                // Special-case Lumina Excel row types: Try to find a Name-like property and extract recursively
                 var full = t.FullName ?? string.Empty;
                 if (full.StartsWith("Lumina.Excel.Sheets."))
                 {
-                    // try common property names first
+                    // Try common property names first
                     var candidates = new[] { "Name", "Name English", "Name_en", "Name_English", "NameRaw", "PlaceName", "TownName", "Value" };
                     foreach (var cn in candidates)
                     {
@@ -39,7 +39,7 @@ namespace CrystalTerror
                         }
                     }
 
-                    // fallback: inspect all properties for a Name-like suffix
+                    // Fallback: inspect all properties for a Name-like suffix
                     foreach (var p in t.GetProperties())
                     {
                         if (p.Name.EndsWith("Name", StringComparison.OrdinalIgnoreCase) || p.Name.IndexOf("name", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -55,7 +55,7 @@ namespace CrystalTerror
                     }
                 }
 
-                // common patterns: property "Name" or "Value"
+                // Common patterns: property "Name" or "Value"
                 var prop = t.GetProperty("Name") ?? t.GetProperty("Value");
                 if (prop != null)
                 {
@@ -64,7 +64,7 @@ namespace CrystalTerror
                     if (!string.IsNullOrWhiteSpace(rec) && !rec.Contains("Lumina.")) return rec;
                 }
 
-                // fallback to ToString()
+                // Fallback to ToString()
                 var to = obj.ToString() ?? string.Empty;
                 return to;
             }
@@ -103,7 +103,7 @@ namespace CrystalTerror
                     catch { }
                 }
 
-                // Fallback: try ObjectTable.LocalPlayer (may not have world info)
+                // Fallback: Try ObjectTable.LocalPlayer (may not have world info)
                 try
                 {
                     var ot = this.plugin?.ObjectTable;
@@ -196,7 +196,7 @@ namespace CrystalTerror
         private readonly CrystalTerror plugin;
         private readonly System.Collections.Generic.Dictionary<string, bool> expanded = new(System.StringComparer.OrdinalIgnoreCase);
         private int selectedTab = 0; // 0=Overview,1=Filters,2=Settings
-        // UI: selected retainers filter (entries formatted as "Key|RetainerName"; use "Key|*" for all retainers of a character)
+        // UI: Selected retainers filter (entries formatted as "Key|RetainerName"; use "Key|*" for all retainers of a character)
         private System.Collections.Generic.HashSet<string> selectedRetainers = new(System.StringComparer.OrdinalIgnoreCase);
         private string retainerSearch = string.Empty;
         // Cache Lumina id map for shards/crystals/clusters to avoid rebuilding every draw
@@ -204,9 +204,9 @@ namespace CrystalTerror
         // Cache last scan results and throttle scans to reduce draw-time work
         private System.Collections.Generic.List<CristalRow>? cachedCounts = null;
         private System.DateTime lastScanTime = System.DateTime.MinValue;
-        private int scanIntervalMs = 1000; // refresh once per second by default
+        private readonly UiSettings uiSettings = new UiSettings();
         private bool didInitialScanAttempt = false;
-        // removed unused field didExtendedPlayerScan
+        // Removed unused field didExtendedPlayerScan
         // Background IPC worker fields
         private System.Threading.CancellationTokenSource? ipcCancellation;
         private System.Threading.Tasks.Task? ipcTask;
@@ -214,7 +214,7 @@ namespace CrystalTerror
         // Debounced config save fields
         private System.Threading.CancellationTokenSource? saveCts;
         private readonly object saveLock = new();
-        private readonly int saveDelayMs = 3000; // 3 seconds debounce
+        
         // Background scan guard to avoid concurrent heavy scans on the main thread
         private bool scanInProgress = false;
         private readonly object scanGuard = new();
@@ -222,10 +222,19 @@ namespace CrystalTerror
         private System.Collections.Generic.Dictionary<ulong, (System.DateTime lastUpdatedUtc, System.Collections.Generic.Dictionary<string, long> counts)> perRetainerAggregates = new();
         // Snapshot of known retainer ids (set by main-thread scan) for the background worker to use
         private System.Collections.Generic.List<ulong> retainerIdSnapshot = new();
-        private int ipcIntervalMs = 2000; // background IPC refresh interval
+        
 
         private static readonly string[] Elements = new[] { "Fire", "Ice", "Wind", "Earth", "Lightning", "Water" };
         private static readonly string[] Types = new[] { "Shard", "Crystal", "Cluster" };
+        private static string ElementShort(string el)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(el)) return el ?? string.Empty;
+                return el.Length >= 2 ? el.Substring(0, 2) : el;
+            }
+            catch { return el ?? string.Empty; }
+        }
         // Relevant item RowIds for elemental shards/crystals/clusters (inclusive range provided by user)
         private static readonly System.Collections.Generic.HashSet<uint> RelevantItemIds =
             new(System.Linq.Enumerable.Range(2, 18).Select(i => (uint)i));
@@ -273,7 +282,7 @@ namespace CrystalTerror
             }
             catch
             {
-                // ignore failures here; ScanInventories will attempt again if needed
+                // Ignore failures here; ScanInventories will attempt again if needed
             }
             // Start background IPC worker
             try
@@ -286,7 +295,7 @@ namespace CrystalTerror
                     {
                         try
                         {
-                            // Snapshot retainer ids and idMap for thread-safety
+                                // Snapshot retainer ids and idMap for thread-safety
                             List<ulong> snapIds;
                             lock (this.ipcLock) { snapIds = new List<ulong>(this.retainerIdSnapshot); }
                             var idMapLocal = this.idMapAll;
@@ -322,8 +331,8 @@ namespace CrystalTerror
                             }
                         }
                         catch { }
-                        // wait with cancellation support
-                        try { if (token.WaitHandle.WaitOne(this.ipcIntervalMs)) break; } catch { break; }
+                        // Wait with cancellation support
+                        try { if (token.WaitHandle.WaitOne(this.uiSettings.Timing.IpcIntervalMs)) break; } catch { break; }
                     }
                 }, token);
             }
@@ -526,16 +535,16 @@ namespace CrystalTerror
 
         public override void Draw()
         {
-            // Draw centered checkbox groups: Types (Shard/Crystal/Cluster) above Elements
+                // Draw centered checkbox groups: Types (Shard/Crystal/Cluster) above Elements
             var changedAny = false;
 
             void DrawCenteredGroup(string id, string[] labels, System.Collections.Generic.Dictionary<string, bool> map)
             {
                 ImGui.PushID(id);
-                // compute approximate total width
+                // Compute approximate total width
                 var avail = ImGui.GetContentRegionAvail().X;
                 var total = 0.0f;
-                var spacing = 20.0f; // approximate spacing between checkboxes
+                var spacing = this.uiSettings.Spacing.CenteredGroupSpacing; // approximate spacing between checkboxes
                 for (var i = 0; i < labels.Length; ++i)
                 {
                     var ts = ImGui.CalcTextSize(labels[i]);
@@ -584,7 +593,7 @@ namespace CrystalTerror
             try
             {
                 var pad = ImGui.GetStyle().FramePadding.X;
-                var btnSize = 20.0f;
+                var btnSize = this.uiSettings.Spacing.SettingsButtonSize;
                 var xpos = ImGui.GetWindowContentRegionMax().X - btnSize - pad;
                 ImGui.SetCursorPosX(xpos);
                 if (ImGui.Button("⚙##ct_settings", new System.Numerics.Vector2(btnSize, btnSize)))
@@ -613,6 +622,7 @@ namespace CrystalTerror
                     var now = System.DateTime.Now;
                     var resInit = this.ScanInventories();
                     this.cachedCounts = resInit ?? new System.Collections.Generic.List<CristalRow>();
+                    try { this.EnsureSaveIfCachedValid(); } catch { }
                     this.lastScanTime = now;
                 }
                 catch { }
@@ -660,7 +670,7 @@ namespace CrystalTerror
                                 var sc = kv.Value;
                                 var display = NormalizeStoredDisplay(sc?.Name ?? string.Empty, key);
 
-                                // simple search filter (matches display or any retainer name)
+                                // Simple search filter (matches display or any retainer name)
                                 if (!string.IsNullOrWhiteSpace(this.retainerSearch))
                                 {
                                     var s = this.retainerSearch;
@@ -757,15 +767,8 @@ namespace CrystalTerror
 
             if (this.selectedTab == 0)
             {
-                if (ImGui.BeginTable("cristalTable", colCount, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
+                // Render each character as its own collapsible header + table. No outer table wrapper so headers can span full width.
                 {
-                ImGui.TableSetupColumn("Character");
-                foreach (var ty in enabledTypes)
-                {
-                    foreach (var el in enabledElements)
-                        ImGui.TableSetupColumn(ty + " " + el);
-                }
-                ImGui.TableHeadersRow();
 
                 // Build groups: each group represents one character (player) and its retainers
                 var groups = new System.Collections.Generic.List<(string UniqueKey, string DisplayName, System.Collections.Generic.Dictionary<string,long> PlayerCounts, System.Collections.Generic.List<CristalRow> Retainers)>();
@@ -780,7 +783,7 @@ namespace CrystalTerror
                         if (!string.IsNullOrEmpty(currentKey) && string.Equals(key, currentKey, StringComparison.OrdinalIgnoreCase)
                             && this.cachedCounts != null && this.cachedCounts.Count > 0)
                         {
-                                // build group from live cachedCounts
+                                // Build group from live cachedCounts
                                 var playerRow = this.cachedCounts[0];
                                 var retainerRows = this.cachedCounts.Skip(1).ToList();
                                 groups.Add((key, NormalizeStoredDisplay(playerRow.Character, key), new System.Collections.Generic.Dictionary<string,long>(playerRow.ElementCounts, System.StringComparer.OrdinalIgnoreCase), retainerRows));
@@ -808,7 +811,7 @@ namespace CrystalTerror
                     groups.Insert(0, (currentKey, NormalizeStoredDisplay(playerRow.Character, currentKey), new System.Collections.Generic.Dictionary<string,long>(playerRow.ElementCounts, System.StringComparer.OrdinalIgnoreCase), retainerRows));
                 }
 
-                // If selection filter is active, limit groups/retainters to the selected set
+                // If selection filter is active, limit groups/retainers to the selected set
                 var groupsToRender = groups;
                 try
                 {
@@ -838,119 +841,246 @@ namespace CrystalTerror
                 // Render each character group as a collapsible section
                 foreach (var g in groupsToRender)
                 {
-                    // Player row with expand/collapse toggle
-                    ImGui.TableNextRow();
-                    ImGui.TableNextColumn();
                     ImGui.PushID(g.UniqueKey);
-                    var isOpen = this.expanded.TryGetValue(g.UniqueKey, out var openVal) ? openVal : false;
-                    var hasRetainers = g.Retainers != null && g.Retainers.Count > 0;
-                    if (hasRetainers)
-                    {
-                        if (ImGui.SmallButton(isOpen ? "v" : ">"))
-                        {
-                            isOpen = !isOpen;
-                            this.expanded[g.UniqueKey] = isOpen;
-                        }
-                        ImGui.SameLine();
-                    }
-                    else
-                    {
-                        // Ensure previous expanded state is cleared for groups without retainers
-                        try { this.expanded[g.UniqueKey] = false; } catch { }
-                        // Reserve space where the button would be so text aligns
-                        try
-                        {
-                            var cur = ImGui.GetCursorPosX();
-                            ImGui.SetCursorPosX(cur + 22f);
-                        }
-                        catch { }
-                    }
+                    var headerLabel = (string.IsNullOrWhiteSpace(g.DisplayName) ? g.UniqueKey : g.DisplayName) + "##" + g.UniqueKey;
 
-                    ImGui.Text(g.DisplayName);
-                    ImGui.PopID();
-
-                    // Sum retainer counts
+                    // Compute totals for the header: player + retainers for each column
                     var summedRetainers = new System.Collections.Generic.Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-                    foreach (var rr in g.Retainers)
+                    if (g.Retainers != null)
                     {
-                        // If selection filter active and this retainer is not selected, skip its counts
-                        if (this.selectedRetainers != null && this.selectedRetainers.Count > 0)
+                        foreach (var rr in g.Retainers)
                         {
-                            var allKey = g.UniqueKey + "|*";
-                            var entryKey = g.UniqueKey + "|" + rr.Character;
-                            if (!this.selectedRetainers.Contains(allKey) && !this.selectedRetainers.Contains(entryKey))
-                                continue;
-                        }
-                        foreach (var kv in rr.ElementCounts)
-                        {
-                            summedRetainers.TryGetValue(kv.Key, out var cur); summedRetainers[kv.Key] = cur + kv.Value;
-                        }
-                    }
-
-                    // If collapsed, display player + retainers totals; if expanded, show player-only
-                    var displayCounts = new System.Collections.Generic.Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-                    foreach (var kv in g.PlayerCounts) displayCounts[kv.Key] = kv.Value;
-                    if (!isOpen)
-                    {
-                        foreach (var kv in summedRetainers)
-                        {
-                            displayCounts.TryGetValue(kv.Key, out var cur); displayCounts[kv.Key] = cur + kv.Value;
-                        }
-                    }
-
-                    foreach (var ty in enabledTypes)
-                    {
-                        foreach (var el in enabledElements)
-                        {
-                            ImGui.TableNextColumn();
-                            var key = ty + ":" + el;
-                            var val = displayCounts.TryGetValue(key, out var cv) ? cv : 0L;
-                            ImGui.Text(val.ToString());
-                        }
-                    }
-
-                    // If expanded, render retainer rows as indented child rows
-                    if (isOpen && g.Retainers.Count > 0)
-                    {
-                        foreach (var r in g.Retainers)
-                        {
-                            // If selection filter active and this retainer is not selected, skip rendering
+                            // Respect selection filter when computing totals
                             if (this.selectedRetainers != null && this.selectedRetainers.Count > 0)
                             {
                                 var allKey = g.UniqueKey + "|*";
-                                var entryKey = g.UniqueKey + "|" + r.Character;
+                                var entryKey = g.UniqueKey + "|" + rr.Character;
                                 if (!this.selectedRetainers.Contains(allKey) && !this.selectedRetainers.Contains(entryKey))
                                     continue;
                             }
-
-                            ImGui.TableNextRow();
-                            ImGui.TableNextColumn();
-                            ImGui.Indent(20);
-                            ImGui.Text(r.Character);
-                            ImGui.Unindent();
-
-                            foreach (var ty in enabledTypes)
+                            foreach (var kv in rr.ElementCounts)
                             {
-                                foreach (var el in enabledElements)
-                                {
-                                    ImGui.TableNextColumn();
-                                    var key = ty + ":" + el;
-                                    var val = (r.ElementCounts != null && r.ElementCounts.TryGetValue(key, out var cv)) ? cv : 0;
-                                    ImGui.Text(val.ToString());
-                                }
+                                summedRetainers.TryGetValue(kv.Key, out var cur); summedRetainers[kv.Key] = cur + kv.Value;
                             }
                         }
                     }
-                }
 
-                ImGui.EndTable();
+                    var displayCountsForHeader = new System.Collections.Generic.Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+                    if (g.PlayerCounts != null)
+                    {
+                        foreach (var kv in g.PlayerCounts) displayCountsForHeader[kv.Key] = kv.Value;
+                    }
+                    foreach (var kv in summedRetainers)
+                    {
+                        displayCountsForHeader.TryGetValue(kv.Key, out var cur); displayCountsForHeader[kv.Key] = cur + kv.Value;
+                    }
+
+                    // Prepare column keys in order (skip character column)
+                    var colKeys = new System.Collections.Generic.List<string>();
+                    foreach (var ty in enabledTypes)
+                        foreach (var el in enabledElements)
+                            colKeys.Add(ty + ":" + el);
+
+                    // Constrain header label drawing to the character column width so name length doesn't affect column positions.
+                    var contentMin = ImGui.GetWindowContentRegionMin().X;
+                    var contentMax = ImGui.GetWindowContentRegionMax().X;
+                    var totalW = contentMax - contentMin;
+                    var nCols = colCount;
+                    var dataCols = Math.Max(1, nCols - 1);
+
+                    // Increase the base width reserved for the character name to reduce truncation.
+                    // Reserve at least 120px or 20% of the available width, capped to half of total.
+                    // Prefer to shrink the crystal/data columns first down to a minimum before reducing the character column.
+                    var minCharWidth = this.uiSettings.Sizing.MinCharWidth;
+                    var desiredCharWidth = Math.Max(minCharWidth, totalW * 0.20f);
+                    if (desiredCharWidth > totalW * 0.5f) desiredCharWidth = totalW * 0.5f;
+                    var minDataColWidth = this.uiSettings.Sizing.MinDataColWidth; // smallest acceptable width per crystal column before shrinking char column
+                    var charWidth = desiredCharWidth;
+                    var requiredDataTotalMin = minDataColWidth * dataCols;
+                    var availableForDataWithDesiredChar = totalW - desiredCharWidth;
+                    float dataColWidth;
+                    if (availableForDataWithDesiredChar < requiredDataTotalMin)
+                    {
+                        // Need to free up space for data columns. Reduce charWidth down to keep data columns at min width,
+                        // But never below minCharWidth.
+                        var maxCharWidthAllowed = Math.Max(minCharWidth, totalW - requiredDataTotalMin);
+                        if (maxCharWidthAllowed < charWidth)
+                            charWidth = maxCharWidthAllowed;
+                        dataColWidth = (totalW - charWidth) / (float)dataCols;
+                        if (dataColWidth < 1.0f) dataColWidth = 1.0f;
+                    }
+                    else
+                    {
+                        dataColWidth = (totalW - charWidth) / (float)dataCols;
+                    }
+
+                    // Truncate the visible header name so it cannot push the column starts.
+                    var fullName = string.IsNullOrWhiteSpace(g.DisplayName) ? g.UniqueKey : g.DisplayName;
+                    var visibleName = fullName;
+                    try
+                    {
+                        var arrowReserve = this.uiSettings.Spacing.ArrowReserve; // space for arrow and padding
+                        var maxLabelWidth = Math.Max(this.uiSettings.Sizing.MinLabelWidth, charWidth - arrowReserve - this.uiSettings.Spacing.LabelInnerPadding);
+                        var txtSize = ImGui.CalcTextSize(visibleName);
+                        if (txtSize.X > maxLabelWidth)
+                        {
+                            // Trim and append ellipsis until it fits
+                            var baseName = visibleName;
+                            var keep = baseName.Length;
+                            while (keep > 0 && ImGui.CalcTextSize(baseName.Substring(0, keep) + "...").X > maxLabelWidth)
+                                keep--;
+                            if (keep > 0)
+                                visibleName = baseName.Substring(0, keep) + "...";
+                            else
+                                visibleName = "...";
+                        }
+                    }
+                    catch { }
+
+                    var visibleLabel = visibleName + "##" + g.UniqueKey;
+                    var open = ImGui.CollapsingHeader(visibleLabel, ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.SpanAvailWidth);
+                    if (visibleName != fullName)
+                    {
+                        try { if (ImGui.IsItemHovered()) ImGui.SetTooltip(fullName); } catch { }
+                    }
+                    // If collapsed, display totals aligned to the table columns on the same header line
+                    if (!open)
+                    {
+                        try
+                        {
+                            if (totalW <= 0) { ImGui.SameLine(); ImGui.TextUnformatted(string.Empty); }
+                            else
+                            {
+                                // Render each column value at its column start X (character column is index 0)
+                                for (var ci = 0; ci < colKeys.Count; ++ci)
+                                {
+                                    var k = colKeys[ci];
+                                    var v = displayCountsForHeader.TryGetValue(k, out var vv) ? vv : 0L;
+                                    var vStr = v.ToString();
+
+                                    // Derive type and element from key (format "Type:Element")
+                                    var parts = k.Split(':');
+                                    var ty = parts.Length > 0 ? parts[0] : string.Empty;
+                                    var el = parts.Length > 1 ? parts[1] : string.Empty;
+
+                                    // Show full element name in header labels unless the reserved character column
+                                    // width is below a threshold, in which case use a two-letter abbreviation.
+                                    var headerFullMinWidth = this.uiSettings.Sizing.HeaderFullMinWidth; // if charWidth is below this, abbreviate
+                                    var useFullElement = charWidth >= headerFullMinWidth;
+                                    var elemLabel = useFullElement ? el : ElementShort(el);
+                                    var label = enabledTypes.Length == 1 ? (elemLabel + ":") : (ty + " " + elemLabel + ":");
+
+                                    try
+                                    {
+                                        // Column left and right in absolute coords
+                                        var columnLeft = ImGui.GetWindowPos().X + contentMin + charWidth + dataColWidth * ci;
+                                        var columnRight = ImGui.GetWindowPos().X + contentMin + charWidth + dataColWidth * (ci + 1);
+
+                                        // Draw label left-aligned inside column, then value immediately after the label
+                                        ImGui.SameLine();
+                                        var colRelLeft = columnLeft - ImGui.GetWindowPos().X + 4;
+                                        var labelSz = ImGui.CalcTextSize(label);
+                                        ImGui.SetCursorPosX(colRelLeft + this.uiSettings.Spacing.ColumnLeftPadding);
+                                        ImGui.TextUnformatted(label);
+                                        ImGui.SameLine();
+                                        try
+                                        {
+                                            ImGui.SetCursorPosX(colRelLeft + labelSz.X + this.uiSettings.Spacing.LabelValueGap);
+                                        }
+                                        catch { }
+                                    }
+                                    catch { }
+
+                                    ImGui.TextUnformatted(vStr);
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+                    ImGui.PopID();
+
+                    if (!open) continue;
+
+                    var tableId = "cristalTable_" + g.UniqueKey;
+                    if (ImGui.BeginTable(tableId, colCount, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders))
+                    {
+                        // First column fixed to charWidth so its width doesn't vary by name length
+                        ImGui.TableSetupColumn("Character", ImGuiTableColumnFlags.WidthFixed, charWidth);
+                        // Set each crystal/data column to a fixed equal width so all have the same space
+                        foreach (var ty in enabledTypes)
+                        {
+                            foreach (var el in enabledElements)
+                            {
+                                // Use full element name for the table column header
+                                ImGui.TableSetupColumn(ty + " " + el, ImGuiTableColumnFlags.WidthFixed, dataColWidth);
+                            }
+                        }
+                        ImGui.TableHeadersRow();
+
+                        // Player row
+                        ImGui.TableNextRow();
+                        ImGui.TableNextColumn();
+                        ImGui.Text(g.DisplayName);
+                        var colIdx = 0;
+                        foreach (var ty in enabledTypes)
+                        {
+                            foreach (var el in enabledElements)
+                            {
+                                ImGui.TableNextColumn();
+                                var key = ty + ":" + el;
+                                var val = g.PlayerCounts != null && g.PlayerCounts.TryGetValue(key, out var cv) ? cv : 0L;
+                                var valStr = val.ToString();
+                                ImGui.TextUnformatted(valStr);
+                                colIdx++;
+                            }
+                        }
+
+                        // Retainer rows
+                        if (g.Retainers != null && g.Retainers.Count > 0)
+                        {
+                            foreach (var r in g.Retainers)
+                            {
+                                // If selection filter active and this retainer is not selected, skip rendering
+                                if (this.selectedRetainers != null && this.selectedRetainers.Count > 0)
+                                {
+                                    var allKey = g.UniqueKey + "|*";
+                                    var entryKey = g.UniqueKey + "|" + r.Character;
+                                    if (!this.selectedRetainers.Contains(allKey) && !this.selectedRetainers.Contains(entryKey))
+                                        continue;
+                                }
+
+                                ImGui.TableNextRow();
+                                ImGui.TableNextColumn();
+                                ImGui.Indent((int)this.uiSettings.Spacing.RetainerIndent);
+                                ImGui.Text(r.Character);
+                                ImGui.Unindent();
+
+                                var colIdx2 = 0;
+                                foreach (var ty in enabledTypes)
+                                {
+                                    foreach (var el in enabledElements)
+                                    {
+                                        ImGui.TableNextColumn();
+                                        var key = ty + ":" + el;
+                                        var val = (r.ElementCounts != null && r.ElementCounts.TryGetValue(key, out var cv)) ? cv : 0;
+                                        var valStr = val.ToString();
+                                        ImGui.TextUnformatted(valStr);
+                                        colIdx2++;
+                                    }
+                                }
+                            }
+                        }
+
+                        ImGui.EndTable();
+                    }
+                }
                 }
             }
 
             try { ImGui.EndChild(); } catch { }
         }
 
-        // Allow external callers (ConfigWindow via Plugin) to switch the currently selected tab
+                // Allow external callers (ConfigWindow via Plugin) to switch the currently selected tab
         public void SetSelectedTab(int tab)
         {
             if (tab < 0) tab = 0;
@@ -981,7 +1111,7 @@ namespace CrystalTerror
                 return results;
             }
 
-            // helper to count in a container. counts: "shard", "cluster", and per-element keys like "Fire", "Ice"
+            // Helper to count in a container. Counts: "shard", "cluster", and per-element keys like "Fire", "Ice"
             static void CountContainer(InventoryContainer* container, InventoryType invType, Dictionary<string, long> counts, string[] elements, IDataManager dataManager, System.Collections.Generic.Dictionary<uint, (string type, string element)>? idMap = null)
             {
                 if (container == null)
@@ -1018,7 +1148,7 @@ namespace CrystalTerror
                     if (!matched)
                         continue;
 
-                    // read qty
+                    // Read qty
                     long qty = 1;
                     try
                     {
@@ -1073,12 +1203,12 @@ namespace CrystalTerror
 
             // Also scan other non-retainer containers not covered in PlayerInventoriesToScan
             // (handles uncommon storage locations). This avoids relying on a one-time fallback
-            // and ensures crystals stored in other containers are counted.
+            // And ensure crystals stored in other containers are counted.
             try
             {
                 foreach (InventoryType t in Enum.GetValues(typeof(InventoryType)))
                 {
-                    // skip retainer pages and retainer crystals (we only want character containers here)
+                    // Skip retainer pages and retainer crystals (we only want character containers here)
                     if (t >= InventoryType.RetainerPage1 && t <= InventoryType.RetainerPage7) continue;
                     if (t == InventoryType.RetainerCrystals) continue;
                     if (scannedTypes.Contains(t)) continue; // already scanned above
@@ -1086,7 +1216,7 @@ namespace CrystalTerror
                     var cont = inventory->GetInventoryContainer(t);
                     if (cont == null || cont->Size == 0) continue;
 
-                    // measure counts before/after to detect if this container contributed
+                    // Measure counts before/after to detect if this container contributed
                     long beforeTotal = playerCounts.Values.Sum();
                     CountContainer(cont, t, playerCounts, Elements, this.plugin.DataManager, this.idMapAll != null && this.idMapAll.Count > 0 ? this.idMapAll : null);
                     long afterTotal = playerCounts.Values.Sum();
@@ -1096,7 +1226,7 @@ namespace CrystalTerror
                     }
                 }
 
-                // update the cached first row to reflect merged player counts
+                // Update the cached first row to reflect merged player counts
                 if (results.Count > 0)
                     results[0] = new CristalRow(playerName ?? string.Empty, playerCounts);
             }
@@ -1128,7 +1258,7 @@ namespace CrystalTerror
                 }
                 catch
                 {
-                    // ignore failures and fall back to showing up to maxDirectPages
+                    // Ignore failures and fall back to showing up to maxDirectPages
                     actualPages = maxDirectPages;
                 }
 
@@ -1138,7 +1268,7 @@ namespace CrystalTerror
                     var t = (InventoryType)((int)InventoryType.RetainerPage1 + pageIndex);
                     var pageNumber = (int)(t - InventoryType.RetainerPage1) + 1;
                     var cont = inventory->GetInventoryContainer(t);
-                    // if container is null, still add an empty row so UI rows remain stable
+                    // If container is null, still add an empty row so UI rows remain stable
                     var rCounts = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
                     if (cont != null)
                     {
@@ -1155,7 +1285,7 @@ namespace CrystalTerror
                     }
                     catch
                     {
-                        // ignore failures
+                        // Ignore failures
                     }
 
                     // If we have AllaganTools IPC and can resolve a retainer id for this page, merge RetainerCrystals counts into this retainer
@@ -1171,7 +1301,7 @@ namespace CrystalTerror
                                 {
                                     if (this.plugin.Config.SkipDisabledRetainers)
                                         continue;
-                                    // if not skipping, still mark this retainer handled so it's not double-added later
+                                    // If not skipping, still mark this retainer handled so it's not double-added later
                                     handledRetainerIds.Add(ret->RetainerId);
                                 }
                                 else
@@ -1221,7 +1351,7 @@ namespace CrystalTerror
                         }
                         catch
                         {
-                            // ignore ipc/retainer lookup errors
+                            // Ignore ipc/retainer lookup errors
                         }
                     }
 
@@ -1260,7 +1390,7 @@ namespace CrystalTerror
                 }
 
                 // If we have AllaganTools IPC, also enumerate up to 10 sorted retainers and add rows for any retainers
-                // that don't map to the standard RetainerPage1..RetainerPage7 containers (handles retainer slots 8..10)
+                // That don't map to the standard RetainerPage1..RetainerPage7 containers (handles retainer slots 8..10)
                 if (itemCountIpc != null)
                 {
                     try
@@ -1273,7 +1403,7 @@ namespace CrystalTerror
                             if (handledRetainerIds.Contains(ret->RetainerId)) continue;
 
                             var rid = ret->RetainerId;
-                            // collect retainer id for background worker
+                            // Collect retainer id for background worker
                             collectedRetainerIds.Add(rid);
                             var rCounts = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
                             if (idMap != null)
@@ -1302,10 +1432,10 @@ namespace CrystalTerror
                     }
                     catch
                     {
-                        // ignore failures
+                        // Ignore failures
                     }
                 }
-                // publish collected retainer ids snapshot for background IPC worker
+                // Publish collected retainer ids snapshot for background IPC worker
                 try { lock (this.ipcLock) { this.retainerIdSnapshot = collectedRetainerIds; } } catch { }
             }
 
@@ -1324,7 +1454,7 @@ namespace CrystalTerror
                 // If we don't have a detected world, do not persist stored character data
                 if (string.IsNullOrWhiteSpace(worldForKey) || string.IsNullOrWhiteSpace(playerName) || string.Equals(playerName, "Player", System.StringComparison.OrdinalIgnoreCase))
                 {
-                    // skip saving to config when we can't form a canonical Name@World key
+                    // Skip saving to config when we can't form a canonical Name@World key
                     return results;
                 }
 
@@ -1338,7 +1468,7 @@ namespace CrystalTerror
                 for (var i = 1; i < results.Count; ++i)
                 {
                     var r = results[i];
-                    // clone counts into serializable dictionary
+                    // Clone counts into serializable dictionary
                     var cd = new System.Collections.Generic.Dictionary<string, long>(r.ElementCounts ?? new System.Collections.Generic.Dictionary<string, long>(), System.StringComparer.OrdinalIgnoreCase);
                     retDict[r.Character ?? string.Empty] = cd;
                 }
@@ -1383,7 +1513,7 @@ namespace CrystalTerror
             try
             {
                 var now = System.DateTime.Now;
-                if ((now - this.lastScanTime).TotalMilliseconds > this.scanIntervalMs)
+                if ((now - this.lastScanTime).TotalMilliseconds > this.uiSettings.Timing.ScanIntervalMs)
                 {
                     // If a scan is already running in background, skip starting another
                     lock (this.scanGuard)
@@ -1400,11 +1530,12 @@ namespace CrystalTerror
                         {
                                     var res = this.ScanInventories();
                                             var safeRes = res ?? new System.Collections.Generic.List<CristalRow>();
-                                            lock (this.scanGuard)
-                                            {
-                                                this.cachedCounts = safeRes;
-                                                this.lastScanTime = System.DateTime.Now;
-                                            }
+                                                lock (this.scanGuard)
+                                                {
+                                                    this.cachedCounts = safeRes;
+                                                    try { this.EnsureSaveIfCachedValid(); } catch { }
+                                                    this.lastScanTime = System.DateTime.Now;
+                                                }
                         }
                         catch { }
                         finally
@@ -1424,6 +1555,7 @@ namespace CrystalTerror
                 // Trigger an immediate scan when inventory changes are reported
                 var res = this.ScanInventories();
                 this.cachedCounts = res ?? new System.Collections.Generic.List<CristalRow>();
+                try { this.EnsureSaveIfCachedValid(); } catch { }
                 this.lastScanTime = System.DateTime.Now;
             }
             catch { }
@@ -1544,7 +1676,7 @@ namespace CrystalTerror
                     try
                     {
                         // WaitOne returns true if the handle was signaled (canceled); false if timeout elapsed
-                        var signaled = ct.WaitHandle.WaitOne(this.saveDelayMs);
+                        var signaled = ct.WaitHandle.WaitOne(this.uiSettings.Timing.SaveDelayMs);
                         if (!signaled)
                         {
                             this.SaveConfigNow();
@@ -1553,6 +1685,146 @@ namespace CrystalTerror
                     catch { }
                 }, ct);
             }
+        }
+
+        // If we have a cached player row that appears valid (readable name and detected home world),
+        // request a debounced save so the live player row is persisted to stored characters.
+        private void EnsureSaveIfCachedValid()
+        {
+            try
+            {
+                if (this.cachedCounts == null || this.cachedCounts.Count == 0) return;
+                var playerRow = this.cachedCounts[0];
+                var playerName = playerRow.Character ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(playerName) || string.Equals(playerName, "Player", StringComparison.OrdinalIgnoreCase)) return;
+                string? world = null;
+                try { world = this.GetLocalPlayerHomeWorld(); } catch { world = null; }
+                if (string.IsNullOrWhiteSpace(world)) return;
+
+                // Looks valid: ensure a stored-character entry exists for this canonical key.
+                try { this.AddStoredCharacterIfMissing(); } catch { }
+            }
+            catch { }
+        }
+
+        // Add a stored-character entry for the cached player row if no canonical key exists yet.
+        // This will not overwrite existing entries — it only creates a new entry when missing.
+        private void AddStoredCharacterIfMissing()
+        {
+            try
+            {
+                if (this.cachedCounts == null || this.cachedCounts.Count == 0) return;
+                var playerRow = this.cachedCounts[0];
+                var playerName = playerRow.Character ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(playerName) || string.Equals(playerName, "Player", StringComparison.OrdinalIgnoreCase)) return;
+
+                string? world = null;
+                try { world = this.GetLocalPlayerHomeWorld(); } catch { world = null; }
+                if (string.IsNullOrWhiteSpace(world)) return;
+
+                var key = playerName + "@" + world;
+
+                var cfg = this.plugin.Config ?? (this.plugin.PluginInterface.GetPluginConfig() as CrystalConfig ?? new CrystalConfig());
+                if (cfg.StoredCharacters == null) cfg.StoredCharacters = new StoredCharactersContainer();
+                if (cfg.StoredCharacters.ByCharacter == null) cfg.StoredCharacters.ByCharacter = new System.Collections.Generic.Dictionary<string, StoredCharacter>(System.StringComparer.OrdinalIgnoreCase);
+
+                var changed = false;
+                // Prefer existing canonical entry if present; capture the actual write key used for logging.
+                var writeKey = key;
+                if (!cfg.StoredCharacters.ByCharacter.TryGetValue(key, out var target))
+                {
+                    // If there's an existing entry with the same stored name, prefer to merge retainers into it
+                    try
+                    {
+                        var match = cfg.StoredCharacters.ByCharacter.FirstOrDefault(kv => string.Equals(kv.Value?.Name ?? string.Empty, playerName ?? string.Empty, StringComparison.OrdinalIgnoreCase));
+                        if (!string.IsNullOrWhiteSpace(match.Key))
+                        {
+                            target = match.Value;
+                            writeKey = match.Key;
+                        }
+                    }
+                    catch { }
+
+                    // If still no target, create a new canonical entry
+                    if (target == null)
+                    {
+                        var stored = new StoredCharacter();
+                        stored.Name = playerName ?? string.Empty;
+                        stored.LastUpdatedUtc = System.DateTime.UtcNow;
+                        stored.PlayerCounts = new System.Collections.Generic.Dictionary<string, long>(playerRow.ElementCounts ?? new System.Collections.Generic.Dictionary<string, long>(), System.StringComparer.OrdinalIgnoreCase);
+                        stored.RetainerCounts = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, long>>(System.StringComparer.OrdinalIgnoreCase);
+                        cfg.StoredCharacters.ByCharacter[key] = stored;
+                        target = stored;
+                        writeKey = key;
+                        changed = true;
+                        try { this.plugin.Log?.Info($"Stored character added: {writeKey} (Name={stored.Name})"); } catch { }
+                        try { this.plugin.Chat?.Print($"Crystal Terror: added stored character {stored.Name} ({writeKey})"); } catch { }
+                    }
+                    else
+                    {
+                        try { this.plugin.Log?.Info($"Merging retainer data into existing stored entry: {writeKey} (Name={playerName})"); } catch { }
+                    }
+                }
+
+                // Ensure target has a RetainerCounts dictionary
+                if (target.RetainerCounts == null)
+                    target.RetainerCounts = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, long>>(System.StringComparer.OrdinalIgnoreCase);
+
+                // Merge retainer rows from cachedCounts (skip index 0 which is player)
+                try
+                {
+                    for (var i = 1; i < this.cachedCounts.Count; ++i)
+                    {
+                        var r = this.cachedCounts[i];
+                        var rn = r.Character ?? string.Empty;
+                        if (string.IsNullOrWhiteSpace(rn)) continue;
+                        // Prepare serializable dictionary for counts
+                        var cd = new System.Collections.Generic.Dictionary<string, long>(r.ElementCounts ?? new System.Collections.Generic.Dictionary<string, long>(), System.StringComparer.OrdinalIgnoreCase);
+
+                        // If we don't already have this retainer stored, add it.
+                        if (!target.RetainerCounts.ContainsKey(rn))
+                        {
+                            target.RetainerCounts[rn] = cd;
+                            changed = true;
+                            try { this.plugin.Log?.Info($"Added retainer counts for {rn} to {writeKey}"); } catch { }
+                            try { this.plugin.Chat?.Print($"Crystal Terror: added retainer {rn} for {playerName} ({writeKey})"); } catch { }
+                        }
+                        else
+                        {
+                            // Existing retainer: compare counts and update any differences (log changes)
+                            try
+                            {
+                                var prev = target.RetainerCounts[rn];
+                                foreach (var ckv in cd)
+                                {
+                                    try
+                                    {
+                                        var ckey = ckv.Key ?? string.Empty;
+                                        var newV = ckv.Value;
+                                        prev.TryGetValue(ckey, out var prevV);
+                                        if (prevV != newV)
+                                        {
+                                            try { this.plugin.Log?.Info($"Retainer counts changed for {writeKey} -> {rn}: {ckey} {prevV} -> {newV}"); } catch { }
+                                            try { this.plugin.Chat?.Print($"Crystal Terror: {rn} counts updated for {playerName}: {ckey} {prevV} -> {newV}"); } catch { }
+                                            prev[ckey] = newV;
+                                            changed = true;
+                                        }
+                                    }
+                                    catch { }
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                }
+                catch { }
+
+                if (changed)
+                {
+                    try { this.plugin.PluginInterface.SavePluginConfig(cfg); } catch { }
+                }
+            }
+            catch { }
         }
 
         private void SaveConfigNow()

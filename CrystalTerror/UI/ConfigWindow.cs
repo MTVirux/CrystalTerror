@@ -97,7 +97,7 @@ namespace CrystalTerror
                 }
                 catch { }
 
-                // Purge confirm
+                // Purge confirmation
                 if (ImGui.BeginPopupModal("PurgeConfirm", ImGuiWindowFlags.AlwaysAutoResize))
                 {
                     ImGui.Text("This will delete all stored character and retainer data. This cannot be undone.");
@@ -120,7 +120,7 @@ namespace CrystalTerror
                     ImGui.EndPopup();
                 }
 
-                // Sanitize confirm
+                // Sanitize confirmation
                 if (ImGui.BeginPopupModal("SanitizeConfirm", ImGuiWindowFlags.AlwaysAutoResize))
                 {
                     ImGui.Text("This will remove stored character entries and retainer data that are malformed or do not follow the canonical 'Name@World' structure.\nIt will also remove placeholder entries like 'Player'.\nThis cannot be undone.");
@@ -133,7 +133,7 @@ namespace CrystalTerror
                         {
                             var cfg_local2 = this.plugin.Config ?? (this.plugin.PluginInterface.GetPluginConfig() as CrystalConfig ?? new CrystalConfig());
 
-                            // Basic sanitation: remove entries without '@' or with invalid names
+                            // Basic sanitization: remove entries without '@' or with invalid names
                             try
                             {
                                 if (cfg_local2.StoredCharacters != null && cfg_local2.StoredCharacters.ByCharacter != null)
