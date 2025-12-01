@@ -1,5 +1,5 @@
 # CrystalTerror
-Crystal notification plugin for XIVLauncher / Dalamud
+Crystal management plugin for XIVLauncher / Dalamud
 
 ## Features
 
