@@ -12,6 +12,10 @@ using Lumina.Excel.Sheets;
 
 namespace CrystalTerror
 {
+    /// <summary>
+    /// Main UI window rendering the crystal/retainer table and controls.
+    /// Contains drawing logic and helpers used by the plugin UI.
+    /// </summary>
     public unsafe class CrystalWindow : Window, IDisposable
     {
         private static string ExtractDisplayString(object? obj)
@@ -395,7 +399,10 @@ namespace CrystalTerror
             catch { }
         }
 
-        // Copy a raw inventory dump (player containers, retainer pages, retainer crystals) to clipboard
+        /// <summary>
+        /// Copy a raw inventory dump (player containers, retainer pages, retainer crystals) to the clipboard.
+        /// Useful for debugging or exporting full item lists.
+        /// </summary>
         public void CopyRawInventoryToClipboard()
         {
             var inventory = InventoryManager.Instance();
@@ -486,6 +493,7 @@ namespace CrystalTerror
             this.idMapAll = map;
         }
 
+        /// <summary>Dispose of the window, unregister events and save the configuration.</summary>
         public void Dispose()
         {
             // Ensure final state saved
@@ -533,6 +541,7 @@ namespace CrystalTerror
             catch { }
         }
 
+        /// <summary>Render the main plugin window contents. Called by the Dalamud UI loop.</summary>
         public override void Draw()
         {
                 // Draw centered checkbox groups: Types (Shard/Crystal/Cluster) above Elements
@@ -1080,8 +1089,8 @@ namespace CrystalTerror
             try { ImGui.EndChild(); } catch { }
         }
 
-                // Allow external callers (ConfigWindow via Plugin) to switch the currently selected tab
-        public void SetSelectedTab(int tab)
+                /// <summary>Set the currently selected tab in the main window (0-based).</summary>
+                public void SetSelectedTab(int tab)
         {
             if (tab < 0) tab = 0;
             this.selectedTab = tab;

@@ -7,6 +7,10 @@ using Lumina.Excel.Sheets;
 
 namespace CrystalTerror
 {
+    /// <summary>
+    /// Configuration window used to display and edit plugin settings.
+    /// Provides UI controls for display, filters and data management actions.
+    /// </summary>
     public unsafe class ConfigWindow : Window, IDisposable
     {
     private readonly CrystalTerror plugin;
@@ -21,6 +25,7 @@ namespace CrystalTerror
             InventoryType.Inventory4,
         };
 
+        /// <summary>Creates the configuration window bound to the given plugin instance.</summary>
         public ConfigWindow(CrystalTerror plugin) : base("Crystal Terror - Settings")
         {
             this.plugin = plugin;
@@ -31,10 +36,12 @@ namespace CrystalTerror
             };
         }
 
+        /// <summary>Dispose the configuration window and release any resources.</summary>
         public void Dispose()
         {
         }
 
+        /// <summary>Render the configuration UI; called by the Dalamud UI loop.</summary>
         public override void Draw()
         {
             try

@@ -8,8 +8,12 @@ using Dalamud.Game.Text;
 
 namespace CrystalTerror
 {
+    /// <summary>
+    /// Main plugin class implementing <see cref="IDalamudPlugin"/> and wiring UI and Dalamud services.
+    /// </summary>
     public sealed class CrystalTerror : IDalamudPlugin
     {
+        /// <summary>The display name of the plugin.</summary>
         public string Name => "Crystal Terror";
 
         private readonly WindowSystem windowSystem = new(typeof(CrystalTerror).AssemblyQualifiedName);
@@ -27,8 +31,12 @@ namespace CrystalTerror
         public IChatGui Chat { get; init; }
         public IPluginLog Log { get; init; }
 
+        /// <summary>Runtime configuration for the plugin (persisted via Dalamud).</summary>
         public CrystalConfig Config { get; private set; }
 
+        /// <summary>
+        /// Constructs and initializes the plugin, registering UI windows and commands.
+        /// </summary>
         public CrystalTerror(IDalamudPluginInterface pluginInterface, IDataManager dataManager, ICommandManager commandManager, IFramework framework, IClientState clientState, IPlayerState playerState, Dalamud.Plugin.Services.IGameInventory gameInventory, IObjectTable objectTable, IChatGui chat, IPluginLog log)
         {
             this.PluginInterface = pluginInterface;
@@ -64,6 +72,7 @@ namespace CrystalTerror
 #endif
         }
 
+        /// <summary>Dispose the plugin, save config and unregister event handlers.</summary>
         public void Dispose()
         {
             this.PluginInterface.SavePluginConfig(this.Config);
@@ -82,8 +91,10 @@ namespace CrystalTerror
             try { this.configWindow.Dispose(); } catch { }
         }
 
+        /// <summary>Open the plugin configuration window.</summary>
         public void OpenConfigUi() => this.configWindow.IsOpen = true;
 
+        /// <summary>Open the main plugin UI window.</summary>
         public void OpenMainUi() => this.window.IsOpen = true;
 
         private void OnOpenCommand(string command, string arguments)
