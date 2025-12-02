@@ -47,7 +47,43 @@ namespace CrystalTerror
         /// <summary>Persisted scan results stored across characters and retainers.</summary>
         public StoredCharactersContainer StoredCharacters { get; set; } = new StoredCharactersContainer();
 
+        /// <summary>How characters should be ordered in the UI lists.</summary>
+        public CharacterSortMode CharacterOrder { get; set; } = CharacterSortMode.AlphabeticalAsc;
+
+        /// <summary>How worlds should be ordered in the UI lists (separate from character ordering).</summary>
+        public WorldSortMode WorldOrder { get; set; } = WorldSortMode.None;
+
+        /// <summary>Custom manual ordering for worlds. Each entry is a world name, top-to-bottom order.</summary>
+        public System.Collections.Generic.List<string> CustomWorldOrder { get; set; } = new System.Collections.Generic.List<string>();
+
+        /// <summary>Custom manual ordering for characters. Each entry may be a canonical key (`Name@World`) or display name.</summary>
+        public System.Collections.Generic.List<string> CustomCharacterOrder { get; set; } = new System.Collections.Generic.List<string>();
+
         /// <summary>Dummy save called by Dalamud to persist configuration.</summary>
         public void Save() { }
+    }
+
+    /// <summary>Available character ordering modes for the UI.</summary>
+    public enum CharacterSortMode
+    {
+        AlphabeticalAsc = 0,
+        AlphabeticalDesc = 1,
+        LastUpdatedDesc = 2,
+        LastUpdatedAsc = 3,
+        TotalCrystalsDesc = 4,
+        TotalCrystalsAsc = 5,
+        WorldAsc = 6,
+        WorldDesc = 7,
+        Custom = 8,
+        AutoRetainer = 9,
+    }
+
+    /// <summary>Available world ordering modes for the UI.</summary>
+    public enum WorldSortMode
+    {
+        None = 0,
+        WorldAsc = 1,
+        WorldDesc = 2,
+        Custom = 3,
     }
 }

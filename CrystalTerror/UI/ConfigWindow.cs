@@ -63,6 +63,182 @@ namespace CrystalTerror
                         if (ImGui.Checkbox("Skip disabled/unavailable retainers", ref skip)) { cfg_local.SkipDisabledRetainers = skip; try { this.plugin.PluginInterface.SavePluginConfig(cfg_local); } catch { } }
                         var useInvEvents = cfg_local.UseInventoryEvents;
                         if (ImGui.Checkbox("Use inventory events (immediate refresh)", ref useInvEvents)) { cfg_local.UseInventoryEvents = useInvEvents; try { this.plugin.PluginInterface.SavePluginConfig(cfg_local); } catch { } }
+                        
+                    }
+
+                    if (ImGui.CollapsingHeader("Ordering", ImGuiTreeNodeFlags.None))
+                    {
+                        ImGui.Spacing();
+                        ImGui.TextUnformatted("Ordering");
+                        ImGui.Separator();
+                        try
+                        {
+                            // World ordering control (map combo index -> enum explicitly so 'Custom' is shown)
+                            var worldLabels = new[] { "None", "World (A → Z)", "World (Z → A)", "Custom" };
+                            var worldValues = new[] { WorldSortMode.None, WorldSortMode.WorldAsc, WorldSortMode.WorldDesc, WorldSortMode.Custom };
+                            var worldIdx = 0;
+                            try { worldIdx = Array.FindIndex(worldValues, w => w == cfg_local.WorldOrder); if (worldIdx < 0) worldIdx = 0; } catch { worldIdx = 0; }
+                            if (ImGui.Combo("World order", ref worldIdx, worldLabels, worldLabels.Length))
+                            {
+                                try { cfg_local.WorldOrder = worldValues[Math.Max(0, Math.Min(worldIdx, worldValues.Length - 1))]; } catch { cfg_local.WorldOrder = WorldSortMode.None; }
+                                try { this.plugin.PluginInterface.SavePluginConfig(cfg_local); } catch { }
+                            }
+
+                            // Prefill custom worlds when user selects Custom and no list exists
+                            try
+                            {
+                                if (cfg_local.WorldOrder == WorldSortMode.Custom && (cfg_local.CustomWorldOrder == null || cfg_local.CustomWorldOrder.Count == 0))
+                                {
+                                    var stored = cfg_local.StoredCharacters?.ByCharacter;
+                                    var worlds = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+                                    if (stored != null)
+                                    {
+                                        foreach (var kv in stored)
+                                        {
+                                            try
+                                            {
+                                                var key = kv.Key ?? string.Empty;
+                                                var at = key.IndexOf('@');
+                                                var w = (at >= 0 && at < key.Length - 1) ? key.Substring(at + 1) : string.Empty;
+                                                if (!string.IsNullOrWhiteSpace(w)) worlds.Add(w);
+                                            }
+                                            catch { }
+                                        }
+                                    }
+                                    cfg_local.CustomWorldOrder = worlds.OrderBy(x => x, System.StringComparer.OrdinalIgnoreCase).ToList();
+                                    try { this.plugin.PluginInterface.SavePluginConfig(cfg_local); } catch { }
+                                }
+                            }
+                            catch { }
+
+                            // If custom world ordering selected, show manual editor
+                            if (cfg_local.WorldOrder == WorldSortMode.Custom)
+                            {
+                                try
+                                {
+                                    var worldsText = string.Join("\n", cfg_local.CustomWorldOrder ?? new System.Collections.Generic.List<string>());
+                                    if (ImGui.InputTextMultiline("##custom_worlds", ref worldsText, 8192, new System.Numerics.Vector2(-1, 100)))
+                                    {
+                                        var lines = worldsText.Split(new[] { '\r', '\n' }, System.StringSplitOptions.RemoveEmptyEntries)
+                                            .Select(s => s.Trim())
+                                            .Where(s => !string.IsNullOrWhiteSpace(s))
+                                            .ToList();
+                                        cfg_local.CustomWorldOrder = lines;
+                                        try { this.plugin.PluginInterface.SavePluginConfig(cfg_local); } catch { }
+                                    }
+                                    ImGui.TextWrapped("Enter world names, one per line, top-to-bottom order. Unknown worlds will be listed after these.");
+                                }
+                                catch { }
+                            }
+
+                            ImGui.Spacing();
+
+                            // Character ordering control (map combo index -> enum explicitly so 'Custom' and AutoRetainer are shown and saved)
+                            var baseCharLabels = new System.Collections.Generic.List<string>() { "Alphabetical (A → Z)", "Alphabetical (Z → A)", "Last updated (newest)", "Last updated (oldest)", "Total crystals (desc)", "Total crystals (asc)", "Custom" };
+                            var baseCharValues = new System.Collections.Generic.List<CharacterSortMode>() { CharacterSortMode.AlphabeticalAsc, CharacterSortMode.AlphabeticalDesc, CharacterSortMode.LastUpdatedDesc, CharacterSortMode.LastUpdatedAsc, CharacterSortMode.TotalCrystalsDesc, CharacterSortMode.TotalCrystalsAsc, CharacterSortMode.Custom };
+
+                            // Detect AutoRetainer IPC availability so we can present the option
+                            var autoRetainerAvailable = false;
+                            try
+                            {
+                                var candidates = new[] { "AutoRetainer.RetainerOrder", "AutoRetainer.GetCharacterOrder", "AutoRetainer.Order", "AutoRetainer.List" };
+                                foreach (var c in candidates)
+                                {
+                                    try
+                                    {
+                                        var sub = this.plugin.PluginInterface.GetIpcSubscriber<object, object>(c);
+                                        if (sub != null) { autoRetainerAvailable = true; break; }
+                                    }
+                                    catch { }
+                                }
+                            }
+                            catch { }
+
+                            if (autoRetainerAvailable)
+                            {
+                                baseCharLabels.Add("Use AutoRetainer ordering");
+                                baseCharValues.Add(CharacterSortMode.AutoRetainer);
+                            }
+
+                            var charOrderLabels = baseCharLabels.ToArray();
+                            var charOrderValues = baseCharValues.ToArray();
+                            var curIdx = 0;
+                            try { curIdx = Array.FindIndex(charOrderValues, v => v == cfg_local.CharacterOrder); if (curIdx < 0) curIdx = 0; } catch { curIdx = 0; }
+                            if (ImGui.Combo("Character order", ref curIdx, charOrderLabels, charOrderLabels.Length))
+                            {
+                                try { cfg_local.CharacterOrder = charOrderValues[Math.Max(0, Math.Min(curIdx, charOrderValues.Length - 1))]; } catch { cfg_local.CharacterOrder = CharacterSortMode.AlphabeticalAsc; }
+                                try { this.plugin.PluginInterface.SavePluginConfig(cfg_local); } catch { }
+
+                                // Prefill custom characters when user selects Custom and no list exists
+                                try
+                                {
+                                    if (cfg_local.CharacterOrder == CharacterSortMode.Custom && (cfg_local.CustomCharacterOrder == null || cfg_local.CustomCharacterOrder.Count == 0))
+                                    {
+                                        var stored = cfg_local.StoredCharacters?.ByCharacter;
+                                        var list = new System.Collections.Generic.List<string>();
+                                        if (stored != null)
+                                        {
+                                            foreach (var kv in stored)
+                                            {
+                                                try { list.Add(kv.Key ?? string.Empty); } catch { }
+                                            }
+                                        }
+
+                                        // Helper to extract world
+                                        static string KeyWorld(string k)
+                                        {
+                                            if (string.IsNullOrEmpty(k)) return string.Empty;
+                                            var at = k.IndexOf('@');
+                                            return (at >= 0 && at < k.Length - 1) ? k.Substring(at + 1) : string.Empty;
+                                        }
+
+                                        var worldOrder = cfg_local.WorldOrder;
+                                        if (worldOrder == WorldSortMode.Custom && (cfg_local.CustomWorldOrder != null && cfg_local.CustomWorldOrder.Count > 0))
+                                        {
+                                            var worldMap = cfg_local.CustomWorldOrder.Select((w, i) => new { w, i }).ToDictionary(x => x.w, x => x.i, System.StringComparer.OrdinalIgnoreCase);
+                                            list = list.OrderBy(k => worldMap.TryGetValue(KeyWorld(k), out var wi) ? wi : int.MaxValue).ThenBy(k => k, System.StringComparer.OrdinalIgnoreCase).ToList();
+                                        }
+                                        else if (worldOrder == WorldSortMode.WorldAsc)
+                                        {
+                                            list = list.OrderBy(k => KeyWorld(k), System.StringComparer.OrdinalIgnoreCase).ThenBy(k => k, System.StringComparer.OrdinalIgnoreCase).ToList();
+                                        }
+                                        else if (worldOrder == WorldSortMode.WorldDesc)
+                                        {
+                                            list = list.OrderByDescending(k => KeyWorld(k), System.StringComparer.OrdinalIgnoreCase).ThenBy(k => k, System.StringComparer.OrdinalIgnoreCase).ToList();
+                                        }
+                                        else
+                                        {
+                                            list = list.OrderBy(k => k, System.StringComparer.OrdinalIgnoreCase).ToList();
+                                        }
+
+                                        cfg_local.CustomCharacterOrder = list.Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
+                                        try { this.plugin.PluginInterface.SavePluginConfig(cfg_local); } catch { }
+                                    }
+                                }
+                                catch { }
+                            }
+
+                            // If custom character ordering selected, show manual editor
+                            if (cfg_local.CharacterOrder == CharacterSortMode.Custom)
+                            {
+                                try
+                                {
+                                    var charsText = string.Join("\n", cfg_local.CustomCharacterOrder ?? new System.Collections.Generic.List<string>());
+                                    if (ImGui.InputTextMultiline("##custom_chars", ref charsText, 16384, new System.Numerics.Vector2(-1, 200)))
+                                    {
+                                        var lines = charsText.Split(new[] { '\r', '\n' }, System.StringSplitOptions.RemoveEmptyEntries)
+                                            .Select(s => s.Trim())
+                                            .Where(s => !string.IsNullOrWhiteSpace(s))
+                                            .ToList();
+                                        cfg_local.CustomCharacterOrder = lines;
+                                        try { this.plugin.PluginInterface.SavePluginConfig(cfg_local); } catch { }
+                                    }
+                                    ImGui.TextWrapped("Enter characters in the desired order. Use canonical form 'Name@World' where possible; plain names will also match.");
+                                }
+                                catch { }
+                            }
+                        }
+                        catch { }
                     }
 
                     if (ImGui.CollapsingHeader("Filters", ImGuiTreeNodeFlags.None))

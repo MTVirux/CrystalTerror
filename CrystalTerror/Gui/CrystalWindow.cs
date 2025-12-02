@@ -776,7 +776,7 @@ namespace CrystalTerror
                 {
 
                 // Build groups: each group represents one character (player) and its retainers
-                var groups = new System.Collections.Generic.List<(string UniqueKey, string DisplayName, System.Collections.Generic.Dictionary<string,long> PlayerCounts, System.Collections.Generic.List<CristalRow> Retainers)>();
+                var groups = new System.Collections.Generic.List<(string UniqueKey, string DisplayName, System.Collections.Generic.Dictionary<string,long> PlayerCounts, System.Collections.Generic.List<CristalRow> Retainers, System.DateTime LastUpdatedUtc, long TotalCount)>();
 
                 if (stored != null && stored.Count > 0)
                 {
@@ -791,7 +791,11 @@ namespace CrystalTerror
                                 // Build group from live cachedCounts
                                 var playerRow = this.cachedCounts[0];
                                 var retainerRows = this.cachedCounts.Skip(1).ToList();
-                                groups.Add((key, NormalizeStoredDisplay(playerRow.Character, key), new System.Collections.Generic.Dictionary<string,long>(playerRow.ElementCounts, System.StringComparer.OrdinalIgnoreCase), retainerRows));
+                                var playerCountsLive = new System.Collections.Generic.Dictionary<string,long>(playerRow.ElementCounts, System.StringComparer.OrdinalIgnoreCase);
+                                long totalLive = 0;
+                                try { totalLive = playerCountsLive.Values.Sum(); } catch { totalLive = 0; }
+                                try { foreach (var rr in retainerRows) totalLive += rr.ElementCounts.Values.Sum(); } catch { }
+                                groups.Add((key, NormalizeStoredDisplay(playerRow.Character, key), playerCountsLive, retainerRows, System.DateTime.UtcNow, totalLive));
                             continue;
                         }
 
@@ -804,7 +808,11 @@ namespace CrystalTerror
                             foreach (var r in sc.RetainerCounts)
                                 retList.Add(new CristalRow(r.Key, new System.Collections.Generic.Dictionary<string,long>(r.Value ?? new System.Collections.Generic.Dictionary<string,long>(), System.StringComparer.OrdinalIgnoreCase)));
                         }
-                        groups.Add((key, display, playerCountsDict, retList));
+                        long totalStored = 0;
+                        try { totalStored = playerCountsDict.Values.Sum(); } catch { totalStored = 0; }
+                        try { foreach (var rr in retList) totalStored += rr.ElementCounts.Values.Sum(); } catch { }
+                        var lastUpdated = sc?.LastUpdatedUtc ?? System.DateTime.MinValue;
+                        groups.Add((key, display, playerCountsDict, retList, lastUpdated, totalStored));
                     }
                 }
 
@@ -813,8 +821,323 @@ namespace CrystalTerror
                 {
                     var playerRow = this.cachedCounts[0];
                     var retainerRows = this.cachedCounts.Skip(1).ToList();
-                    groups.Insert(0, (currentKey, NormalizeStoredDisplay(playerRow.Character, currentKey), new System.Collections.Generic.Dictionary<string,long>(playerRow.ElementCounts, System.StringComparer.OrdinalIgnoreCase), retainerRows));
+                    var playerCountsLive2 = new System.Collections.Generic.Dictionary<string,long>(playerRow.ElementCounts, System.StringComparer.OrdinalIgnoreCase);
+                    long totalLive2 = 0;
+                    try { totalLive2 = playerCountsLive2.Values.Sum(); } catch { totalLive2 = 0; }
+                    try { foreach (var rr in retainerRows) totalLive2 += rr.ElementCounts.Values.Sum(); } catch { }
+                    groups.Add((currentKey, NormalizeStoredDisplay(playerRow.Character, currentKey), playerCountsLive2, retainerRows, System.DateTime.UtcNow, totalLive2));
                 }
+
+                // Apply ordering selected in settings. We support a separate world ordering plus a character ordering
+                try
+                {
+                    var cfg = this.plugin?.Config;
+
+                    // Migration: if old configs used CharacterOrder to store world ordering (legacy values), move them to WorldOrder
+                    try
+                    {
+                        if (cfg != null && (cfg.WorldOrder == WorldSortMode.None) && (cfg.CharacterOrder == CharacterSortMode.WorldAsc || cfg.CharacterOrder == CharacterSortMode.WorldDesc))
+                        {
+                            cfg.WorldOrder = cfg.CharacterOrder == CharacterSortMode.WorldAsc ? WorldSortMode.WorldAsc : WorldSortMode.WorldDesc;
+                            cfg.CharacterOrder = CharacterSortMode.AlphabeticalAsc;
+                            try { this.plugin.PluginInterface.SavePluginConfig(cfg); } catch { }
+                        }
+                    }
+                    catch { }
+
+                    var worldOrder = cfg?.WorldOrder ?? WorldSortMode.None;
+                    var charOrder = cfg?.CharacterOrder ?? CharacterSortMode.AlphabeticalAsc;
+
+                    // Helper: get world string from UniqueKey (after '@')
+                    static string KeyWorld((string UniqueKey, string DisplayName, System.Collections.Generic.Dictionary<string,long> PlayerCounts, System.Collections.Generic.List<CristalRow> Retainers, System.DateTime LastUpdatedUtc, long TotalCount) g)
+                    {
+                        var k = g.UniqueKey ?? string.Empty;
+                        var at = k.IndexOf('@');
+                        return (at >= 0 && at < k.Length - 1) ? k.Substring(at + 1) : string.Empty;
+                    }
+
+                    // Secondary character sort function based on character order setting
+                    System.Func<(string UniqueKey, string DisplayName, System.Collections.Generic.Dictionary<string,long> PlayerCounts, System.Collections.Generic.List<CristalRow> Retainers, System.DateTime LastUpdatedUtc, long TotalCount), object> secondaryKey = g => string.IsNullOrWhiteSpace(g.DisplayName) ? g.UniqueKey : g.DisplayName;
+                    var secondaryDesc = false;
+                    switch (charOrder)
+                    {
+                        case CharacterSortMode.AlphabeticalAsc:
+                            secondaryKey = g => string.IsNullOrWhiteSpace(g.DisplayName) ? g.UniqueKey : g.DisplayName;
+                            secondaryDesc = false;
+                            break;
+                        case CharacterSortMode.AlphabeticalDesc:
+                            secondaryKey = g => string.IsNullOrWhiteSpace(g.DisplayName) ? g.UniqueKey : g.DisplayName;
+                            secondaryDesc = true;
+                            break;
+                        case CharacterSortMode.LastUpdatedDesc:
+                            secondaryKey = g => g.LastUpdatedUtc;
+                            secondaryDesc = true;
+                            break;
+                        case CharacterSortMode.LastUpdatedAsc:
+                            secondaryKey = g => g.LastUpdatedUtc;
+                            secondaryDesc = false;
+                            break;
+                        case CharacterSortMode.TotalCrystalsDesc:
+                            secondaryKey = g => g.TotalCount;
+                            secondaryDesc = true;
+                            break;
+                        case CharacterSortMode.TotalCrystalsAsc:
+                            secondaryKey = g => g.TotalCount;
+                            secondaryDesc = false;
+                            break;
+                        case CharacterSortMode.AutoRetainer:
+                            // Handled below by trying to query AutoRetainer ordering via IPC; set placeholder to DisplayName
+                            secondaryKey = g => string.IsNullOrWhiteSpace(g.DisplayName) ? g.UniqueKey : g.DisplayName;
+                            secondaryDesc = false;
+                            break;
+                        default:
+                            secondaryKey = g => string.IsNullOrWhiteSpace(g.DisplayName) ? g.UniqueKey : g.DisplayName;
+                            secondaryDesc = false;
+                            break;
+                    }
+
+                    if (worldOrder == WorldSortMode.WorldAsc)
+                    {
+                            if (charOrder == CharacterSortMode.Custom)
+                            {
+                                // Build char index map
+                                var charMap = new System.Collections.Generic.Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
+                                try
+                                {
+                                    if (cfg?.CustomCharacterOrder != null)
+                                    {
+                                        for (var i = 0; i < cfg.CustomCharacterOrder.Count; ++i)
+                                        {
+                                            var k = cfg.CustomCharacterOrder[i];
+                                            if (string.IsNullOrWhiteSpace(k)) continue;
+                                            if (!charMap.ContainsKey(k)) charMap[k] = i;
+                                        }
+                                    }
+                                }
+                                catch { }
+
+                                groups = groups.OrderBy(g => KeyWorld(g), System.StringComparer.OrdinalIgnoreCase)
+                                    .ThenBy(g => {
+                                        var idx = int.MaxValue;
+                                        try
+                                        {
+                                            var key = g.UniqueKey ?? string.Empty;
+                                            if (charMap.TryGetValue(key, out var xi)) idx = xi;
+                                            else if (!string.IsNullOrWhiteSpace(g.DisplayName) && charMap.TryGetValue(g.DisplayName, out xi)) idx = xi;
+                                        }
+                                        catch { }
+                                        return idx;
+                                    })
+                                    .ThenBy(g => secondaryKey(g))
+                                    .ToList();
+                            }
+                            else
+                            {
+                                if (secondaryDesc)
+                                    groups = groups.OrderBy(g => KeyWorld(g), System.StringComparer.OrdinalIgnoreCase).ThenByDescending(g => secondaryKey(g)).ToList();
+                                else
+                                    groups = groups.OrderBy(g => KeyWorld(g), System.StringComparer.OrdinalIgnoreCase).ThenBy(g => secondaryKey(g)).ToList();
+                            }
+                    }
+                    else if (worldOrder == WorldSortMode.WorldDesc)
+                    {
+                            if (charOrder == CharacterSortMode.Custom)
+                            {
+                                var charMap = new System.Collections.Generic.Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
+                                try
+                                {
+                                    if (cfg?.CustomCharacterOrder != null)
+                                    {
+                                        for (var i = 0; i < cfg.CustomCharacterOrder.Count; ++i)
+                                        {
+                                            var k = cfg.CustomCharacterOrder[i];
+                                            if (string.IsNullOrWhiteSpace(k)) continue;
+                                            if (!charMap.ContainsKey(k)) charMap[k] = i;
+                                        }
+                                    }
+                                }
+                                catch { }
+
+                                groups = groups.OrderByDescending(g => KeyWorld(g), System.StringComparer.OrdinalIgnoreCase)
+                                    .ThenBy(g => {
+                                        var idx = int.MaxValue;
+                                        try
+                                        {
+                                            var key = g.UniqueKey ?? string.Empty;
+                                            if (charMap.TryGetValue(key, out var xi)) idx = xi;
+                                            else if (!string.IsNullOrWhiteSpace(g.DisplayName) && charMap.TryGetValue(g.DisplayName, out xi)) idx = xi;
+                                        }
+                                        catch { }
+                                        return idx;
+                                    })
+                                    .ThenBy(g => secondaryKey(g))
+                                    .ToList();
+                            }
+                            else
+                            {
+                                if (secondaryDesc)
+                                    groups = groups.OrderByDescending(g => KeyWorld(g), System.StringComparer.OrdinalIgnoreCase).ThenByDescending(g => secondaryKey(g)).ToList();
+                                else
+                                    groups = groups.OrderByDescending(g => KeyWorld(g), System.StringComparer.OrdinalIgnoreCase).ThenBy(g => secondaryKey(g)).ToList();
+                            }
+                    }
+                        // If the selected character ordering is AutoRetainer, try to fetch ordering via IPC and apply it
+                        else if (charOrder == CharacterSortMode.AutoRetainer)
+                        {
+                            try
+                            {
+                                var orderList = this.TryGetAutoRetainerOrder();
+                                if (orderList != null && orderList.Count > 0)
+                                {
+                                    // Build index map
+                                    var idxMap = new System.Collections.Generic.Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
+                                    for (var i = 0; i < orderList.Count; ++i)
+                                    {
+                                        var k = orderList[i]; if (k == null) continue;
+                                        if (!idxMap.ContainsKey(k)) idxMap[k] = i;
+                                    }
+
+                                    // Order by world (if enabled) then by autoretainer index (matching UniqueKey or DisplayName), else fallback
+                                    if (worldOrder == WorldSortMode.WorldAsc || worldOrder == WorldSortMode.WorldDesc || worldOrder == WorldSortMode.Custom)
+                                    {
+                                        System.Func<(string UniqueKey, string DisplayName, System.Collections.Generic.Dictionary<string,long> PlayerCounts, System.Collections.Generic.List<CristalRow> Retainers, System.DateTime LastUpdatedUtc, long TotalCount), int> getIdx = g =>
+                                        {
+                                            try
+                                            {
+                                                var key = g.UniqueKey ?? string.Empty;
+                                                if (idxMap.TryGetValue(key, out var v)) return v;
+                                                if (!string.IsNullOrWhiteSpace(g.DisplayName) && idxMap.TryGetValue(g.DisplayName, out v)) return v;
+                                            }
+                                            catch { }
+                                            return int.MaxValue;
+                                        };
+
+                                        if (worldOrder == WorldSortMode.WorldAsc)
+                                            groups = groups.OrderBy(g => KeyWorld(g), System.StringComparer.OrdinalIgnoreCase).ThenBy(g => getIdx(g)).ToList();
+                                        else if (worldOrder == WorldSortMode.WorldDesc)
+                                            groups = groups.OrderByDescending(g => KeyWorld(g), System.StringComparer.OrdinalIgnoreCase).ThenBy(g => getIdx(g)).ToList();
+                                        else // custom world
+                                        {
+                                            var worldMap = new System.Collections.Generic.Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
+                                            try { if (cfg?.CustomWorldOrder != null) { for (var i = 0; i < cfg.CustomWorldOrder.Count; ++i) worldMap[cfg.CustomWorldOrder[i]] = i; } } catch { }
+                                            groups = groups.OrderBy(g => { var w = KeyWorld(g); return worldMap.TryGetValue(w, out var wi) ? wi : int.MaxValue; }).ThenBy(g => getIdx(g)).ToList();
+                                        }
+                                    }
+                                    else
+                                    {
+                                        groups = groups.OrderBy(g => { try { var key = g.UniqueKey ?? string.Empty; return idxMap.TryGetValue(key, out var v) ? v : int.MaxValue; } catch { return int.MaxValue; } }).ToList();
+                                    }
+                                    // Done
+                                }
+                                else
+                                {
+                                    // If we couldn't fetch list, fallback to alphabetical
+                                    groups = groups.OrderBy(g => string.IsNullOrWhiteSpace(g.DisplayName) ? g.UniqueKey : g.DisplayName, System.StringComparer.OrdinalIgnoreCase).ToList();
+                                }
+                            }
+                            catch { }
+                        }
+                        else if (worldOrder == WorldSortMode.Custom)
+                        {
+                            var worldMap = new System.Collections.Generic.Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
+                            try
+                            {
+                                if (cfg?.CustomWorldOrder != null)
+                                {
+                                    for (var i = 0; i < cfg.CustomWorldOrder.Count; ++i)
+                                    {
+                                        var w = cfg.CustomWorldOrder[i];
+                                        if (string.IsNullOrWhiteSpace(w)) continue;
+                                        if (!worldMap.ContainsKey(w)) worldMap[w] = i;
+                                    }
+                                }
+                            }
+                            catch { }
+
+                            if (charOrder == CharacterSortMode.Custom)
+                            {
+                                var charMap = new System.Collections.Generic.Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
+                                try
+                                {
+                                    if (cfg?.CustomCharacterOrder != null)
+                                    {
+                                        for (var i = 0; i < cfg.CustomCharacterOrder.Count; ++i)
+                                        {
+                                            var k = cfg.CustomCharacterOrder[i];
+                                            if (string.IsNullOrWhiteSpace(k)) continue;
+                                            if (!charMap.ContainsKey(k)) charMap[k] = i;
+                                        }
+                                    }
+                                }
+                                catch { }
+
+                                groups = groups.OrderBy(g => {
+                                    var w = KeyWorld(g);
+                                    return worldMap.TryGetValue(w, out var wi) ? wi : int.MaxValue;
+                                }).ThenBy(g => {
+                                    var idx = int.MaxValue;
+                                    try
+                                    {
+                                        var key = g.UniqueKey ?? string.Empty;
+                                        if (charMap.TryGetValue(key, out var ci)) idx = ci;
+                                        else if (!string.IsNullOrWhiteSpace(g.DisplayName) && charMap.TryGetValue(g.DisplayName, out ci)) idx = ci;
+                                    }
+                                    catch { }
+                                    return idx;
+                                }).ThenBy(g => secondaryKey(g)).ToList();
+                            }
+                            else
+                            {
+                                if (secondaryDesc)
+                                    groups = groups.OrderBy(g => { var w = KeyWorld(g); return worldMap.TryGetValue(w, out var wi) ? wi : int.MaxValue; }).ThenByDescending(g => secondaryKey(g)).ToList();
+                                else
+                                    groups = groups.OrderBy(g => { var w = KeyWorld(g); return worldMap.TryGetValue(w, out var wi) ? wi : int.MaxValue; }).ThenBy(g => secondaryKey(g)).ToList();
+                            }
+                        }
+                    else
+                    {
+                        // No world grouping: apply character-only ordering across entire list
+                            if (charOrder == CharacterSortMode.Custom)
+                            {
+                                var charMap = new System.Collections.Generic.Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
+                                try
+                                {
+                                    if (cfg?.CustomCharacterOrder != null)
+                                    {
+                                        for (var i = 0; i < cfg.CustomCharacterOrder.Count; ++i)
+                                        {
+                                            var k = cfg.CustomCharacterOrder[i];
+                                            if (string.IsNullOrWhiteSpace(k)) continue;
+                                            if (!charMap.ContainsKey(k)) charMap[k] = i;
+                                        }
+                                    }
+                                }
+                                catch { }
+
+                                groups = groups.OrderBy(g => {
+                                    var idx = int.MaxValue;
+                                    try
+                                    {
+                                        var key = g.UniqueKey ?? string.Empty;
+                                        if (charMap.TryGetValue(key, out var ci)) idx = ci;
+                                        else if (!string.IsNullOrWhiteSpace(g.DisplayName) && charMap.TryGetValue(g.DisplayName, out ci)) idx = ci;
+                                    }
+                                    catch { }
+                                    return idx;
+                                }).ThenBy(g => secondaryKey(g)).ToList();
+                            }
+                            else
+                            {
+                                if (secondaryDesc)
+                                    groups = groups.OrderByDescending(g => secondaryKey(g)).ToList();
+                                else
+                                    groups = groups.OrderBy(g => secondaryKey(g)).ToList();
+                            }
+                    }
+                }
+                catch { }
+
+            
 
                 // If selection filter is active, limit groups/retainers to the selected set
                 var groupsToRender = groups;
@@ -822,7 +1145,7 @@ namespace CrystalTerror
                 {
                     if (this.selectedRetainers != null && this.selectedRetainers.Count > 0)
                     {
-                        var filtered = new System.Collections.Generic.List<(string UniqueKey, string DisplayName, System.Collections.Generic.Dictionary<string,long> PlayerCounts, System.Collections.Generic.List<CristalRow> Retainers)>();
+                        var filtered = new System.Collections.Generic.List<(string UniqueKey, string DisplayName, System.Collections.Generic.Dictionary<string,long> PlayerCounts, System.Collections.Generic.List<CristalRow> Retainers, System.DateTime LastUpdatedUtc, long TotalCount)>();
                         foreach (var g in groups)
                         {
                             var any = false;
@@ -1091,6 +1414,69 @@ namespace CrystalTerror
             if (tab < 0) tab = 0;
             this.selectedTab = tab;
         }
+
+                // Try to query AutoRetainer ordering via any known IPC names. Returns list of canonical keys or display names.
+                private System.Collections.Generic.List<string>? TryGetAutoRetainerOrder()
+                {
+                    try
+                    {
+                        var pi = this.plugin?.PluginInterface;
+                        if (pi == null) return null;
+                        var candidateNames = new[] { "AutoRetainer.RetainerOrder", "AutoRetainer.GetCharacterOrder", "AutoRetainer.Order", "AutoRetainer.List", "AutoRetainer.GetOrder" };
+                        foreach (var name in candidateNames)
+                        {
+                            try
+                            {
+                                var sub = pi.GetIpcSubscriber<object, object>(name);
+                                if (sub == null) continue;
+                                var t = sub.GetType();
+                                var mi = t.GetMethod("InvokeFunc");
+                                object? res = null;
+                                if (mi != null)
+                                {
+                                    try { res = mi.Invoke(sub, Array.Empty<object>()); } catch { }
+                                }
+                                else
+                                {
+                                    var mi2 = t.GetMethod("Invoke");
+                                    if (mi2 != null)
+                                    {
+                                        try { res = mi2.Invoke(sub, Array.Empty<object>()); } catch { }
+                                    }
+                                }
+
+                                if (res == null) continue;
+                                // Convert result to list of strings
+                                if (res is System.Collections.Generic.IEnumerable<string> se)
+                                {
+                                    return se.ToList();
+                                }
+                                if (res is string[] sa)
+                                {
+                                    return new System.Collections.Generic.List<string>(sa);
+                                }
+                                if (res is System.Collections.IEnumerable oe)
+                                {
+                                    var outl = new System.Collections.Generic.List<string>();
+                                    foreach (var o in oe)
+                                    {
+                                        try { if (o != null) outl.Add(o.ToString() ?? string.Empty); } catch { }
+                                    }
+                                    if (outl.Count > 0) return outl;
+                                }
+                                if (res is string s)
+                                {
+                                    // comma or newline separated
+                                    var parts = s.Split(new[] { ',', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+                                    if (parts.Count > 0) return parts;
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                    catch { }
+                    return null;
+                }
 
         private unsafe List<CristalRow> ScanInventories()
         {
