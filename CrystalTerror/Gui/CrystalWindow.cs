@@ -947,7 +947,7 @@ namespace CrystalTerror
                     catch { }
 
                     var visibleLabel = visibleName + "##" + g.UniqueKey;
-                    var open = ImGui.CollapsingHeader(visibleLabel, ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.SpanAvailWidth);
+                    var open = ImGui.CollapsingHeader(visibleLabel, ImGuiTreeNodeFlags.SpanAvailWidth);
                     if (visibleName != fullName)
                     {
                         try { if (ImGui.IsItemHovered()) ImGui.SetTooltip(fullName); } catch { }

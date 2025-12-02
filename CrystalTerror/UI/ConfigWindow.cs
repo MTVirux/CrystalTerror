@@ -51,7 +51,7 @@ namespace CrystalTerror
                 // Replace menu with collapsible sections for a cleaner settings layout
                 try
                 {
-                    if (ImGui.CollapsingHeader("Display", ImGuiTreeNodeFlags.DefaultOpen))
+                    if (ImGui.CollapsingHeader("Display"))
                     {
                         ImGui.Separator();
 
