@@ -98,10 +98,6 @@ namespace CrystalTerror
                             {
                                 return s;
                             }
-                            else
-                            {
-                                try { this.plugin!.Log?.Info($"PlayerState.HomeWorld value present but extraction returned empty. Type={val?.GetType()?.FullName}, ToString={(val?.ToString() ?? "<null>")}"); } catch { }
-                            }
                         }
                     }
                     catch { }
@@ -1764,10 +1760,6 @@ namespace CrystalTerror
                         changed = true;
                         try { this.plugin.Log?.Info($"Stored character added: {writeKey} (Name={stored.Name})"); } catch { }
                         try { this.plugin.Chat?.Print($"Crystal Terror: added stored character {stored.Name} ({writeKey})"); } catch { }
-                    }
-                    else
-                    {
-                        try { this.plugin.Log?.Info($"Merging retainer data into existing stored entry: {writeKey} (Name={playerName})"); } catch { }
                     }
                 }
 
