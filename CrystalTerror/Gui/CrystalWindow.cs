@@ -1229,10 +1229,6 @@ namespace CrystalTerror
                     long beforeTotal = playerCounts.Values.Sum();
                     CountContainer(cont, t, playerCounts, Elements, this.plugin.DataManager, this.idMapAll != null && this.idMapAll.Count > 0 ? this.idMapAll : null);
                     long afterTotal = playerCounts.Values.Sum();
-                    if (afterTotal > beforeTotal)
-                    {
-                        try { this.plugin.Log?.Info($"CrystalTerror: found crystals in player container {t} (size={cont->Size})"); } catch { }
-                    }
                 }
 
                 // Update the cached first row to reflect merged player counts
