@@ -3,3 +3,5 @@ obj/
 .vs/
 private/
 scripts/
+.github/*
+!.github/workflows
