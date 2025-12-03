@@ -187,7 +187,7 @@ namespace CrystalTerror
 
                 // If there is no name and no key provided, show a friendly placeholder for the local player
                 if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(key))
-                    return "(you)";
+                    return name + "@" + world;
 
                 return name;
             }
@@ -206,22 +206,10 @@ namespace CrystalTerror
         private System.DateTime lastScanTime = System.DateTime.MinValue;
         private readonly UiSettings uiSettings = new UiSettings();
         private bool didInitialScanAttempt = false;
-        // Removed unused field didExtendedPlayerScan
-        // Background IPC worker fields
-        private System.Threading.CancellationTokenSource? ipcCancellation;
-        private System.Threading.Tasks.Task? ipcTask;
-        private readonly object ipcLock = new();
-        // Debounced config save fields
-        private System.Threading.CancellationTokenSource? saveCts;
+        
+        // Debounced config save fields (kept as placeholders)
         private readonly object saveLock = new();
         
-        // Background scan guard to avoid concurrent heavy scans on the main thread
-        private bool scanInProgress = false;
-        private readonly object scanGuard = new();
-        // Per-retainer cached aggregates: retainerId -> (lastUpdatedUtc, counts by "Type:Element")
-        private System.Collections.Generic.Dictionary<ulong, (System.DateTime lastUpdatedUtc, System.Collections.Generic.Dictionary<string, long> counts)> perRetainerAggregates = new();
-        // Snapshot of known retainer ids (set by main-thread scan) for the background worker to use
-        private System.Collections.Generic.List<ulong> retainerIdSnapshot = new();
         
 
         private static readonly string[] Elements = new[] { "Fire", "Ice", "Wind", "Earth", "Lightning", "Water" };
@@ -255,20 +243,7 @@ namespace CrystalTerror
             };
 
             this.plugin = plugin;
-                try { this.plugin!.Framework.Update += this.OnFrameworkUpdate; } catch { }
             try { this.MigrateStoredCharacters(); } catch { }
-            // Subscribe to Dalamud inventory change events if enabled
-            try
-            {
-                if (this.plugin!.Config.UseInventoryEvents && this.plugin.GameInventory != null)
-                {
-                    this.plugin.GameInventory.InventoryChanged += this.OnGameInventoryChangelog;
-                    try { this.plugin.GameInventory.ItemAddedExplicit += this.OnItemAddedExplicit; } catch { }
-                    try { this.plugin.GameInventory.ItemRemovedExplicit += this.OnItemRemovedExplicit; } catch { }
-                    try { this.plugin.GameInventory.ItemChangedExplicit += this.OnItemChangedExplicit; } catch { }
-                }
-            }
-            catch { }
             try
             {
                 try { this.plugin!.ClientState.TerritoryChanged += this.OnTerritoryChanged; } catch { }
@@ -284,59 +259,7 @@ namespace CrystalTerror
             {
                 // Ignore failures here; ScanInventories will attempt again if needed
             }
-            // Start background IPC worker
-            try
-            {
-                this.ipcCancellation = new System.Threading.CancellationTokenSource();
-                var token = this.ipcCancellation.Token;
-                this.ipcTask = System.Threading.Tasks.Task.Run(() =>
-                {
-                    while (!token.IsCancellationRequested)
-                    {
-                        try
-                        {
-                                // Snapshot retainer ids and idMap for thread-safety
-                            List<ulong> snapIds;
-                            lock (this.ipcLock) { snapIds = new List<ulong>(this.retainerIdSnapshot); }
-                            var idMapLocal = this.idMapAll;
-
-                            var itemCountIpc = this.plugin!.PluginInterface.GetIpcSubscriber<uint, ulong, uint, uint>("AllaganTools.ItemCount");
-                            if (itemCountIpc != null && idMapLocal != null && snapIds.Count > 0)
-                            {
-                                var newAgg = new System.Collections.Generic.Dictionary<ulong, (System.DateTime, System.Collections.Generic.Dictionary<string, long>)>();
-                                foreach (var rid in snapIds)
-                                {
-                                    var counts = new System.Collections.Generic.Dictionary<string, long>(System.StringComparer.OrdinalIgnoreCase);
-                                    foreach (var kv in idMapLocal)
-                                    {
-                                        try
-                                        {
-                                            var qty = (long)itemCountIpc.InvokeFunc(kv.Key, rid, (uint)InventoryType.RetainerCrystals);
-                                            if (qty > 0)
-                                            {
-                                                var key = kv.Value.type + ":" + kv.Value.element;
-                                                counts.TryGetValue(key, out var cur); counts[key] = cur + qty;
-                                            }
-                                        }
-                                        catch { }
-                                    }
-                                    newAgg[rid] = (System.DateTime.UtcNow, counts);
-                                }
-
-                                lock (this.ipcLock)
-                                {
-                                    this.perRetainerAggregates = newAgg;
-                                    try { this.RequestSaveDebounced(); } catch { }
-                                }
-                            }
-                        }
-                        catch { }
-                        // Wait with cancellation support
-                        try { if (token.WaitHandle.WaitOne(this.uiSettings.Timing.IpcIntervalMs)) break; } catch { break; }
-                    }
-                }, token);
-            }
-            catch { }
+            
         }
 
         private void MigrateStoredCharacters()
@@ -497,41 +420,10 @@ namespace CrystalTerror
 
             try
             {
-                if (this.plugin != null && this.plugin.Framework != null)
-                    this.plugin!.Framework.Update -= this.OnFrameworkUpdate;
-            }
-            catch { }
-
-            try
-            {
-                if (this.plugin?.GameInventory != null)
-                {
-                    this.plugin.GameInventory.InventoryChanged -= this.OnGameInventoryChangelog;
-                    try { this.plugin.GameInventory.ItemAddedExplicit -= this.OnItemAddedExplicit; } catch { }
-                    try { this.plugin.GameInventory.ItemRemovedExplicit -= this.OnItemRemovedExplicit; } catch { }
-                    try { this.plugin.GameInventory.ItemChangedExplicit -= this.OnItemChangedExplicit; } catch { }
-                }
-            }
-            catch { }
-
-            try
-            {
                 if (this.plugin?.ClientState != null)
                 {
                     try { this.plugin.ClientState.TerritoryChanged -= this.OnTerritoryChanged; } catch { }
                     try { this.plugin.ClientState.MapIdChanged -= this.OnMapIdChanged; } catch { }
-                }
-            }
-            catch { }
-
-            try
-            {
-                if (this.ipcCancellation != null)
-                {
-                    this.ipcCancellation.Cancel();
-                    try { this.ipcTask?.Wait(1000); } catch { }
-                    this.ipcCancellation.Dispose();
-                    this.ipcCancellation = null;
                 }
             }
             catch { }
@@ -765,6 +657,14 @@ namespace CrystalTerror
                 catch { }
             }
 
+            // Debug: always show the detected current character above the table
+            try
+            {
+                var dbg = string.IsNullOrWhiteSpace(currentKey) ? "(no current character)" : currentKey;
+                ImGui.TextDisabled("Current character: " + dbg);
+            }
+            catch { }
+
             // Build columns: Character | (for each Type) (for each enabled Element) -> e.g. Shard Fire, Shard Ice, ... Crystal Fire ... Cluster Water
             var enabledElements = Elements.Where(e => { bool b = false; return (this.plugin?.Config?.ElementsEnabled?.TryGetValue(e, out b) ?? false) && b; }).ToArray();
             var enabledTypes = Types.Where(t => { bool b = false; return (this.plugin?.Config?.TypesEnabled?.TryGetValue(t, out b) ?? false) && b; }).ToArray();
@@ -788,14 +688,15 @@ namespace CrystalTerror
                         if (!string.IsNullOrEmpty(currentKey) && string.Equals(key, currentKey, StringComparison.OrdinalIgnoreCase)
                             && this.cachedCounts != null && this.cachedCounts.Count > 0)
                         {
-                                // Build group from live cachedCounts
+                                // Build group from live cachedCounts. Prefer the freshly-detected player name
                                 var playerRow = this.cachedCounts[0];
                                 var retainerRows = this.cachedCounts.Skip(1).ToList();
                                 var playerCountsLive = new System.Collections.Generic.Dictionary<string,long>(playerRow.ElementCounts, System.StringComparer.OrdinalIgnoreCase);
                                 long totalLive = 0;
                                 try { totalLive = playerCountsLive.Values.Sum(); } catch { totalLive = 0; }
                                 try { foreach (var rr in retainerRows) totalLive += rr.ElementCounts.Values.Sum(); } catch { }
-                                groups.Add((key, NormalizeStoredDisplay(playerRow.Character, key), playerCountsLive, retainerRows, System.DateTime.UtcNow, totalLive));
+                                var detectedName = this.GetLocalPlayerName() ?? playerRow.Character ?? string.Empty;
+                                groups.Add((key, NormalizeStoredDisplay(detectedName, key), playerCountsLive, retainerRows, System.DateTime.UtcNow, totalLive));
                             continue;
                         }
 
@@ -825,7 +726,8 @@ namespace CrystalTerror
                     long totalLive2 = 0;
                     try { totalLive2 = playerCountsLive2.Values.Sum(); } catch { totalLive2 = 0; }
                     try { foreach (var rr in retainerRows) totalLive2 += rr.ElementCounts.Values.Sum(); } catch { }
-                    groups.Add((currentKey, NormalizeStoredDisplay(playerRow.Character, currentKey), playerCountsLive2, retainerRows, System.DateTime.UtcNow, totalLive2));
+                    var detectedName2 = this.GetLocalPlayerName() ?? playerRow.Character ?? string.Empty;
+                    groups.Add((currentKey, NormalizeStoredDisplay(detectedName2, currentKey), playerCountsLive2, retainerRows, System.DateTime.UtcNow, totalLive2));
                 }
 
                 // Apply ordering selected in settings. We support a separate world ordering plus a character ordering
@@ -1480,565 +1382,41 @@ namespace CrystalTerror
 
         private unsafe List<CristalRow> ScanInventories()
         {
+            
             var results = new List<CristalRow>();
-
-            var inventory = InventoryManager.Instance();
-
-            var previousCachedName = this.cachedCounts != null && this.cachedCounts.Count > 0 ? this.cachedCounts[0].Character : null;
-
             var playerName = this.GetLocalPlayerName();
-            // If name detection fails, prefer an existing readable cached name; otherwise keep empty so we don't display/save the literal "Player"
-            if (string.IsNullOrWhiteSpace(playerName)
-                && !string.IsNullOrWhiteSpace(previousCachedName)
-                && !string.Equals(previousCachedName, "Player", System.StringComparison.OrdinalIgnoreCase))
-            {
-                playerName = previousCachedName;
-            }
-            // If still missing, leave playerName null/empty (we'll display a friendly placeholder via NormalizeStoredDisplay)
-            if (inventory == null)
-            {
-                var displayName = string.IsNullOrWhiteSpace(playerName) ? "(you)" : playerName;
-                results.Add(new CristalRow(displayName + " (no inventory)", new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase)));
-                return results;
-            }
-
-            // Helper to count in a container. Counts: "shard", "cluster", and per-element keys like "Fire", "Ice"
-            static void CountContainer(InventoryContainer* container, InventoryType invType, Dictionary<string, long> counts, string[] elements, IDataManager dataManager, System.Collections.Generic.Dictionary<uint, (string type, string element)>? idMap = null)
-            {
-                if (container == null)
-                    return;
-
-                var sheet = dataManager.Excel.GetSheet<Item>();
-                var inv = InventoryManager.Instance();
-                var seen = new System.Collections.Generic.HashSet<uint>();
-                for (var i = 0; i < container->Size; ++i)
-                {
-                    var slot = container->GetInventorySlot(i);
-                    if (slot == null || slot->ItemId == 0)
-                    {
-                        continue;
-                    }
-
-                    var id = (uint)slot->ItemId;
-                    if (!seen.Add(id))
-                    {
-                        continue; // already counted this item id in this container
-                    }
-
-                    // Determine match solely by ID map or by the fixed RelevantItemIds set.
-                    var matched = false;
-                    if (idMap != null)
-                    {
-                        matched = idMap.ContainsKey(id);
-                    }
-                    else
-                    {
-                        matched = RelevantItemIds.Contains(id);
-                    }
-
-                    if (!matched)
-                        continue;
-
-                    // Read qty
-                    long qty = 1;
-                    try
-                    {
-                        if (inv != null)
-                        {
-                            qty = (long)inv->GetItemCountInContainer(id, invType);
-                            if (qty <= 0) qty = 1;
-                        }
-                    }
-                    catch
-                    {
-                        qty = 1;
-                    }
-
-                    // Classify by idMap when present; otherwise use deterministic mapping for IDs 2..19
-                    string type;
-                    string element;
-                    if (idMap != null && idMap.TryGetValue(id, out var mapEntry))
-                    {
-                        type = mapEntry.type;
-                        element = mapEntry.element;
-                    }
-                    else
-                    {
-                        var idx = (int)(id - 2);
-                        var typeIndex = idx / elements.Length;
-                        var elIndex = idx % elements.Length;
-                        type = (typeIndex >= 0 && typeIndex < Types.Length) ? Types[typeIndex] : "Unknown";
-                        element = (elIndex >= 0 && elIndex < elements.Length) ? elements[elIndex] : "Unknown";
-                    }
-
-                    var key = type + ":" + element;
-                    counts.TryGetValue(key, out var c); counts[key] = c + qty;
-                }
-            }
-
-            var playerCounts = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-
-            // Ensure id map is built (built once at construction via EnsureIdMapBuilt)
-            try { this.EnsureIdMapBuilt(); } catch { }
-
-            // Scan common player inventory containers (includes saddlebags, armory and mail)
-            var scannedTypes = new System.Collections.Generic.HashSet<InventoryType>();
-            foreach (var t in PlayerInventoriesToScan)
-            {
-                scannedTypes.Add(t);
-                var cont = inventory->GetInventoryContainer(t);
-                CountContainer(cont, t, playerCounts, Elements, this.plugin.DataManager, this.idMapAll != null && this.idMapAll.Count > 0 ? this.idMapAll : null);
-            }
-
-            results.Add(new CristalRow(playerName ?? string.Empty, playerCounts));
-
-            // Also scan other non-retainer containers not covered in PlayerInventoriesToScan
-            // (handles uncommon storage locations). This avoids relying on a one-time fallback
-            // And ensure crystals stored in other containers are counted.
-            try
-            {
-                foreach (InventoryType t in Enum.GetValues(typeof(InventoryType)))
-                {
-                    // Skip retainer pages and retainer crystals (we only want character containers here)
-                    if (t >= InventoryType.RetainerPage1 && t <= InventoryType.RetainerPage7) continue;
-                    if (t == InventoryType.RetainerCrystals) continue;
-                    if (scannedTypes.Contains(t)) continue; // already scanned above
-
-                    var cont = inventory->GetInventoryContainer(t);
-                    if (cont == null || cont->Size == 0) continue;
-
-                    // Measure counts before/after to detect if this container contributed
-                    long beforeTotal = playerCounts.Values.Sum();
-                    CountContainer(cont, t, playerCounts, Elements, this.plugin.DataManager, this.idMapAll != null && this.idMapAll.Count > 0 ? this.idMapAll : null);
-                    long afterTotal = playerCounts.Values.Sum();
-                }
-
-                // Update the cached first row to reflect merged player counts
-                if (results.Count > 0)
-                    results[0] = new CristalRow(playerName ?? string.Empty, playerCounts);
-            }
-            catch { }
-
-            Dictionary<int, string>? retainerNames = null;
-            if (this.plugin.Config.ShowRetainers)
-                retainerNames = TryGetRetainerNames();
-
-            if (this.plugin.Config.ShowRetainers)
-            {
-                // Try to get AllaganTools IPC for per-retainer counts in RetainerCrystals
-                var itemCountIpc = this.plugin.PluginInterface.GetIpcSubscriber<uint, ulong, uint, uint>("AllaganTools.ItemCount");
-
-                // Reuse the Lumina-derived id map built earlier for player scanning
-                var idMap = idMapAll;
-                // Try retainer pages (RetainerPage1..RetainerPage7) but only up to the actual number of retainers the account has
-                var handledRetainerIds = new System.Collections.Generic.HashSet<ulong>();
-                int maxDirectPages = 7;
-                int actualPages = 0;
-                try
-                {
-                    for (uint i = 0; i < (uint)maxDirectPages; ++i)
-                    {
-                        var ret = FFXIVClientStructs.FFXIV.Client.Game.RetainerManager.Instance()->GetRetainerBySortedIndex(i);
-                        if (ret == null || ret->RetainerId == 0) break;
-                        actualPages++;
-                    }
-                }
-                catch
-                {
-                    // Ignore failures and fall back to showing up to maxDirectPages
-                    actualPages = maxDirectPages;
-                }
-
-                var collectedRetainerIds = new System.Collections.Generic.List<ulong>();
-                for (int pageIndex = 0; pageIndex < actualPages; ++pageIndex)
-                {
-                    var t = (InventoryType)((int)InventoryType.RetainerPage1 + pageIndex);
-                    var pageNumber = (int)(t - InventoryType.RetainerPage1) + 1;
-                    var cont = inventory->GetInventoryContainer(t);
-                    // If container is null, still add an empty row so UI rows remain stable
-                    var rCounts = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-                    if (cont != null)
-                    {
-                        CountContainer(cont, t, rCounts, Elements, this.plugin.DataManager, idMap);
-                    }
-
-                    // If there's a retainer struct for this page and it's marked unavailable, skip or mark it depending on settings
-                    try
-                    {
-                        var pageIdxLocal = (int)(t - InventoryType.RetainerPage1);
-                        var retTemp = FFXIVClientStructs.FFXIV.Client.Game.RetainerManager.Instance()->GetRetainerBySortedIndex((uint)pageIdxLocal);
-                        if (retTemp != null && !retTemp->Available && this.plugin.Config.SkipDisabledRetainers)
-                            continue;
-                    }
-                    catch
-                    {
-                        // Ignore failures
-                    }
-
-                    // If we have AllaganTools IPC and can resolve a retainer id for this page, merge RetainerCrystals counts into this retainer
-                    if (itemCountIpc != null)
-                    {
-                        try
-                        {
-                            var pageIdx = (int)(t - InventoryType.RetainerPage1);
-                            var ret = FFXIVClientStructs.FFXIV.Client.Game.RetainerManager.Instance()->GetRetainerBySortedIndex((uint)pageIdx);
-                            if (ret != null && ret->RetainerId != 0)
-                            {
-                                if (!ret->Available)
-                                {
-                                    if (this.plugin.Config.SkipDisabledRetainers)
-                                        continue;
-                                    // If not skipping, still mark this retainer handled so it's not double-added later
-                                    handledRetainerIds.Add(ret->RetainerId);
-                                }
-                                else
-                                {
-                                    handledRetainerIds.Add(ret->RetainerId);
-                                }
-
-                                var rid = ret->RetainerId;
-                                // Merge cached IPC aggregates if available, else fall back to direct per-item calls
-                                (System.DateTime last, System.Collections.Generic.Dictionary<string, long> counts) cached;
-                                var haveCached = false;
-                                lock (this.ipcLock)
-                                {
-                                    if (this.perRetainerAggregates.TryGetValue(rid, out var v))
-                                    {
-                                        cached = v;
-                                        haveCached = true;
-                                    }
-                                    else
-                                        cached = (System.DateTime.MinValue, new System.Collections.Generic.Dictionary<string, long>());
-                                }
-
-                                if (haveCached)
-                                {
-                                    foreach (var kv in cached.counts)
-                                    {
-                                        rCounts.TryGetValue(kv.Key, out var cur); rCounts[kv.Key] = cur + kv.Value;
-                                    }
-                                }
-                                else if (idMap != null)
-                                {
-                                    foreach (var kv in idMap)
-                                    {
-                                        try
-                                        {
-                                            var qty = (long)itemCountIpc.InvokeFunc(kv.Key, rid, (uint)InventoryType.RetainerCrystals);
-                                            if (qty > 0)
-                                            {
-                                                var key = kv.Value.type + ":" + kv.Value.element;
-                                                rCounts.TryGetValue(key, out var curr); rCounts[key] = curr + qty;
-                                            }
-                                        }
-                                        catch { }
-                                    }
-                                }
-                            }
-                        }
-                        catch
-                        {
-                            // Ignore ipc/retainer lookup errors
-                        }
-                    }
-
-                    var pageName = retainerNames != null && retainerNames.TryGetValue(pageNumber, out var rn) && !string.IsNullOrWhiteSpace(rn) ? rn : t.ToString();
-                    try
-                    {
-                        var pageIdxLocal2 = (int)(t - InventoryType.RetainerPage1);
-                        var retTemp2 = FFXIVClientStructs.FFXIV.Client.Game.RetainerManager.Instance()->GetRetainerBySortedIndex((uint)pageIdxLocal2);
-                        if (retTemp2 != null && !retTemp2->Available && !this.plugin.Config.SkipDisabledRetainers)
-                            pageName += " (unavailable)";
-                    }
-                    catch { }
-
-                    results.Add(new CristalRow(pageName, rCounts));
-                }
-                // If IPC not available, fall back to adding the special RetainerCrystals container as its own row
-                if (itemCountIpc == null)
-                {
-                    var rc = inventory->GetInventoryContainer(InventoryType.RetainerCrystals);
-                    if (rc != null)
-                    {
-                        var rcEmpty = true;
-                        for (var i = 0; i < rc->Size; ++i)
-                        {
-                            var s = rc->GetInventorySlot(i);
-                            if (s != null && s->ItemId != 0) { rcEmpty = false; break; }
-                        }
-
-                        if (!rcEmpty)
-                        {
-                            var rcCounts = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-                            CountContainer(rc, InventoryType.RetainerCrystals, rcCounts, Elements, this.plugin.DataManager, idMap);
-                            results.Add(new CristalRow("RetainerCrystals", rcCounts));
-                        }
-                    }
-                }
-
-                // If we have AllaganTools IPC, also enumerate up to 10 sorted retainers and add rows for any retainers
-                // That don't map to the standard RetainerPage1..RetainerPage7 containers (handles retainer slots 8..10)
-                if (itemCountIpc != null)
-                {
-                    try
-                    {
-                        for (uint i = 0; i < 10; ++i)
-                        {
-                            var ret = FFXIVClientStructs.FFXIV.Client.Game.RetainerManager.Instance()->GetRetainerBySortedIndex(i);
-                            if (ret == null || ret->RetainerId == 0) continue;
-                            if (!ret->Available && this.plugin.Config.SkipDisabledRetainers) continue;
-                            if (handledRetainerIds.Contains(ret->RetainerId)) continue;
-
-                            var rid = ret->RetainerId;
-                            // Collect retainer id for background worker
-                            collectedRetainerIds.Add(rid);
-                            var rCounts = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-                            if (idMap != null)
-                            {
-                            foreach (var kv in idMap)
-                            {
-                                try
-                                {
-                                    var qty = (long)itemCountIpc.InvokeFunc(kv.Key, rid, (uint)InventoryType.RetainerCrystals);
-                                    if (qty > 0)
-                                    {
-                                        var key = kv.Value.type + ":" + kv.Value.element;
-                                        rCounts.TryGetValue(key, out var curr); rCounts[key] = curr + qty;
-                                    }
-                                }
-                                catch { }
-                            }
-                            }
-
-                            var idx = (int)i + 1;
-                            var name = retainerNames != null && retainerNames.TryGetValue(idx, out var rn) && !string.IsNullOrWhiteSpace(rn) ? rn : ret->NameString;
-                            if (!ret->Available && !this.plugin.Config.SkipDisabledRetainers)
-                                name += " (unavailable)";
-                            results.Add(new CristalRow(name, rCounts));
-                        }
-                    }
-                    catch
-                    {
-                        // Ignore failures
-                    }
-                }
-                // Publish collected retainer ids snapshot for background IPC worker
-                try { lock (this.ipcLock) { this.retainerIdSnapshot = collectedRetainerIds; } } catch { }
-            }
-
-            // Persist scanned results into plugin config so data is kept across characters
-            try
-            {
-                // Build a canonical key: require player name + home world (Name@World).
-                var key = playerName ?? "";
-                string? worldForKey = null;
-                try
-                {
-                    worldForKey = this.GetLocalPlayerHomeWorld();
-                }
-                catch { worldForKey = null; }
-
-                // If we don't have a detected world, do not persist stored character data
-                if (string.IsNullOrWhiteSpace(worldForKey) || string.IsNullOrWhiteSpace(playerName) || string.Equals(playerName, "Player", System.StringComparison.OrdinalIgnoreCase))
-                {
-                    // Skip saving to config when we can't form a canonical Name@World key
-                    return results;
-                }
-
-                key = playerName + "@" + worldForKey;
-                var stored = new StoredCharacter();
-                stored.Name = playerName ?? string.Empty;
-                stored.LastUpdatedUtc = System.DateTime.UtcNow;
-                stored.PlayerCounts = new System.Collections.Generic.Dictionary<string, long>(playerCounts ?? new System.Collections.Generic.Dictionary<string, long>(), System.StringComparer.OrdinalIgnoreCase);
-                // Retainers: results entries after the first
-                var retDict = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, long>>(System.StringComparer.OrdinalIgnoreCase);
-                for (var i = 1; i < results.Count; ++i)
-                {
-                    var r = results[i];
-                    // Clone counts into serializable dictionary
-                    var cd = new System.Collections.Generic.Dictionary<string, long>(r.ElementCounts ?? new System.Collections.Generic.Dictionary<string, long>(), System.StringComparer.OrdinalIgnoreCase);
-                    retDict[r.Character ?? string.Empty] = cd;
-                }
-                stored.RetainerCounts = retDict;
-
-                var cfg = this.plugin.Config ?? (this.plugin.PluginInterface.GetPluginConfig() as CrystalConfig ?? new CrystalConfig());
-                if (cfg.StoredCharacters == null) cfg.StoredCharacters = new StoredCharactersContainer();
-                if (cfg.StoredCharacters.ByCharacter == null) cfg.StoredCharacters.ByCharacter = new System.Collections.Generic.Dictionary<string, StoredCharacter>(System.StringComparer.OrdinalIgnoreCase);
-                // Validate canonical key again before writing
-                var atIdx = key.IndexOf('@');
-                if (atIdx > 0 && atIdx < key.Length - 1)
-                {
-                    // If any existing stored entry already has the same stored.Name, prefer updating that key
-                    string writeKey = key;
-                    try
-                    {
-                        if (cfg.StoredCharacters.ByCharacter != null)
-                        {
-                            var match = cfg.StoredCharacters.ByCharacter.FirstOrDefault(kv => string.Equals(kv.Value?.Name ?? string.Empty, stored.Name ?? string.Empty, StringComparison.OrdinalIgnoreCase));
-                            if (!string.IsNullOrWhiteSpace(match.Key))
-                            {
-                                writeKey = match.Key;
-                            }
-                            else
-                            {
-                                writeKey = this.EnsureNonConflictingStoredKey(cfg, key, stored.Name);
-                            }
-                        }
-                    }
-                    catch { writeKey = key; }
-                    cfg.StoredCharacters.ByCharacter[writeKey] = stored;
-                }
-                try { this.plugin.PluginInterface.SavePluginConfig(cfg); } catch { }
-            }
-            catch { }
-
+            results.Add(new CristalRow(string.IsNullOrWhiteSpace(playerName) ? "(you)" : playerName!, new Dictionary<string, long>(System.StringComparer.OrdinalIgnoreCase)));
             return results;
         }
 
         private void OnFrameworkUpdate(Dalamud.Plugin.Services.IFramework framework)
         {
-            try
-            {
-                var now = System.DateTime.Now;
-                if ((now - this.lastScanTime).TotalMilliseconds > this.uiSettings.Timing.ScanIntervalMs)
-                {
-                    // If a scan is already running in background, skip starting another
-                    lock (this.scanGuard)
-                    {
-                        if (this.scanInProgress) return;
-                        this.scanInProgress = true;
-                    }
-
-                    // Run the potentially expensive scan off the main thread to avoid freezes
-                    var taskCt = System.Threading.CancellationToken.None;
-                    _ = System.Threading.Tasks.Task.Run(() =>
-                    {
-                        try
-                        {
-                                    var res = this.ScanInventories();
-                                            var safeRes = res ?? new System.Collections.Generic.List<CristalRow>();
-                                                lock (this.scanGuard)
-                                                {
-                                                    this.cachedCounts = safeRes;
-                                                    try { this.EnsureSaveIfCachedValid(); } catch { }
-                                                    this.lastScanTime = System.DateTime.Now;
-                                                }
-                        }
-                        catch { }
-                        finally
-                        {
-                            lock (this.scanGuard) { this.scanInProgress = false; }
-                        }
-                    }, taskCt);
-                }
-            }
-            catch { }
+            // no-op
         }
 
         private void OnGameInventoryChangelog(System.Collections.Generic.IReadOnlyCollection<Dalamud.Game.Inventory.InventoryEventArgTypes.InventoryEventArgs> events)
         {
-            try
-            {
-                // Trigger an immediate scan when inventory changes are reported
-                var res = this.ScanInventories();
-                this.cachedCounts = res ?? new System.Collections.Generic.List<CristalRow>();
-                try { this.EnsureSaveIfCachedValid(); } catch { }
-                this.lastScanTime = System.DateTime.Now;
-            }
-            catch { }
+            // no-op
         }
 
         private void OnItemAddedExplicit(Dalamud.Game.Inventory.InventoryEventArgTypes.InventoryItemAddedArgs args)
         {
-            try
-            {
-                this.HandlePlayerInventoryDelta(args.Inventory, args.Item.ItemId, args.Item.Quantity);
-            }
-            catch { }
+            // no-op
         }
 
         private void OnItemRemovedExplicit(Dalamud.Game.Inventory.InventoryEventArgTypes.InventoryItemRemovedArgs args)
         {
-            try
-            {
-                // removed -> subtract quantity
-                this.HandlePlayerInventoryDelta(args.Inventory, args.Item.ItemId, -args.Item.Quantity);
-            }
-            catch { }
+            // no-op
         }
 
         private void OnItemChangedExplicit(Dalamud.Game.Inventory.InventoryEventArgTypes.InventoryItemChangedArgs args)
         {
-            try
-            {
-                var oldQty = args.OldItemState.Quantity;
-                var newQty = args.Item.Quantity;
-                var delta = newQty - oldQty;
-                if (delta != 0)
-                    this.HandlePlayerInventoryDelta(args.Inventory, args.Item.ItemId, delta);
-            }
-            catch { }
+            // no-op
         }
 
         private void HandlePlayerInventoryDelta(Dalamud.Game.Inventory.GameInventoryType inventoryType, uint itemId, int delta)
         {
-            try
-            {
-                // Only handle main player inventories (Inventory1..Inventory4) and related player containers
-                if ((int)inventoryType > 1000) // crude cutoff: player containers are low numbers, retainer/crystals are large
-                    return;
-
-                if (delta == 0) return;
-
-                // Ensure cachedCounts seeded
-                if (this.cachedCounts == null || this.cachedCounts.Count == 0)
-                {
-                    var res = this.ScanInventories();
-                    this.cachedCounts = res ?? new System.Collections.Generic.List<CristalRow>();
-                }
-
-                // Ensure id map is ready
-                try { this.EnsureIdMapBuilt(); } catch { }
-
-                // Determine key (Type:Element)
-                string key;
-                if (this.idMapAll != null && this.idMapAll.TryGetValue(itemId, out var mapEntry))
-                {
-                    key = mapEntry.type + ":" + mapEntry.element;
-                }
-                else
-                {
-                    if (!RelevantItemIds.Contains(itemId)) return; // not a crystal/shard type we track
-                    var idx = (int)(itemId - 2);
-                    var typeIndex = idx / Elements.Length;
-                    var elIndex = idx % Elements.Length;
-                    var type = (typeIndex >= 0 && typeIndex < Types.Length) ? Types[typeIndex] : "Unknown";
-                    var element = (elIndex >= 0 && elIndex < Elements.Length) ? Elements[elIndex] : "Unknown";
-                    key = type + ":" + element;
-                }
-
-                // Update player's cached row (index 0)
-                if (this.cachedCounts.Count == 0) return;
-                var row = this.cachedCounts[0];
-                var dict = row.ElementCounts;
-                dict.TryGetValue(key, out var existing);
-                var updated = existing + delta;
-                if (updated <= 0)
-                {
-                    if (dict.ContainsKey(key)) dict.Remove(key);
-                }
-                else
-                {
-                    dict[key] = updated;
-                }
-
-                // refresh last scan timestamp so draw shows updated values
-                this.lastScanTime = System.DateTime.Now;
-
-                // Persist (debounced) the updated cachedCounts into plugin config
-                try { this.RequestSaveDebounced(); } catch { }
-            }
-            catch { }
+            // no-op
         }
 
         private void OnTerritoryChanged(ushort territoryId)
@@ -2053,25 +1431,7 @@ namespace CrystalTerror
 
         private void RequestSaveDebounced()
         {
-            lock (this.saveLock)
-            {
-                try { this.saveCts?.Cancel(); } catch { }
-                this.saveCts = new System.Threading.CancellationTokenSource();
-                var ct = this.saveCts.Token;
-                _ = System.Threading.Tasks.Task.Run(() =>
-                {
-                    try
-                    {
-                        // WaitOne returns true if the handle was signaled (canceled); false if timeout elapsed
-                        var signaled = ct.WaitHandle.WaitOne(this.uiSettings.Timing.SaveDelayMs);
-                        if (!signaled)
-                        {
-                            this.SaveConfigNow();
-                        }
-                    }
-                    catch { }
-                }, ct);
-            }
+            try { this.EnsureSaveIfCachedValid(); } catch { }
         }
 
         // If we have a cached player row that appears valid (readable name and detected home world),
@@ -2080,16 +1440,66 @@ namespace CrystalTerror
         {
             try
             {
-                if (this.cachedCounts == null || this.cachedCounts.Count == 0) return;
-                var playerRow = this.cachedCounts[0];
-                var playerName = playerRow.Character ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(playerName) || string.Equals(playerName, "Player", StringComparison.OrdinalIgnoreCase)) return;
-                string? world = null;
-                try { world = this.GetLocalPlayerHomeWorld(); } catch { world = null; }
-                if (string.IsNullOrWhiteSpace(world)) return;
+                if (this.plugin == null) return;
+                var cfg = this.plugin.Config;
+                if (cfg == null) return;
 
-                // Looks valid: ensure a stored-character entry exists for this canonical key.
-                try { this.AddStoredCharacterIfMissing(); } catch { }
+                if (this.cachedCounts == null || this.cachedCounts.Count == 0) return;
+
+                // Determine canonical current key using detected player name + home world when available
+                var playerNameLocal = this.GetLocalPlayerName() ?? string.Empty;
+                var currentKey = playerNameLocal;
+                try
+                {
+                    var world = this.GetLocalPlayerHomeWorld();
+                    if (!string.IsNullOrEmpty(world)) currentKey = currentKey + "@" + world;
+                }
+                catch { }
+
+                if (string.IsNullOrWhiteSpace(currentKey)) return;
+
+                // Build StoredCharacter from cachedCounts: index 0 is player, rest are retainers
+                var sc = new StoredCharacter();
+                sc.LastUpdatedUtc = System.DateTime.UtcNow;
+                // Use the detected display name (without world) if available
+                sc.Name = string.IsNullOrWhiteSpace(playerNameLocal) ? currentKey : playerNameLocal;
+
+                // Player counts
+                try
+                {
+                    var playerRow = this.cachedCounts[0];
+                    sc.PlayerCounts = new System.Collections.Generic.Dictionary<string, long>(playerRow.ElementCounts, System.StringComparer.OrdinalIgnoreCase);
+                }
+                catch { sc.PlayerCounts = new System.Collections.Generic.Dictionary<string, long>(System.StringComparer.OrdinalIgnoreCase); }
+
+                // Retainer counts
+                var retMap = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, long>>(System.StringComparer.OrdinalIgnoreCase);
+                try
+                {
+                    foreach (var r in this.cachedCounts.Skip(1))
+                    {
+                        var name = r.Character ?? string.Empty;
+                        if (string.IsNullOrWhiteSpace(name)) name = "(retainer)";
+                        retMap[name] = new System.Collections.Generic.Dictionary<string, long>(r.ElementCounts, System.StringComparer.OrdinalIgnoreCase);
+                    }
+                }
+                catch { }
+                sc.RetainerCounts = retMap;
+
+                // Merge/update only the current character entry into StoredCharacters (preserve other characters)
+                try
+                {
+                    cfg.StoredCharacters = cfg.StoredCharacters ?? new StoredCharactersContainer();
+                    cfg.StoredCharacters.ByCharacter = cfg.StoredCharacters.ByCharacter ?? new System.Collections.Generic.Dictionary<string, StoredCharacter>(System.StringComparer.OrdinalIgnoreCase);
+
+                    // Ensure we don't accidentally overwrite a different character's entry with same key
+                    var baseKey = currentKey ?? string.Empty;
+                    var keyToUse = this.EnsureNonConflictingStoredKey(cfg, baseKey, sc.Name);
+
+                    cfg.StoredCharacters.ByCharacter[keyToUse] = sc;
+                    try { this.plugin.PluginInterface.SavePluginConfig(cfg); } catch { }
+                }
+                catch { }
             }
             catch { }
         }
@@ -2100,238 +1510,58 @@ namespace CrystalTerror
         {
             try
             {
+                if (this.plugin == null) return;
+                var cfg = this.plugin.Config;
+                if (cfg == null) return;
                 if (this.cachedCounts == null || this.cachedCounts.Count == 0) return;
-                var playerRow = this.cachedCounts[0];
-                var playerName = playerRow.Character ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(playerName) || string.Equals(playerName, "Player", StringComparison.OrdinalIgnoreCase)) return;
 
-                string? world = null;
-                try { world = this.GetLocalPlayerHomeWorld(); } catch { world = null; }
-                if (string.IsNullOrWhiteSpace(world)) return;
-
-                var key = playerName + "@" + world;
-
-                var cfg = this.plugin.Config ?? (this.plugin.PluginInterface.GetPluginConfig() as CrystalConfig ?? new CrystalConfig());
-                if (cfg.StoredCharacters == null) cfg.StoredCharacters = new StoredCharactersContainer();
-                if (cfg.StoredCharacters.ByCharacter == null) cfg.StoredCharacters.ByCharacter = new System.Collections.Generic.Dictionary<string, StoredCharacter>(System.StringComparer.OrdinalIgnoreCase);
-
-                var changed = false;
-                // Prefer existing canonical entry if present; capture the actual write key used for logging.
-                var writeKey = key;
-                if (!cfg.StoredCharacters.ByCharacter.TryGetValue(key, out var target))
-                {
-                    // If there's an existing entry with the same stored name, prefer to merge retainers into it
-                    try
-                    {
-                        var match = cfg.StoredCharacters.ByCharacter.FirstOrDefault(kv => string.Equals(kv.Value?.Name ?? string.Empty, playerName ?? string.Empty, StringComparison.OrdinalIgnoreCase));
-                        if (!string.IsNullOrWhiteSpace(match.Key))
-                        {
-                            target = match.Value;
-                            writeKey = match.Key;
-                        }
-                    }
-                    catch { }
-
-                    // If still no target, create a new canonical entry
-                    if (target == null)
-                    {
-                        var stored = new StoredCharacter();
-                        stored.Name = playerName ?? string.Empty;
-                        stored.LastUpdatedUtc = System.DateTime.UtcNow;
-                        stored.PlayerCounts = new System.Collections.Generic.Dictionary<string, long>(playerRow.ElementCounts ?? new System.Collections.Generic.Dictionary<string, long>(), System.StringComparer.OrdinalIgnoreCase);
-                        stored.RetainerCounts = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, long>>(System.StringComparer.OrdinalIgnoreCase);
-                        cfg.StoredCharacters.ByCharacter[key] = stored;
-                        target = stored;
-                        writeKey = key;
-                        changed = true;
-                        try { this.plugin.Log?.Info($"Stored character added: {writeKey} (Name={stored.Name})"); } catch { }
-                        try { this.plugin.Chat?.Print($"Crystal Terror: added stored character {stored.Name} ({writeKey})"); } catch { }
-                    }
-                }
-
-                // Ensure target has a RetainerCounts dictionary
-                if (target.RetainerCounts == null)
-                    target.RetainerCounts = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, long>>(System.StringComparer.OrdinalIgnoreCase);
-
-                // Merge retainer rows from cachedCounts (skip index 0 which is player)
+                var playerNameLocal = this.GetLocalPlayerName() ?? string.Empty;
+                var currentKey = playerNameLocal;
                 try
                 {
-                    for (var i = 1; i < this.cachedCounts.Count; ++i)
-                    {
-                        var r = this.cachedCounts[i];
-                        var rn = r.Character ?? string.Empty;
-                        if (string.IsNullOrWhiteSpace(rn)) continue;
-                        // Prepare serializable dictionary for counts
-                        var cd = new System.Collections.Generic.Dictionary<string, long>(r.ElementCounts ?? new System.Collections.Generic.Dictionary<string, long>(), System.StringComparer.OrdinalIgnoreCase);
-
-                        // If we don't already have this retainer stored, add it.
-                        if (!target.RetainerCounts.ContainsKey(rn))
-                        {
-                            target.RetainerCounts[rn] = cd;
-                            changed = true;
-                            try { this.plugin.Log?.Info($"Added retainer counts for {rn} to {writeKey}"); } catch { }
-                            try { this.plugin.Chat?.Print($"Crystal Terror: added retainer {rn} for {playerName} ({writeKey})"); } catch { }
-                        }
-                        else
-                        {
-                            // Existing retainer: compare counts and update any differences (log changes)
-                            try
-                            {
-                                var prev = target.RetainerCounts[rn];
-                                foreach (var ckv in cd)
-                                {
-                                    try
-                                    {
-                                        var ckey = ckv.Key ?? string.Empty;
-                                        var newV = ckv.Value;
-                                        prev.TryGetValue(ckey, out var prevV);
-                                        if (prevV != newV)
-                                        {
-                                            try { this.plugin.Log?.Info($"Retainer counts changed for {writeKey} -> {rn}: {ckey} {prevV} -> {newV}"); } catch { }
-                                            try { this.plugin.Chat?.Print($"Crystal Terror: {rn} counts updated for {playerName}: {ckey} {prevV} -> {newV}"); } catch { }
-                                            prev[ckey] = newV;
-                                            changed = true;
-                                        }
-                                    }
-                                    catch { }
-                                }
-                            }
-                            catch { }
-                        }
-                    }
+                    var world = this.GetLocalPlayerHomeWorld();
+                    if (!string.IsNullOrEmpty(world)) currentKey = currentKey + "@" + world;
                 }
                 catch { }
 
-                if (changed)
-                {
-                    try { this.plugin.PluginInterface.SavePluginConfig(cfg); } catch { }
-                }
+                if (string.IsNullOrWhiteSpace(currentKey)) return;
+
+                cfg.StoredCharacters = cfg.StoredCharacters ?? new StoredCharactersContainer();
+                cfg.StoredCharacters.ByCharacter = cfg.StoredCharacters.ByCharacter ?? new System.Collections.Generic.Dictionary<string, StoredCharacter>(System.StringComparer.OrdinalIgnoreCase);
+
+                // If an entry already exists for this canonical key, do nothing
+                if (cfg.StoredCharacters.ByCharacter.ContainsKey(currentKey)) return;
+
+                // Build stored character like EnsureSaveIfCachedValid but only add when missing
+                var sc = new StoredCharacter();
+                sc.LastUpdatedUtc = System.DateTime.UtcNow;
+                sc.Name = string.IsNullOrWhiteSpace(playerNameLocal) ? currentKey : playerNameLocal;
+                try { sc.PlayerCounts = new System.Collections.Generic.Dictionary<string, long>(this.cachedCounts[0].ElementCounts, System.StringComparer.OrdinalIgnoreCase); } catch { sc.PlayerCounts = new System.Collections.Generic.Dictionary<string, long>(System.StringComparer.OrdinalIgnoreCase); }
+                var retMap = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, long>>(System.StringComparer.OrdinalIgnoreCase);
+                try { foreach (var r in this.cachedCounts.Skip(1)) { var name = r.Character ?? string.Empty; if (string.IsNullOrWhiteSpace(name)) name = "(retainer)"; retMap[name] = new System.Collections.Generic.Dictionary<string, long>(r.ElementCounts, System.StringComparer.OrdinalIgnoreCase); } } catch { }
+                sc.RetainerCounts = retMap;
+
+                var baseKey = currentKey ?? string.Empty;
+                var keyToUse = this.EnsureNonConflictingStoredKey(cfg, baseKey, sc.Name);
+                cfg.StoredCharacters.ByCharacter[keyToUse] = sc;
+                try { this.plugin.PluginInterface.SavePluginConfig(cfg); } catch { }
             }
             catch { }
         }
 
         private void SaveConfigNow()
         {
-            lock (this.saveLock)
-            {
-                try { this.saveCts?.Cancel(); } catch { }
-                try
-                {
-                    // ensure cached counts are present
-                    if (this.cachedCounts == null || this.cachedCounts.Count == 0)
-                    {
-                        try { var res = this.ScanInventories(); this.cachedCounts = res ?? new System.Collections.Generic.List<CristalRow>(); } catch { }
-                    }
-
-                    // copy cachedCounts[0] into config stored characters under current key
-                    CrystalConfig cfg = null!;
-                    try { cfg = this.UpdateConfigFromCached(); } catch { }
-
-                    try { if (cfg != null) this.plugin.PluginInterface.SavePluginConfig(cfg); } catch { }
-                }
-                catch { }
-            }
+            try { this.plugin?.PluginInterface?.SavePluginConfig(this.plugin.Config); } catch { }
         }
 
         private CrystalConfig UpdateConfigFromCached()
         {
-            // Build and return a modified config instance (do not attempt to set Plugin.Config directly)
-            var cfg = this.plugin.Config ?? (this.plugin.PluginInterface.GetPluginConfig() as CrystalConfig ?? new CrystalConfig());
             try
             {
-                if (this.cachedCounts == null || this.cachedCounts.Count == 0) return cfg;
-                var playerRow = this.cachedCounts[0];
-                var playerName = playerRow.Character;
-                // Require a valid home world when persisting cached data. If missing, skip saving.
-                string? worldForKey = null;
-                try { worldForKey = this.GetLocalPlayerHomeWorld(); } catch { worldForKey = null; }
-                if (string.IsNullOrWhiteSpace(worldForKey) || string.IsNullOrWhiteSpace(playerName) || string.Equals(playerName, "Player", System.StringComparison.OrdinalIgnoreCase))
-                {
-                    return cfg;
-                }
-
-                var key = playerName + "@" + worldForKey;
-
-                if (cfg.StoredCharacters == null) cfg.StoredCharacters = new StoredCharactersContainer();
-                if (cfg.StoredCharacters.ByCharacter == null) cfg.StoredCharacters.ByCharacter = new System.Collections.Generic.Dictionary<string, StoredCharacter>(System.StringComparer.OrdinalIgnoreCase);
-                // If the detected player name is the generic "Player" or empty, do not persist it into stored characters
-                if (string.IsNullOrWhiteSpace(playerName) || string.Equals(playerName, "Player", System.StringComparison.OrdinalIgnoreCase))
-                {
-                    return cfg;
-                }
-
-                var stored = new StoredCharacter();
-                stored.Name = playerName ?? string.Empty;
-                stored.LastUpdatedUtc = System.DateTime.UtcNow;
-                stored.PlayerCounts = new System.Collections.Generic.Dictionary<string, long>(playerRow.ElementCounts, System.StringComparer.OrdinalIgnoreCase);
-
-                // preserve existing retainer data if present
-                if (cfg.StoredCharacters.ByCharacter.TryGetValue(key, out var existing))
-                {
-                    stored.RetainerCounts = existing.RetainerCounts ?? new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, long>>(System.StringComparer.OrdinalIgnoreCase);
-                }
-                else
-                {
-                    stored.RetainerCounts = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, long>>(System.StringComparer.OrdinalIgnoreCase);
-                }
-
-                // Merge any background IPC per-retainer aggregates into the stored retainer counts
-                try
-                {
-                    System.Collections.Generic.Dictionary<ulong, (System.DateTime lastUpdatedUtc, System.Collections.Generic.Dictionary<string, long> counts)> perAggCopy = null!;
-                    lock (this.ipcLock)
-                    {
-                        if (this.perRetainerAggregates != null && this.perRetainerAggregates.Count > 0)
-                            perAggCopy = new System.Collections.Generic.Dictionary<ulong, (System.DateTime, System.Collections.Generic.Dictionary<string, long>)>(this.perRetainerAggregates);
-                    }
-
-                    if (perAggCopy != null && perAggCopy.Count > 0)
-                    {
-                        foreach (var kv in perAggCopy)
-                        {
-                            try
-                            {
-                                var rid = kv.Key;
-                                var counts = kv.Value.counts;
-                                string rName;
-                                if (cfg.RetainerNames != null && cfg.RetainerNames.TryGetValue(rid, out var rn) && !string.IsNullOrWhiteSpace(rn))
-                                {
-                                    rName = rn;
-                                }
-                                else
-                                {
-                                    rName = "Retainer " + rid.ToString();
-                                }
-
-                                // clone counts into serializable dictionary
-                                var cd = new System.Collections.Generic.Dictionary<string, long>(counts, System.StringComparer.OrdinalIgnoreCase);
-                                stored.RetainerCounts[rName] = cd;
-                            }
-                            catch { }
-                        }
-                    }
-                }
-                catch { }
-
-                // Prefer an existing key with the same stored name to avoid duplicates from transient key differences
-                string writeKey2 = key;
-                try
-                {
-                    if (cfg.StoredCharacters.ByCharacter != null)
-                    {
-                        var match2 = cfg.StoredCharacters.ByCharacter.FirstOrDefault(kv => string.Equals(kv.Value?.Name ?? string.Empty, stored.Name ?? string.Empty, StringComparison.OrdinalIgnoreCase));
-                        if (!string.IsNullOrWhiteSpace(match2.Key))
-                            writeKey2 = match2.Key;
-                        else
-                            writeKey2 = this.EnsureNonConflictingStoredKey(cfg, key, stored.Name);
-                    }
-                }
-                catch { writeKey2 = key; }
-                cfg.StoredCharacters.ByCharacter[writeKey2] = stored;
+                this.EnsureSaveIfCachedValid();
             }
             catch { }
-
-            return cfg;
+            return this.plugin.Config ?? (this.plugin.PluginInterface.GetPluginConfig() as CrystalConfig ?? new CrystalConfig());
         }
 
         // Ensure we don't overwrite an existing stored-character key that belongs to a different character.
