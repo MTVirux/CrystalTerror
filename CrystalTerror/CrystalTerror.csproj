@@ -19,6 +19,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\FontAwesomeIcons\FontAwesomeIcons.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="ECommons" Version="3.0.1.9" />
   </ItemGroup>
 
