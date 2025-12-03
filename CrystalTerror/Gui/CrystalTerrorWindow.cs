@@ -55,18 +55,6 @@ namespace CrystalTerror.Gui
 
         public override void Draw()
         {
-            ImGui.Separator();
-
-            if (ImGui.Button("Config"))
-            {
-                this.RequestOpenConfig?.Invoke();
-            }
-
-            ImGui.SameLine();
-            if (ImGui.Button("Open data folder"))
-            {
-                // placeholder: open folder or show path
-            }
 
             // Logged-in character. Prefer plugin-provided values (kept up-to-date by OnFrameworkUpdate),
             // otherwise fall back to reflective reading of clientState.
