@@ -37,7 +37,6 @@ namespace CrystalTerror.Gui
 
         public override void Draw()
         {
-            ImGui.TextUnformatted("CrystalTerror — Inventory tracker for crystals/shards/clusters");
             ImGui.Separator();
 
             if (ImGui.Button("Config"))
@@ -159,9 +158,13 @@ namespace CrystalTerror.Gui
                     ImGui.PushID(i);
                     if (this.config.EditMode)
                     {
+                        var isFirst = i == 0;
+                        var isLast = i == this.config.Characters.Count - 1;
+
+                        ImGui.BeginDisabled(isFirst);
                         if (ImGui.Button("↑"))
                         {
-                            if (i > 0)
+                            if (!isFirst)
                             {
                                 var tmp = this.config.Characters[i - 1];
                                 this.config.Characters[i - 1] = this.config.Characters[i];
@@ -176,10 +179,13 @@ namespace CrystalTerror.Gui
                                 }
                             }
                         }
+                        ImGui.EndDisabled();
                         ImGui.SameLine();
+
+                        ImGui.BeginDisabled(isLast);
                         if (ImGui.Button("↓"))
                         {
-                            if (i < this.config.Characters.Count - 1)
+                            if (!isLast)
                             {
                                 var tmp = this.config.Characters[i + 1];
                                 this.config.Characters[i + 1] = this.config.Characters[i];
@@ -194,6 +200,7 @@ namespace CrystalTerror.Gui
                                 }
                             }
                         }
+                        ImGui.EndDisabled();
                         ImGui.SameLine();
                     }
 
