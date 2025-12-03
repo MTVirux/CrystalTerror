@@ -11,6 +11,9 @@ namespace CrystalTerror
         /// <summary>Retainer display name.</summary>
         public string Name { get; set; } = string.Empty;
 
+        /// <summary>Persisted AllaganTools/retainer identifier (atid).</summary>
+        public ulong atid { get; set; }
+
         /// <summary>Item counts for the retainer's inventory.</summary>
         public Inventory Inventory { get; set; } = new Inventory();
 

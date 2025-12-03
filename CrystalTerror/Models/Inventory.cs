@@ -40,16 +40,7 @@ namespace CrystalTerror
         public long Water_Shard { get; set; }
         public long Water_Crystal { get; set; }
         public long Water_Cluster { get; set; }
-
-        // Light
-        public long Light_Shard { get; set; }
-        public long Light_Crystal { get; set; }
-        public long Light_Cluster { get; set; }
-
-        // Dark
-        public long Dark_Shard { get; set; }
-        public long Dark_Crystal { get; set; }
-        public long Dark_Cluster { get; set; }
+        // Light and Dark removed
 
         public Inventory()
         {
@@ -68,8 +59,6 @@ namespace CrystalTerror
                     Element.Lightning => Lightning_Shard,
                     Element.Earth => Earth_Shard,
                     Element.Water => Water_Shard,
-                    Element.Light => Light_Shard,
-                    Element.Dark => Dark_Shard,
                     _ => 0
                 },
                 CrystalType.Crystal => element switch
@@ -80,8 +69,6 @@ namespace CrystalTerror
                     Element.Lightning => Lightning_Crystal,
                     Element.Earth => Earth_Crystal,
                     Element.Water => Water_Crystal,
-                    Element.Light => Light_Crystal,
-                    Element.Dark => Dark_Crystal,
                     _ => 0
                 },
                 CrystalType.Cluster => element switch
@@ -92,8 +79,6 @@ namespace CrystalTerror
                     Element.Lightning => Lightning_Cluster,
                     Element.Earth => Earth_Cluster,
                     Element.Water => Water_Cluster,
-                    Element.Light => Light_Cluster,
-                    Element.Dark => Dark_Cluster,
                     _ => 0
                 },
                 _ => 0
@@ -113,8 +98,6 @@ namespace CrystalTerror
                         case Element.Lightning: Lightning_Shard = value; break;
                         case Element.Earth: Earth_Shard = value; break;
                         case Element.Water: Water_Shard = value; break;
-                        case Element.Light: Light_Shard = value; break;
-                        case Element.Dark: Dark_Shard = value; break;
                     }
                     break;
                 case CrystalType.Crystal:
@@ -126,8 +109,6 @@ namespace CrystalTerror
                         case Element.Lightning: Lightning_Crystal = value; break;
                         case Element.Earth: Earth_Crystal = value; break;
                         case Element.Water: Water_Crystal = value; break;
-                        case Element.Light: Light_Crystal = value; break;
-                        case Element.Dark: Dark_Crystal = value; break;
                     }
                     break;
                 case CrystalType.Cluster:
@@ -139,8 +120,6 @@ namespace CrystalTerror
                         case Element.Lightning: Lightning_Cluster = value; break;
                         case Element.Earth: Earth_Cluster = value; break;
                         case Element.Water: Water_Cluster = value; break;
-                        case Element.Light: Light_Cluster = value; break;
-                        case Element.Dark: Dark_Cluster = value; break;
                     }
                     break;
             }
@@ -174,13 +153,7 @@ namespace CrystalTerror
                 { nameof(Water_Crystal), Water_Crystal },
                 { nameof(Water_Cluster), Water_Cluster },
 
-                { nameof(Light_Shard), Light_Shard },
-                { nameof(Light_Crystal), Light_Crystal },
-                { nameof(Light_Cluster), Light_Cluster },
-
-                { nameof(Dark_Shard), Dark_Shard },
-                { nameof(Dark_Crystal), Dark_Crystal },
-                { nameof(Dark_Cluster), Dark_Cluster }
+                // Light/Dark removed
             };
         }
 

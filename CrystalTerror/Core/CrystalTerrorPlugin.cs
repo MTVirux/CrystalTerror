@@ -6,6 +6,8 @@ using Dalamud.Plugin;
 using Dalamud.Game.Command;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
+using FFXIVClientStructs.FFXIV.Client.Game;
+using Lumina.Excel.Sheets;
 using Dalamud.Game.Gui;
 using Dalamud.Game.ClientState;
 using Dalamud.Game.Text.SeStringHandling; 
@@ -22,6 +24,15 @@ namespace CrystalTerror
         private readonly PluginConfig config;
         private readonly IFramework framework;
         private readonly IClientState clientState;
+        private readonly IDataManager dataManager;
+        private readonly Dictionary<uint, (Element, CrystalType)> trackedItems = new();
+        private readonly Dictionary<uint, long> lastItemCounts = new();
+        private DateTime lastPoll = DateTime.MinValue;
+        private readonly TimeSpan pollInterval = TimeSpan.FromSeconds(5);
+        private Dalamud.Plugin.Ipc.ICallGateSubscriber<(uint, FFXIVClientStructs.FFXIV.Client.Game.InventoryItem.ItemFlags, ulong, uint), bool>? allaganItemAdded;
+        private Dalamud.Plugin.Ipc.ICallGateSubscriber<(uint, FFXIVClientStructs.FFXIV.Client.Game.InventoryItem.ItemFlags, ulong, uint), bool>? allaganItemRemoved;
+        private Dalamud.Plugin.Ipc.ICallGateSubscriber<uint, ulong, uint, uint>? allaganItemCount;
+        private Dalamud.Plugin.Ipc.ICallGateSubscriber<uint, ulong, uint, uint>? allaganItemCountHQ;
         private string? lastSeenName;
         private string? lastSeenWorld;
         private bool isDisposed;
@@ -50,6 +61,30 @@ namespace CrystalTerror
 
             this.framework = framework;
             this.clientState = clientState;
+            this.dataManager = dataManager;
+
+            // subscribe to login/logout events to trigger import on login
+            try { this.clientState.Login += OnClientLogin; } catch { }
+            try { this.clientState.Logout += OnClientLogout; } catch { }
+
+            // build tracked items map from Lumina sheet
+            try { BuildTrackedItemMap(); } catch { }
+
+            // try to subscribe to AllaganTools item IPC if available
+            try
+            {
+                allaganItemAdded = this.PluginInterface.GetIpcSubscriber<(uint, FFXIVClientStructs.FFXIV.Client.Game.InventoryItem.ItemFlags, ulong, uint), bool>("AllaganTools.ItemAdded");
+                allaganItemRemoved = this.PluginInterface.GetIpcSubscriber<(uint, FFXIVClientStructs.FFXIV.Client.Game.InventoryItem.ItemFlags, ulong, uint), bool>("AllaganTools.ItemRemoved");
+                allaganItemAdded?.Subscribe(OnAllaganItemChanged);
+                allaganItemRemoved?.Subscribe(OnAllaganItemChanged);
+                allaganItemCount = this.PluginInterface.GetIpcSubscriber<uint, ulong, uint, uint>("AllaganTools.ItemCount");
+                allaganItemCountHQ = this.PluginInterface.GetIpcSubscriber<uint, ulong, uint, uint>("AllaganTools.ItemCountHQ");
+            }
+            catch
+            {
+                // ignore if AllaganTools not present
+            }
+            this.dataManager = dataManager;
 
             // subscribe to framework updates to detect login/logout and record characters
             this.framework.Update += OnFrameworkUpdate;
@@ -90,6 +125,12 @@ namespace CrystalTerror
                 HelpMessage = "Toggle the CrystalTerror main window",
             });
 
+            // support manual import via "/ct import"
+            this.CommandManager.AddHandler("/ctimport", new CommandInfo((c, a) => { TryImportForCurrentPlayer(); })
+            {
+                HelpMessage = "Import current character inventory into CrystalTerror config",
+            });
+
             this.PluginInterface.UiBuilder.Draw += this.DrawUi;
             this.PluginInterface.UiBuilder.OpenMainUi += this.OpenMainUi;
             this.PluginInterface.UiBuilder.OpenConfigUi += this.OpenConfigUi;
@@ -127,6 +168,12 @@ namespace CrystalTerror
 
         private void OnToggleCommand(string command, string args)
         {
+            if (!string.IsNullOrWhiteSpace(args) && args.Trim().Equals("import", StringComparison.OrdinalIgnoreCase))
+            {
+                TryImportForCurrentPlayer();
+                return;
+            }
+
             this.mainWindow.IsOpen = !this.mainWindow.IsOpen;
         }
 
@@ -192,6 +239,10 @@ namespace CrystalTerror
                 this.configWindow.Dispose();
                 this.autoRetainerWindow.Dispose();
                 this.autoRetainerRetainersWindow.Dispose();
+                try { this.clientState.Login -= OnClientLogin; } catch { }
+                try { this.clientState.Logout -= OnClientLogout; } catch { }
+                try { allaganItemAdded?.Unsubscribe(OnAllaganItemChanged); } catch { }
+                try { allaganItemRemoved?.Unsubscribe(OnAllaganItemChanged); } catch { }
             }
 
             this.isDisposed = true;
@@ -271,11 +322,22 @@ namespace CrystalTerror
                 }
 
                 if (name == lastSeenName && world == lastSeenWorld)
+                {
+                    // still same character — poll inventory occasionally
+                    try
+                    {
+                        var scPoll = this.config.Characters.FirstOrDefault(c => c.Name == this.lastSeenName && c.World == this.lastSeenWorld);
+                        if (scPoll != null) PollTrackedCountsAndMaybeImport(scPoll);
+                    }
+                    catch { }
                     return;
+                }
 
                 lastSeenName = name;
                 lastSeenWorld = world;
                 SaveOrUpdateCharacter(name, world);
+                // trigger import on login/change
+                try { TryImportForCurrentPlayer(); } catch { }
             }
             catch
             {
@@ -303,6 +365,15 @@ namespace CrystalTerror
                 };
 
                 this.config.Characters.Add(sc);
+                try
+                {
+                    // attempt to populate inventory for newly-seen character
+                    TryImportForCurrentPlayer();
+                }
+                catch
+                {
+                    // ignore import failures
+                }
             }
 
             try
@@ -314,5 +385,283 @@ namespace CrystalTerror
                 // ignore save errors
             }
         }
+
+        private unsafe void TryImportForCurrentPlayer()
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(this.lastSeenName) || string.IsNullOrEmpty(this.lastSeenWorld))
+                {
+                    // fallback: try to reflectively read clientState
+                    var clientType = this.clientState?.GetType();
+                    var localPlayerProp = clientType?.GetProperty("LocalPlayer");
+                    var localPlayer = localPlayerProp?.GetValue(this.clientState);
+                    if (localPlayer == null) return;
+
+                    var nameProp = localPlayer.GetType().GetProperty("Name");
+                    var nameVal = nameProp?.GetValue(localPlayer);
+                    var name = nameVal?.ToString();
+                    if (string.IsNullOrEmpty(name)) return;
+
+                    string world = "(unknown)";
+                    var worldProp = localPlayer.GetType().GetProperty("World") ?? localPlayer.GetType().GetProperty("HomeWorld");
+                    var worldVal = worldProp?.GetValue(localPlayer);
+                    if (worldVal != null) world = worldVal.ToString() ?? world;
+
+                    this.lastSeenName = name;
+                    this.lastSeenWorld = world;
+                }
+
+                var sc = this.config.Characters.FirstOrDefault(c => c.Name == this.lastSeenName && c.World == this.lastSeenWorld);
+                if (sc == null) return;
+
+                ImportInventoryForCharacter(sc);
+                try { ImportRetainersForCharacter(sc); } catch { }
+                // initialize lastItemCounts for tracked items
+                try
+                {
+                    var inv = FFXIVClientStructs.FFXIV.Client.Game.InventoryManager.Instance();
+                    if (inv != null)
+                    {
+                        foreach (var kv in trackedItems)
+                        {
+                            try { lastItemCounts[kv.Key] = inv->GetInventoryItemCount(kv.Key); } catch { }
+                        }
+                    }
+                }
+                catch { }
+                try { this.PluginInterface.SavePluginConfig(this.config); } catch { }
+            }
+            catch
+            {
+                // ignore import errors
+            }
+        }
+
+        private void OnClientLogin()
+        {
+            try { TryImportForCurrentPlayer(); } catch { }
+        }
+
+        private void OnClientLogout(int a, int b)
+        {
+            try { lastItemCounts.Clear(); } catch { }
+        }
+
+        private void OnAllaganItemChanged((uint itemId, FFXIVClientStructs.FFXIV.Client.Game.InventoryItem.ItemFlags flags, ulong a, uint b) tuple)
+        {
+            try
+            {
+                if (trackedItems.ContainsKey(tuple.itemId))
+                {
+                    var sc = this.config.Characters.FirstOrDefault(c => c.Name == this.lastSeenName && c.World == this.lastSeenWorld);
+                    if (sc != null)
+                    {
+                        ImportInventoryForCharacter(sc);
+                        try { ImportRetainersForCharacter(sc); } catch { }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private unsafe void ImportRetainersForCharacter(StoredCharacter sc)
+        {
+            try
+            {
+                if (allaganItemCount == null) return; // AllaganTools not present
+
+                var rm = RetainerManager.Instance();
+                if (rm == null) return;
+
+                // ensure we have a retainers list
+                if (sc.Retainers == null) sc.Retainers = new System.Collections.Generic.List<Retainer>();
+
+                // For each retainer slot (0..9) try to lookup a retainer id and query counts
+                for (uint slot = 0; slot < 10; slot++)
+                {
+                    try
+                    {
+                        var ret = rm->GetRetainerBySortedIndex(slot);
+                        if (ret == null) continue;
+                        if (!ret->Available) continue;
+                        var retId = ret->RetainerId;
+                        if (retId == 0) continue;
+
+                        // read the in-game retainer name if available
+                        string displayName = null;
+                        try
+                        {
+                            displayName = ret->NameString;
+                        }
+                        catch { }
+
+                        // find or create a Retainer entry by numeric atid or (legacy) numeric-name
+                        var stored = sc.Retainers.FirstOrDefault(r => r.atid == retId || r.Name == retId.ToString());
+                        if (stored == null)
+                        {
+                            stored = new Retainer(sc) { atid = retId, Name = string.IsNullOrEmpty(displayName) ? retId.ToString() : displayName };
+                            sc.Retainers.Add(stored);
+                        }
+                        else
+                        {
+                            // ensure persisted atid is set and update display name if available
+                            stored.atid = retId;
+                            if (!string.IsNullOrEmpty(displayName)) stored.Name = displayName;
+                        }
+
+                        // zero out counts first
+                        stored.Inventory = new Inventory();
+
+                        // for each tracked item, query AllaganTools for quantities across retainer containers
+                        foreach (var kv in trackedItems)
+                        {
+                            try
+                            {
+                                uint itemId = kv.Key;
+                                uint qty = 0;
+                                // sum across the same containers as RetainerInfo.GetRetainerInventoryItem
+                                qty += allaganItemCount.InvokeFunc(itemId, retId, 10000);
+                                qty += allaganItemCount.InvokeFunc(itemId, retId, 10001);
+                                qty += allaganItemCount.InvokeFunc(itemId, retId, 10002);
+                                qty += allaganItemCount.InvokeFunc(itemId, retId, 10003);
+                                qty += allaganItemCount.InvokeFunc(itemId, retId, 10004);
+                                qty += allaganItemCount.InvokeFunc(itemId, retId, 10005);
+                                qty += allaganItemCount.InvokeFunc(itemId, retId, 10006);
+                                qty += allaganItemCount.InvokeFunc(itemId, retId, (uint)InventoryType.RetainerCrystals);
+
+                                var (el, type) = trackedItems[itemId];
+                                stored.Inventory.SetCount(el, type, qty);
+                            }
+                            catch { }
+                        }
+                    }
+                    catch { }
+                }
+                try { this.PluginInterface.SavePluginConfig(this.config); } catch { }
+            }
+            catch { }
+        }
+
+        private unsafe void PollTrackedCountsAndMaybeImport(StoredCharacter sc)
+        {
+            try
+            {
+                var now = DateTime.UtcNow;
+                if (now - lastPoll < pollInterval) return;
+                lastPoll = now;
+
+                var inv = InventoryManager.Instance();
+                if (inv == null) return;
+
+                var changed = false;
+                foreach (var id in trackedItems.Keys)
+                {
+                    try
+                    {
+                        var cnt = inv->GetInventoryItemCount(id);
+                        if (!lastItemCounts.TryGetValue(id, out var prev) || prev != cnt)
+                        {
+                            lastItemCounts[id] = cnt;
+                            changed = true;
+                        }
+                    }
+                    catch { }
+                }
+
+                if (changed) ImportInventoryForCharacter(sc);
+            }
+            catch { }
+        }
+
+        private unsafe void ImportInventoryForCharacter(StoredCharacter sc)
+        {
+            try
+            {
+                var invMgr = InventoryManager.Instance();
+                if (invMgr == null) return;
+
+                var sheet = this.dataManager.GetExcelSheet<Item>();
+                if (sheet == null) return;
+
+                var elements = Enum.GetValues(typeof(Element)).Cast<Element>().ToArray();
+                var typeNames = new Dictionary<CrystalType, string>
+                {
+                    { CrystalType.Shard, "Shard" },
+                    { CrystalType.Crystal, "Crystal" },
+                    { CrystalType.Cluster, "Cluster" }
+                };
+
+                // iterate items and match by name pattern like "Fire Shard"
+                foreach (var item in sheet)
+                {
+                    try
+                    {
+                        var itemName = item.Name.ToString();
+                        if (string.IsNullOrEmpty(itemName)) continue;
+
+                        foreach (var el in elements)
+                        {
+                            foreach (var kv in typeNames)
+                            {
+                                var expected = el.ToString() + " " + kv.Value;
+                                if (!itemName.Equals(expected, StringComparison.OrdinalIgnoreCase) && !itemName.Contains(expected, StringComparison.OrdinalIgnoreCase))
+                                    continue;
+
+                                var count = (long)invMgr->GetInventoryItemCount((uint)item.RowId);
+                                sc.Inventory.SetCount(el, kv.Key, count);
+                                // once matched, skip other types for this item
+                                break;
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // ignore per-item errors
+                    }
+                }
+            }
+            catch
+            {
+                // ignore import errors
+            }
+        }
+
+        private void BuildTrackedItemMap()
+        {
+            // Use an explicit ID map for crystals/shards/clusters to avoid language issues
+            try
+            {
+                var explicitMap = new Dictionary<uint, (Element, CrystalType)>
+                {
+                    { 2u, (Element.Fire, CrystalType.Shard) },
+                    { 3u, (Element.Ice, CrystalType.Shard) },
+                    { 4u, (Element.Wind, CrystalType.Shard) },
+                    { 5u, (Element.Earth, CrystalType.Shard) },
+                    { 6u, (Element.Lightning, CrystalType.Shard) },
+                    { 7u, (Element.Water, CrystalType.Shard) },
+                    { 8u, (Element.Fire, CrystalType.Crystal) },
+                    { 9u, (Element.Ice, CrystalType.Crystal) },
+                    { 10u, (Element.Wind, CrystalType.Crystal) },
+                    { 11u, (Element.Earth, CrystalType.Crystal) },
+                    { 12u, (Element.Lightning, CrystalType.Crystal) },
+                    { 13u, (Element.Water, CrystalType.Crystal) },
+                    { 14u, (Element.Fire, CrystalType.Cluster) },
+                    { 15u, (Element.Ice, CrystalType.Cluster) },
+                    { 16u, (Element.Wind, CrystalType.Cluster) },
+                    { 17u, (Element.Earth, CrystalType.Cluster) },
+                    { 18u, (Element.Lightning, CrystalType.Cluster) },
+                    { 19u, (Element.Water, CrystalType.Cluster) },
+                };
+
+                trackedItems.Clear();
+                foreach (var kv in explicitMap)
+                {
+                    trackedItems[kv.Key] = kv.Value;
+                }
+            }
+            catch { }
+        }
     }
+                    // end foreach item
 }

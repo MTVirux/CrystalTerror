@@ -317,8 +317,9 @@ namespace CrystalTerror.Gui
                             ImGui.Indent();
                             try
                             {
-                                var elements = Enum.GetValues(typeof(CrystalTerror.Element)).Cast<CrystalTerror.Element>().ToArray();
-                                var colCount = 1 + elements.Length; // Name + each element
+                                var allElements = Enum.GetValues(typeof(CrystalTerror.Element)).Cast<CrystalTerror.Element>();
+                                var elements = allElements.Where(e => this.config.EnabledElements.Contains(e)).ToArray();
+                                var colCount = 1 + Math.Max(0, elements.Length); // Name + each enabled element
                                 if (ImGui.BeginTable($"retainers_table_{i}", colCount, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable))
                                 {
                                     ImGui.TableSetupColumn("Name");
@@ -341,7 +342,15 @@ namespace CrystalTerror.Gui
                                             {
                                                 var el = elements[ei];
                                                 var inv = r?.Inventory ?? new CrystalTerror.Inventory();
-                                                var s = $"{inv.GetCount(el, CrystalTerror.CrystalType.Shard)}/{inv.GetCount(el, CrystalTerror.CrystalType.Crystal)}/{inv.GetCount(el, CrystalTerror.CrystalType.Cluster)}";
+                                                // Build cell text based on enabled types in config (Shard/Crystal/Cluster order)
+                                                var parts = new System.Collections.Generic.List<string>();
+                                                var typeOrder = new[] { CrystalTerror.CrystalType.Shard, CrystalTerror.CrystalType.Crystal, CrystalTerror.CrystalType.Cluster };
+                                                foreach (var tt in typeOrder)
+                                                {
+                                                    if (!this.config.EnabledTypes.Contains(tt)) continue;
+                                                    parts.Add(inv.GetCount(el, tt).ToString());
+                                                }
+                                                var s = parts.Count > 0 ? string.Join("/", parts) : "-";
                                                 ImGui.TextUnformatted(s);
                                             }
                                             catch

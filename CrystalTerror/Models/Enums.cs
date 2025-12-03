@@ -13,8 +13,6 @@ namespace CrystalTerror
         Lightning,
         Earth,
         Water,
-        Light,
-        Dark,
     }
 
     /// <summary>

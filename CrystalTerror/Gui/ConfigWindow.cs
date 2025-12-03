@@ -100,6 +100,62 @@ namespace CrystalTerror.Gui
                 }
             }
 
+            // --- Filters ---
+            if (this.IsOpen && !this.wasOpen) ImGui.SetNextItemOpen(false, ImGuiCond.Once);
+            if (ImGui.CollapsingHeader("Filters"))
+            {
+                ImGui.TextUnformatted("Elements to include:");
+                ImGui.Indent();
+                foreach (var el in Enum.GetValues(typeof(CrystalTerror.Element)).Cast<CrystalTerror.Element>())
+                {
+                    var present = this.config.EnabledElements.Contains(el);
+                    var label = el.ToString();
+                    if (ImGui.Checkbox(label + "##el_" + label, ref present))
+                    {
+                        try
+                        {
+                            if (present)
+                            {
+                                if (!this.config.EnabledElements.Contains(el)) this.config.EnabledElements.Add(el);
+                            }
+                            else
+                            {
+                                if (this.config.EnabledElements.Contains(el)) this.config.EnabledElements.RemoveAll(x => x == el);
+                            }
+                            this.pluginInterface.SavePluginConfig(this.config);
+                        }
+                        catch { }
+                    }
+                }
+                ImGui.Unindent();
+
+                ImGui.Spacing();
+                ImGui.TextUnformatted("Crystal types to include:");
+                ImGui.Indent();
+                foreach (var t in Enum.GetValues(typeof(CrystalTerror.CrystalType)).Cast<CrystalTerror.CrystalType>())
+                {
+                    var present = this.config.EnabledTypes.Contains(t);
+                    var label = t.ToString();
+                    if (ImGui.Checkbox(label + "##type_" + label, ref present))
+                    {
+                        try
+                        {
+                            if (present)
+                            {
+                                if (!this.config.EnabledTypes.Contains(t)) this.config.EnabledTypes.Add(t);
+                            }
+                            else
+                            {
+                                if (this.config.EnabledTypes.Contains(t)) this.config.EnabledTypes.RemoveAll(x => x == t);
+                            }
+                            this.pluginInterface.SavePluginConfig(this.config);
+                        }
+                        catch { }
+                    }
+                }
+                ImGui.Unindent();
+            }
+
             // --- Storage / Import section ---
             if (this.IsOpen && !this.wasOpen) ImGui.SetNextItemOpen(false, ImGuiCond.Once);
             if (ImGui.CollapsingHeader("Storage"))

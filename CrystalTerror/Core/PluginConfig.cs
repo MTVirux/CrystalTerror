@@ -18,5 +18,24 @@ namespace CrystalTerror
 
         /// <summary>Controls how characters are sorted in the main UI.</summary>
         public CharacterSort CharacterSort { get; set; } = CharacterSort.Alphabetical;
+
+        /// <summary>Which elements to include when importing and showing inventories.</summary>
+        public List<Element> EnabledElements { get; set; } = new List<Element>
+        {
+            Element.Fire,
+            Element.Ice,
+            Element.Wind,
+            Element.Lightning,
+            Element.Earth,
+            Element.Water
+        };
+
+        /// <summary>Which crystal sizes/types to include when importing and showing inventories.</summary>
+        public List<CrystalType> EnabledTypes { get; set; } = new List<CrystalType>
+        {
+            CrystalType.Shard,
+            CrystalType.Crystal,
+            CrystalType.Cluster
+        };
     }
 }
