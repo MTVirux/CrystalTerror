@@ -18,7 +18,7 @@ namespace CrystalTerror
         public Inventory Inventory { get; set; } = new Inventory();
 
         /// <summary>Reference to the character that owns this retainer. Required — never null.</summary>
-        private StoredCharacter _ownerCharacter = new StoredCharacter();
+        private StoredCharacter _ownerCharacter = default!;
         public StoredCharacter OwnerCharacter
         {
             get => _ownerCharacter;
