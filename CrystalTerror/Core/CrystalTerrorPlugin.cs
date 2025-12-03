@@ -61,7 +61,7 @@ namespace CrystalTerror
             this.mainWindow.RequestOpenConfig = () => this.configWindow.IsOpen = true;
 
             // register a simple toggle command
-            this.CommandManager.AddHandler("/cterr", new CommandInfo(this.OnToggleCommand)
+            this.CommandManager.AddHandler("/ct", new CommandInfo(this.OnToggleCommand)
             {
                 HelpMessage = "Toggle the CrystalTerror main window",
             });
