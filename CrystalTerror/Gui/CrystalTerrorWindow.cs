@@ -3,6 +3,7 @@ using OtterGui;
 using OtterGui.Raii;
 using Dalamud.Interface.Windowing;
 using Dalamud.Bindings.ImGui;
+using OtterGui.Text;
 using Dalamud.Plugin;
 // Use dynamic for client state to avoid a hard dependency on the Dalamud client state interface
 
@@ -28,6 +29,23 @@ namespace CrystalTerror.Gui
                 MinimumSize = new System.Numerics.Vector2(300, 120),
                 MaximumSize = new System.Numerics.Vector2(9999, 9999),
             };
+            
+            // Add a cog to the title bar that opens the config when clicked
+            try
+            {
+                TitleBarButtons.Add(new()
+                {
+                    Click = (m) => { if (m == ImGuiMouseButton.Left) this.RequestOpenConfig?.Invoke(); },
+                    Icon = (Dalamud.Interface.FontAwesomeIcon)FontAwesomeIcon.Cog,
+                    IconOffset = new(2, 2),
+                    ShowTooltip = () => ImGui.SetTooltip("Open settings window"),
+                });
+            }
+            catch
+            {
+                // If TitleBarButtons or related types are not available, silently ignore.
+            }
+
         }
 
         public override void PreDraw()
