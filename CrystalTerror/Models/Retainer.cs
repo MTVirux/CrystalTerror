@@ -16,5 +16,8 @@ namespace CrystalTerror
 
         /// <summary>Item counts for the retainer's inventory.</summary>
         public Inventory Inventory { get; set; } = new Inventory();
+
+        /// <summary>Reference to the character that owns this retainer.</summary>
+        public StoredCharacter OwnerCharacter { get; set; } = null;
     }
 }
