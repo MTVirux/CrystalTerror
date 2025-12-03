@@ -1,3 +1,12 @@
 [submodule "OtterGui"]
 	path = OtterGui
 	url = https://github.com/Ottermandias/OtterGui.git
+[submodule "NightmareUI"]
+	path = NightmareUI
+	url = https://github.com/NightmareXIV/NightmareUI
+[submodule "NightmareUI.OtterGuiWrapper"]
+	path = NightmareUI.OtterGuiWrapper
+	url = https://github.com/NightmareXIV/NightmareUI.OtterGuiWrapper
+[submodule "ECommons"]
+	path = ECommons
+	url = https://github.com/NightmareXIV/ECommons
