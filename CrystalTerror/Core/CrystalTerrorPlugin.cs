@@ -17,6 +17,8 @@ namespace CrystalTerror
         private readonly WindowSystem windowSystem = new(typeof(CrystalTerrorPlugin).AssemblyQualifiedName);
         private readonly Gui.CrystalTerrorWindow mainWindow;
         private readonly Gui.ConfigWindow configWindow;
+        private readonly Gui.AutoRetainerCharsWindow autoRetainerWindow;
+        private readonly Gui.AutoRetainerRetainersWindow autoRetainerRetainersWindow;
         private readonly PluginConfig config;
         private readonly IFramework framework;
         private readonly IClientState clientState;
@@ -54,11 +56,33 @@ namespace CrystalTerror
 
             this.mainWindow = new Gui.CrystalTerrorWindow(this.config, clientState, () => (this.lastSeenName, this.lastSeenWorld), this.PluginInterface);
             this.configWindow = new Gui.ConfigWindow(this.config, this.PluginInterface);
+            this.autoRetainerWindow = new Gui.AutoRetainerCharsWindow(this.PluginInterface);
+            this.autoRetainerRetainersWindow = new Gui.AutoRetainerRetainersWindow(this.PluginInterface);
             this.windowSystem.AddWindow(this.mainWindow);
             this.windowSystem.AddWindow(this.configWindow);
+            this.windowSystem.AddWindow(this.autoRetainerWindow);
+            this.windowSystem.AddWindow(this.autoRetainerRetainersWindow);
 
-            // wire main window request to open config
+            // wire main window request to open config and autoretainer list
             this.mainWindow.RequestOpenConfig = () => this.configWindow.IsOpen = true;
+            this.mainWindow.RequestOpenAutoRetainer = () => this.autoRetainerWindow.IsOpen = true;
+            // wire chars window request to open retainers window for a CID
+            this.autoRetainerWindow.RequestOpenRetainers = (cid, name) =>
+            {
+                try
+                {
+                    this.autoRetainerRetainersWindow.SetCharacter(cid, name);
+                    this.autoRetainerRetainersWindow.IsOpen = true;
+                }
+                catch { }
+            };
+
+            // Also allow the chars window to request importing a character's data into config
+            this.autoRetainerWindow.RequestImportCharacter = (cid) =>
+            {
+                try { this.configWindow.ImportCharacterFromCid(cid); } catch { }
+            };
+
 
             // register a simple toggle command
             this.CommandManager.AddHandler("/ct", new CommandInfo(this.OnToggleCommand)
@@ -69,6 +93,20 @@ namespace CrystalTerror
             this.PluginInterface.UiBuilder.Draw += this.DrawUi;
             this.PluginInterface.UiBuilder.OpenMainUi += this.OpenMainUi;
             this.PluginInterface.UiBuilder.OpenConfigUi += this.OpenConfigUi;
+
+            // If both windows are closed at startup, ensure we are not stuck in edit mode.
+            try
+            {
+                if (!this.mainWindow.IsOpen && !this.configWindow.IsOpen && this.config.EditMode)
+                {
+                    this.config.EditMode = false;
+                    try { this.PluginInterface.SavePluginConfig(this.config); } catch { }
+                }
+            }
+            catch
+            {
+                // ignore
+            }
 
 #if DEBUG
             this.mainWindow.IsOpen = true;
@@ -94,6 +132,20 @@ namespace CrystalTerror
 
         private void DrawUi()
         {
+            try
+            {
+                // If user closed all windows, automatically exit edit mode and persist.
+                if (!this.mainWindow.IsOpen && !this.configWindow.IsOpen && this.config.EditMode)
+                {
+                    this.config.EditMode = false;
+                    try { this.PluginInterface.SavePluginConfig(this.config); } catch { }
+                }
+            }
+            catch
+            {
+                // be conservative — don't let UI housekeeping crash drawing
+            }
+
             this.windowSystem.Draw();
         }
 
@@ -138,6 +190,8 @@ namespace CrystalTerror
                 this.windowSystem.RemoveAllWindows();
                 this.mainWindow.Dispose();
                 this.configWindow.Dispose();
+                this.autoRetainerWindow.Dispose();
+                this.autoRetainerRetainersWindow.Dispose();
             }
 
             this.isDisposed = true;

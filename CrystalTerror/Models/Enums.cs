@@ -26,4 +26,17 @@ namespace CrystalTerror
         Crystal,
         Cluster,
     }
+
+    /// <summary>
+    /// How saved characters should be presented in the UI.
+    /// </summary>
+    public enum CharacterSort
+    {
+        Alphabetical,
+        ReverseAlphabetical,
+        World,
+        ReverseWorld,
+        AutoRetainer,
+        Custom,
+    }
 }

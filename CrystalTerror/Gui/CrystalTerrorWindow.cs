@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using OtterGui;
 using OtterGui.Raii;
 using Dalamud.Interface.Windowing;
@@ -11,6 +13,7 @@ namespace CrystalTerror.Gui
 {
     public class CrystalTerrorWindow : Window, IDisposable
     {
+        public Action? RequestOpenAutoRetainer;
         private bool disposed;
         private readonly PluginConfig config;
         private readonly dynamic? clientState;
@@ -151,14 +154,106 @@ namespace CrystalTerror.Gui
             ImGui.Spacing();
             ImGui.Bullet(); ImGui.TextUnformatted($"Logged in character: {playerName}@{playerWorld}");
 
+            ImGui.SameLine();
+            if (ImGui.Button("AutoRetainer chars"))
+            {
+                this.RequestOpenAutoRetainer?.Invoke();
+            }
+
             ImGui.Spacing();
             ImGui.TextUnformatted("Saved characters:");
             ImGui.Spacing();
             if (this.config?.Characters != null)
             {
-                for (var i = 0; i < this.config.Characters.Count; ++i)
+                // Determine the list to display. In EditMode we must operate on the persisted list
+                // so reordering buttons map to the underlying indices. Otherwise, present a sorted
+                // copy based on the selected CharacterSort.
+                List<StoredCharacter> displayList;
+                if (this.config.EditMode)
                 {
-                    var c = this.config.Characters[i];
+                    displayList = this.config.Characters;
+                }
+                else
+                {
+                    switch (this.config.CharacterSort)
+                    {
+                        case CharacterSort.Alphabetical:
+                            displayList = this.config.Characters.OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+                                .ThenBy(c => c.World, StringComparer.OrdinalIgnoreCase).ToList();
+                            break;
+                        case CharacterSort.ReverseAlphabetical:
+                            displayList = this.config.Characters.OrderByDescending(c => c.Name, StringComparer.OrdinalIgnoreCase)
+                                .ThenByDescending(c => c.World, StringComparer.OrdinalIgnoreCase).ToList();
+                            break;
+                        case CharacterSort.World:
+                            displayList = this.config.Characters.OrderBy(c => c.World, StringComparer.OrdinalIgnoreCase)
+                                .ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList();
+                            break;
+                        case CharacterSort.ReverseWorld:
+                            displayList = this.config.Characters.OrderByDescending(c => c.World, StringComparer.OrdinalIgnoreCase)
+                                .ThenByDescending(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList();
+                            break;
+                        case CharacterSort.AutoRetainer:
+                            {
+                                try
+                                {
+                                    var getCids = this.pluginInterface.GetIpcSubscriber<List<ulong>>("AutoRetainer.GetRegisteredCIDs");
+                                    var cids = getCids?.InvokeFunc();
+                                    if (cids != null && cids.Count > 0)
+                                    {
+                                        var getOcd = this.pluginInterface.GetIpcSubscriber<ulong, object>("AutoRetainer.GetOfflineCharacterData");
+                                        var orderKeys = new List<string>();
+                                        foreach (var cid in cids)
+                                        {
+                                            try
+                                            {
+                                                var ocd = getOcd?.InvokeFunc(cid);
+                                                if (ocd == null) continue;
+                                                dynamic d = ocd;
+                                                string name = "(unknown)";
+                                                string world = "(unknown)";
+                                                try { name = d.Name ?? name; } catch { }
+                                                try { world = d.World ?? d.HomeWorld ?? world; } catch { }
+                                                orderKeys.Add((name + "\u0001" + world).ToLowerInvariant());
+                                            }
+                                            catch
+                                            {
+                                                // ignore per-cid errors
+                                            }
+                                        }
+
+                                        var rank = new Dictionary<string, int>();
+                                        for (var idx = 0; idx < orderKeys.Count; ++idx)
+                                        {
+                                            var k = orderKeys[idx];
+                                            if (!rank.ContainsKey(k)) rank[k] = idx;
+                                        }
+
+                                        displayList = this.config.Characters.OrderBy(c =>
+                                        {
+                                            var key = (c.Name + "\u0001" + c.World).ToLowerInvariant();
+                                            return rank.TryGetValue(key, out var r) ? r : int.MaxValue;
+                                        }).ToList();
+                                        break;
+                                    }
+                                }
+                                catch
+                                {
+                                    // fall back to persisted order
+                                }
+
+                                displayList = this.config.Characters;
+                                break;
+                            }
+                        default:
+                            displayList = this.config.Characters;
+                            break;
+                    }
+                }
+
+                for (var i = 0; i < displayList.Count; ++i)
+                {
+                    var c = displayList[i];
                     var header = $"{c.Name}@{c.World}";
 
                     ImGui.PushID(i);
@@ -214,7 +309,136 @@ namespace CrystalTerror.Gui
                     {
                         ImGui.Indent();
                         ImGui.TextUnformatted($"Last update (UTC): {c.LastUpdateUtc:u}");
-                        ImGui.TextUnformatted($"Retainers: {c.Retainers?.Count ?? 0}");
+
+                        // If we have stored retainers, show them in a table (rows = retainers, columns = elemental inventory)
+                        if (c.Retainers != null && c.Retainers.Count > 0)
+                        {
+                            ImGui.TextUnformatted("Retainers:");
+                            ImGui.Indent();
+                            try
+                            {
+                                var elements = Enum.GetValues(typeof(CrystalTerror.Element)).Cast<CrystalTerror.Element>().ToArray();
+                                var colCount = 1 + elements.Length; // Name + each element
+                                if (ImGui.BeginTable($"retainers_table_{i}", colCount, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable))
+                                {
+                                    ImGui.TableSetupColumn("Name");
+                                    foreach (var el in elements)
+                                        ImGui.TableSetupColumn(el.ToString());
+
+                                    ImGui.TableHeadersRow();
+
+                                    for (var ri = 0; ri < c.Retainers.Count; ++ri)
+                                    {
+                                        var r = c.Retainers[ri];
+                                        ImGui.TableNextRow();
+                                        ImGui.TableSetColumnIndex(0);
+                                        ImGui.TextUnformatted(r?.Name ?? "(unknown)");
+
+                                        for (var ei = 0; ei < elements.Length; ++ei)
+                                        {
+                                            ImGui.TableSetColumnIndex(1 + ei);
+                                            try
+                                            {
+                                                var el = elements[ei];
+                                                var inv = r?.Inventory ?? new CrystalTerror.Inventory();
+                                                var s = $"{inv.GetCount(el, CrystalTerror.CrystalType.Shard)}/{inv.GetCount(el, CrystalTerror.CrystalType.Crystal)}/{inv.GetCount(el, CrystalTerror.CrystalType.Cluster)}";
+                                                ImGui.TextUnformatted(s);
+                                            }
+                                            catch
+                                            {
+                                                ImGui.TextUnformatted("-");
+                                            }
+                                        }
+                                    }
+
+                                    ImGui.EndTable();
+                                }
+                            }
+                            catch
+                            {
+                                // fallback: simple list if table rendering fails
+                                ImGui.Indent();
+                                for (var ri = 0; ri < c.Retainers.Count; ++ri)
+                                    ImGui.BulletText(c.Retainers[ri]?.Name ?? "(unknown)");
+                                ImGui.Unindent();
+                            }
+
+                            ImGui.Unindent();
+                        }
+                        else
+                        {
+                            // No stored retainers — try to query AutoRetainer for this character and list them
+                            var listed = false;
+                            try
+                            {
+                                var getCids = this.pluginInterface.GetIpcSubscriber<System.Collections.Generic.List<ulong>>("AutoRetainer.GetRegisteredCIDs");
+                                var cids = getCids?.InvokeFunc();
+                                if (cids != null && cids.Count > 0)
+                                {
+                                    var getOcd = this.pluginInterface.GetIpcSubscriber<ulong, object>("AutoRetainer.GetOfflineCharacterData");
+                                    foreach (var cid in cids)
+                                    {
+                                        try
+                                        {
+                                            var ocd = getOcd?.InvokeFunc(cid);
+                                            if (ocd == null) continue;
+                                            dynamic d = ocd;
+                                            string name = "(unknown)";
+                                            string world = "(unknown)";
+                                            try { name = d.Name ?? name; } catch { }
+                                            try { world = d.World ?? d.HomeWorld ?? world; } catch { }
+
+                                            if (!string.Equals(name, c.Name, StringComparison.OrdinalIgnoreCase) || !string.Equals(world, c.World, StringComparison.OrdinalIgnoreCase))
+                                                continue;
+
+                                            // matched character — enumerate retainer entries if present
+                                            try
+                                            {
+                                                if (d.RetainerData != null)
+                                                {
+                                                    ImGui.TextUnformatted("Retainers (AutoRetainer):");
+                                                    ImGui.Indent();
+                                                    try
+                                                    {
+                                                        foreach (var rd in d.RetainerData)
+                                                        {
+                                                            string rname = "(unknown)";
+                                                            try { rname = rd.Name ?? rname; } catch { }
+                                                            ImGui.BulletText(rname);
+                                                        }
+                                                    }
+                                                    catch
+                                                    {
+                                                        // if enumeration fails, ignore
+                                                    }
+                                                    ImGui.Unindent();
+                                                    listed = true;
+                                                    break;
+                                                }
+                                            }
+                                            catch
+                                            {
+                                                // ignore per-cid failures
+                                            }
+                                        }
+                                        catch
+                                        {
+                                            // ignore per-cid failures
+                                        }
+                                    }
+                                }
+                            }
+                            catch
+                            {
+                                // ignore IPC errors
+                            }
+
+                            if (!listed)
+                            {
+                                ImGui.TextUnformatted("Retainers: none");
+                            }
+                        }
+
                         ImGui.Unindent();
                     }
 

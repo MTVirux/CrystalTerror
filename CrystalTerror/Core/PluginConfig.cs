@@ -15,5 +15,8 @@ namespace CrystalTerror
         
         /// <summary>Enables edit mode in the UI to reorder characters.</summary>
         public bool EditMode { get; set; } = false;
+
+        /// <summary>Controls how characters are sorted in the main UI.</summary>
+        public CharacterSort CharacterSort { get; set; } = CharacterSort.Alphabetical;
     }
 }
