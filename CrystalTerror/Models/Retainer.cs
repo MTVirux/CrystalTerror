@@ -19,7 +19,8 @@ namespace CrystalTerror
 
         /// <summary>Reference to the character that owns this retainer. Required — never null.</summary>
         private StoredCharacter _ownerCharacter = default!;
-        public StoredCharacter OwnerCharacter
+            [Newtonsoft.Json.JsonIgnore]
+            public StoredCharacter OwnerCharacter
         {
             get => _ownerCharacter;
             set => _ownerCharacter = value ?? throw new ArgumentNullException(nameof(value), "OwnerCharacter cannot be null.");

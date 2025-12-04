@@ -60,7 +60,64 @@ namespace CrystalTerror
 
             // load or create config
             var cfgObj = this.PluginInterface.GetPluginConfig();
-            this.config = cfgObj as PluginConfig ?? new PluginConfig();
+            this.config = cfgObj as PluginConfig ?? null;
+            // If not a PluginConfig, attempt to migrate from any existing JSON in the plugin config directory
+            if (this.config == null)
+            {
+                try
+                {
+                    var cfgDir = this.PluginInterface.GetPluginConfigDirectory();
+                    if (!string.IsNullOrEmpty(cfgDir) && System.IO.Directory.Exists(cfgDir))
+                    {
+                        foreach (var f in System.IO.Directory.GetFiles(cfgDir, "*.json"))
+                        {
+                            try
+                            {
+                                var txt = System.IO.File.ReadAllText(f);
+                                var maybe = System.Text.Json.JsonSerializer.Deserialize<PluginConfig>(txt);
+                                if (maybe != null)
+                                {
+                                    this.config = maybe;
+                                    this.Log.Information($"CrystalTerror: Migrated config from file '{f}'");
+                                    break;
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                }
+                catch { }
+            }
+            if (this.config == null) this.config = new PluginConfig();
+            // Ensure Retainer.OwnerCharacter back-references are set after deserialization/migration
+            try
+            {
+                if (this.config.Characters != null)
+                {
+                    foreach (var sc in this.config.Characters)
+                    {
+                        if (sc.Retainers == null) sc.Retainers = new System.Collections.Generic.List<Retainer>();
+                        foreach (var r in sc.Retainers)
+                        {
+                            try { if (r.OwnerCharacter == null) r.OwnerCharacter = sc; } catch { r.OwnerCharacter = sc; }
+                        }
+                    }
+                }
+            }
+            catch { }
+            try
+            {
+                this.Log.Information($"CrystalTerror: Loaded config object type={(cfgObj == null ? "null" : cfgObj.GetType().FullName)}");
+                if (this.config != null && this.config.Warnings != null)
+                {
+                    try
+                    {
+                        this.Log.Information($"CrystalTerror: Warnings L1={{Enabled={this.config.Warnings.Level1.Enabled},Th={this.config.Warnings.Level1.Threshold}}}, L2={{Enabled={this.config.Warnings.Level2.Enabled},Th={this.config.Warnings.Level2.Threshold}}}, L3={{Enabled={this.config.Warnings.Level3.Enabled},Th={this.config.Warnings.Level3.Threshold}}}");
+                    }
+                    catch { }
+                }
+            }
+            catch { }
 
             this.framework = framework;
             this.clientState = clientState;
@@ -131,7 +188,7 @@ namespace CrystalTerror
                 // AutoRetainer enabled: plugin must be installed and either IPC present or the plugin loaded
                 () => this.PluginInterface.InstalledPlugins.Any(x => x.InternalName == "AutoRetainer") && (this.PluginInterface.GetIpcSubscriber<System.Collections.Generic.List<ulong>>("AutoRetainer.GetRegisteredCIDs") != null || this.PluginInterface.InstalledPlugins.Any(x => x.InternalName == "AutoRetainer" && x.IsLoaded))
             );
-            this.configWindow = new Gui.ConfigWindow(this.config, this.PluginInterface);
+            this.configWindow = new Gui.ConfigWindow(this.config, this.PluginInterface, this.Log);
             this.autoRetainerWindow = new Gui.AutoRetainerCharsWindow(this.PluginInterface);
             this.autoRetainerRetainersWindow = new Gui.AutoRetainerRetainersWindow(this.PluginInterface);
             this.windowSystem.AddWindow(this.mainWindow);

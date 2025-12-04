@@ -59,6 +59,23 @@ namespace CrystalTerror.Gui
 
         }
 
+        private System.Numerics.Vector4 GetWarningColor(long count)
+        {
+            try
+            {
+                var w = this.config?.Warnings;
+                if (w == null) return new System.Numerics.Vector4(1f, 1f, 1f, 1f);
+                if (w.Level3 != null && w.Level3.Enabled && count >= w.Level3.Threshold)
+                    return new System.Numerics.Vector4(w.Level3.Color[0], w.Level3.Color[1], w.Level3.Color[2], w.Level3.Color[3]);
+                if (w.Level2 != null && w.Level2.Enabled && count >= w.Level2.Threshold)
+                    return new System.Numerics.Vector4(w.Level2.Color[0], w.Level2.Color[1], w.Level2.Color[2], w.Level2.Color[3]);
+                if (w.Level1 != null && w.Level1.Enabled && count >= w.Level1.Threshold)
+                    return new System.Numerics.Vector4(w.Level1.Color[0], w.Level1.Color[1], w.Level1.Color[2], w.Level1.Color[3]);
+            }
+            catch { }
+            return new System.Numerics.Vector4(1f, 1f, 1f, 1f);
+        }
+
         public override void PreDraw()
         {
             // customize window title or flags here if needed
@@ -426,20 +443,38 @@ namespace CrystalTerror.Gui
                                     for (var ei = 0; ei < charElements.Length; ++ei)
                                     {
                                         ImGui.TableSetColumnIndex(1 + ei);
-                                        try
-                                        {
-                                            var el = charElements[ei];
-                                            var inv = c.Inventory ?? new CrystalTerror.Inventory();
-                                            var parts = new System.Collections.Generic.List<string>();
-                                            var typeOrder = new[] { CrystalTerror.CrystalType.Shard, CrystalTerror.CrystalType.Crystal, CrystalTerror.CrystalType.Cluster };
-                                            foreach (var tt in typeOrder)
+                                            try
                                             {
-                                                if (!this.config.EnabledTypes.Contains(tt)) continue;
-                                                parts.Add(inv.GetCount(el, tt).ToString());
+                                                var el = charElements[ei];
+                                                var inv = c.Inventory ?? new CrystalTerror.Inventory();
+                                                var counts = new System.Collections.Generic.List<long>();
+                                                var typeOrder = new[] { CrystalTerror.CrystalType.Shard, CrystalTerror.CrystalType.Crystal, CrystalTerror.CrystalType.Cluster };
+                                                foreach (var tt in typeOrder)
+                                                {
+                                                    if (!this.config.EnabledTypes.Contains(tt)) continue;
+                                                    try { counts.Add(inv.GetCount(el, tt)); } catch { counts.Add(0); }
+                                                }
+
+                                                if (counts.Count == 0)
+                                                {
+                                                    ImGui.TextUnformatted("-");
+                                                }
+                                                else
+                                                {
+                                                    for (var pi = 0; pi < counts.Count; ++pi)
+                                                    {
+                                                        var cnt = counts[pi];
+                                                        var col = GetWarningColor(cnt);
+                                                        if (pi > 0)
+                                                        {
+                                                            ImGui.SameLine(0, 0);
+                                                            ImGui.TextUnformatted("/");
+                                                            ImGui.SameLine(0, 0);
+                                                        }
+                                                        ImGui.TextColored(col, cnt.ToString());
+                                                    }
+                                                }
                                             }
-                                            var s = parts.Count > 0 ? string.Join("/", parts) : "-";;;
-                                            ImGui.TextUnformatted(s);
-                                        }
                                         catch
                                         {
                                             ImGui.TextUnformatted("-");
@@ -485,16 +520,34 @@ namespace CrystalTerror.Gui
                                             {
                                                 var el = elements[ei];
                                                 var inv = r?.Inventory ?? new CrystalTerror.Inventory();
-                                                // Build cell text based on enabled types in config (Shard/Crystal/Cluster order)
-                                                var parts = new System.Collections.Generic.List<string>();
+                                                // Build numeric counts for this cell (Shard/Crystal/Cluster order)
+                                                var counts = new System.Collections.Generic.List<long>();
                                                 var typeOrder = new[] { CrystalTerror.CrystalType.Shard, CrystalTerror.CrystalType.Crystal, CrystalTerror.CrystalType.Cluster };
                                                 foreach (var tt in typeOrder)
                                                 {
                                                     if (!this.config.EnabledTypes.Contains(tt)) continue;
-                                                    parts.Add(inv.GetCount(el, tt).ToString());
+                                                    try { counts.Add(inv.GetCount(el, tt)); } catch { counts.Add(0); }
                                                 }
-                                                var s = parts.Count > 0 ? string.Join("/", parts) : "-";
-                                                ImGui.TextUnformatted(s);
+
+                                                if (counts.Count == 0)
+                                                {
+                                                    ImGui.TextUnformatted("-");
+                                                }
+                                                else
+                                                {
+                                                    for (var pi = 0; pi < counts.Count; ++pi)
+                                                    {
+                                                        var cnt = counts[pi];
+                                                        var col = GetWarningColor(cnt);
+                                                        if (pi > 0)
+                                                        {
+                                                            ImGui.SameLine(0, 0);
+                                                            ImGui.TextUnformatted("/");
+                                                            ImGui.SameLine(0, 0);
+                                                        }
+                                                        ImGui.TextColored(col, cnt.ToString());
+                                                    }
+                                                }
                                             }
                                             catch
                                             {

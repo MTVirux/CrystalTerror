@@ -5,6 +5,7 @@ using OtterGui;
 using Dalamud.Interface.Windowing;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Plugin;
+using Dalamud.Plugin.Services;
 
 namespace CrystalTerror.Gui
 {
@@ -13,21 +14,36 @@ namespace CrystalTerror.Gui
         private bool disposed;
         private readonly PluginConfig config;
         private readonly IDalamudPluginInterface pluginInterface;
+        private readonly IPluginLog log;
         private string importResultMessage = string.Empty;
         private bool wasOpen = false;
 
         
 
-        public ConfigWindow(PluginConfig config, IDalamudPluginInterface pluginInterface)
+        public ConfigWindow(PluginConfig config, IDalamudPluginInterface pluginInterface, IPluginLog log)
             : base("CrystalTerror Config###CrystalTerrorConfigWindow")
         {
             this.config = config ?? throw new ArgumentNullException(nameof(config));
             this.pluginInterface = pluginInterface ?? throw new ArgumentNullException(nameof(pluginInterface));
+            this.log = log ?? throw new ArgumentNullException(nameof(log));
             SizeConstraints = new WindowSizeConstraints()
             {
                 MinimumSize = new System.Numerics.Vector2(300, 100),
                 MaximumSize = new System.Numerics.Vector2(9999, 9999),
             };
+        }
+
+        private void SaveConfig()
+        {
+            try
+            {
+                this.pluginInterface.SavePluginConfig(this.config);
+                try { this.log.Information("CrystalTerror: Saved plugin config."); } catch { }
+            }
+            catch (Exception ex)
+            {
+                try { this.log.Error($"CrystalTerror: Failed to save plugin config: {ex}"); } catch { }
+            }
         }
 
         public override void Draw()
@@ -46,7 +62,7 @@ namespace CrystalTerror.Gui
                 if (ImGui.Checkbox("Ignore missing plugin warnings (hide top-of-window warnings)", ref ignoreWarnings))
                 {
                     this.config.IgnoreMissingPluginWarnings = ignoreWarnings;
-                    try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
+                    SaveConfig();
                 }
             }
 
@@ -72,7 +88,7 @@ namespace CrystalTerror.Gui
                             {
                                 if (this.config.EnabledElements.Contains(el)) this.config.EnabledElements.RemoveAll(x => x == el);
                             }
-                            this.pluginInterface.SavePluginConfig(this.config);
+                            SaveConfig();
                         }
                         catch { }
                     }
@@ -98,12 +114,140 @@ namespace CrystalTerror.Gui
                             {
                                 if (this.config.EnabledTypes.Contains(t)) this.config.EnabledTypes.RemoveAll(x => x == t);
                             }
-                            this.pluginInterface.SavePluginConfig(this.config);
+                            SaveConfig();
                         }
                         catch { }
                     }
                 }
                 ImGui.Unindent();
+            }
+
+            // --- Warnings ---
+            if (this.IsOpen && !this.wasOpen) ImGui.SetNextItemOpen(false, ImGuiCond.Once);
+            if (ImGui.CollapsingHeader("Warnings"))
+            {
+                try
+                {
+                    if (this.config.Warnings == null) this.config.Warnings = new WarningSettings();
+                    var ws = this.config.Warnings;
+
+                    ImGui.TextUnformatted("Warning thresholds:");
+                    ImGui.Indent();
+
+                    var changed = false;
+
+                    // Level 1
+                    // Enable/disable
+                    var en1 = ws.Level1.Enabled;
+                    if (ImGui.Checkbox("Enable Level 1##warn_en1", ref en1))
+                    {
+                        ws.Level1.Enabled = en1;
+                        changed = true;
+                    }
+
+                    var l1 = ws.Level1.Threshold;
+                    if (ImGui.SliderInt("Level 1 threshold##warn_l1", ref l1, 1, 9999))
+                    {
+                        if (l1 < 1) l1 = 1;
+                        if (l1 >= ws.Level2.Threshold)
+                        {
+                            ws.Level2.Threshold = Math.Min(9999, l1 + 1);
+                            if (ws.Level3.Threshold <= ws.Level2.Threshold)
+                                ws.Level3.Threshold = Math.Min(9999, ws.Level2.Threshold + 1);
+                        }
+                        ws.Level1.Threshold = l1;
+                        changed = true;
+                    }
+                    var color1 = ws.Level1.Color;
+                    if (color1 == null || color1.Length < 4) color1 = new float[] { 1f, 0.9f, 0f, 1f };
+                    var vec1 = new System.Numerics.Vector4(color1[0], color1[1], color1[2], color1[3]);
+                    if (ImGui.ColorEdit4("Level 1 color##warn_c1", ref vec1))
+                    {
+                        ws.Level1.Color = new float[] { vec1.X, vec1.Y, vec1.Z, vec1.W };
+                        changed = true;
+                    }
+
+                    ImGui.Spacing();
+
+                    // Level 2
+                    // Enable/disable
+                    var en2 = ws.Level2.Enabled;
+                    if (ImGui.Checkbox("Enable Level 2##warn_en2", ref en2))
+                    {
+                        ws.Level2.Enabled = en2;
+                        changed = true;
+                    }
+
+                    var l2 = ws.Level2.Threshold;
+                    if (ImGui.SliderInt("Level 2 threshold##warn_l2", ref l2, 1, 9999))
+                    {
+                        if (l2 <= ws.Level1.Threshold)
+                        {
+                            ws.Level1.Threshold = Math.Max(1, l2 - 1);
+                            changed = true;
+                        }
+                        if (l2 >= ws.Level3.Threshold)
+                        {
+                            ws.Level3.Threshold = Math.Min(9999, l2 + 1);
+                            changed = true;
+                        }
+                        ws.Level2.Threshold = l2;
+                        changed = true;
+                    }
+                    var color2 = ws.Level2.Color;
+                    if (color2 == null || color2.Length < 4) color2 = new float[] { 1f, 0.6f, 0.15f, 1f };
+                    var vec2 = new System.Numerics.Vector4(color2[0], color2[1], color2[2], color2[3]);
+                    if (ImGui.ColorEdit4("Level 2 color##warn_c2", ref vec2))
+                    {
+                        ws.Level2.Color = new float[] { vec2.X, vec2.Y, vec2.Z, vec2.W };
+                        changed = true;
+                    }
+
+                    ImGui.Spacing();
+
+                    // Level 3
+                    // Enable/disable
+                    var en3 = ws.Level3.Enabled;
+                    if (ImGui.Checkbox("Enable Level 3##warn_en3", ref en3))
+                    {
+                        ws.Level3.Enabled = en3;
+                        changed = true;
+                    }
+
+                    var l3 = ws.Level3.Threshold;
+                    if (ImGui.SliderInt("Level 3 threshold##warn_l3", ref l3, 1, 9999))
+                    {
+                        if (l3 <= ws.Level2.Threshold)
+                        {
+                            ws.Level2.Threshold = Math.Max(1, l3 - 1);
+                            if (ws.Level1.Threshold >= ws.Level2.Threshold)
+                                ws.Level1.Threshold = Math.Max(1, ws.Level2.Threshold - 1);
+                            changed = true;
+                        }
+                        ws.Level3.Threshold = l3;
+                        changed = true;
+                    }
+                    var color3 = ws.Level3.Color;
+                    if (color3 == null || color3.Length < 4) color3 = new float[] { 1f, 0.15f, 0.15f, 1f };
+                    var vec3 = new System.Numerics.Vector4(color3[0], color3[1], color3[2], color3[3]);
+                    if (ImGui.ColorEdit4("Level 3 color##warn_c3", ref vec3))
+                    {
+                        ws.Level3.Color = new float[] { vec3.X, vec3.Y, vec3.Z, vec3.W };
+                        changed = true;
+                    }
+
+                    if (changed)
+                    {
+                        this.config.Warnings = ws;
+                        SaveConfig();
+                    }
+
+                    ImGui.Unindent();
+                }
+                catch
+                {
+                    // ignore UI errors
+                }
             }
 
             // --- Storage / Import section ---
@@ -123,7 +267,7 @@ namespace CrystalTerror.Gui
                         this.config.CharacterSort = CrystalTerror.CharacterSort.Custom;
                     }
 
-                    try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
+                    SaveConfig();
                 }
                 ImGui.SameLine();
                 ImGui.TextUnformatted(this.config.EditMode ? "Edit mode: ON" : "Edit mode: OFF");
@@ -138,32 +282,32 @@ namespace CrystalTerror.Gui
                     if (ImGui.Selectable("Alphabetical", this.config.CharacterSort == CrystalTerror.CharacterSort.Alphabetical))
                     {
                         this.config.CharacterSort = CrystalTerror.CharacterSort.Alphabetical;
-                        try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
+                        SaveConfig();
                     }
                     if (ImGui.Selectable("Reverse alphabetical", this.config.CharacterSort == CrystalTerror.CharacterSort.ReverseAlphabetical))
                     {
                         this.config.CharacterSort = CrystalTerror.CharacterSort.ReverseAlphabetical;
-                        try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
+                        SaveConfig();
                     }
                     if (ImGui.Selectable("World", this.config.CharacterSort == CrystalTerror.CharacterSort.World))
                     {
                         this.config.CharacterSort = CrystalTerror.CharacterSort.World;
-                        try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
+                        SaveConfig();
                     }
                     if (ImGui.Selectable("Reverse by world", this.config.CharacterSort == CrystalTerror.CharacterSort.ReverseWorld))
                     {
                         this.config.CharacterSort = CrystalTerror.CharacterSort.ReverseWorld;
-                        try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
+                        SaveConfig();
                     }
                     if (ImGui.Selectable("Custom (persisted order)", this.config.CharacterSort == CrystalTerror.CharacterSort.Custom))
                     {
                         this.config.CharacterSort = CrystalTerror.CharacterSort.Custom;
-                        try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
+                        SaveConfig();
                     }
                     if (ImGui.Selectable("AutoRetainer order", this.config.CharacterSort == CrystalTerror.CharacterSort.AutoRetainer))
                     {
                         this.config.CharacterSort = CrystalTerror.CharacterSort.AutoRetainer;
-                        try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
+                        SaveConfig();
                     }
 
                     ImGui.EndCombo();
@@ -269,7 +413,7 @@ namespace CrystalTerror.Gui
                                 }
                             }
 
-                            try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
+                            SaveConfig();
                             this.importResultMessage = $"Imported {added} characters from AutoRetainer.";
                             ImGui.OpenPopup("ImportResult");
                         }
@@ -295,15 +439,15 @@ namespace CrystalTerror.Gui
                 ImGui.Spacing();
                 if (ImGui.Button("Confirm Purge"))
                 {
-                    try
-                    {
-                        this.config.Characters?.Clear();
-                        this.pluginInterface.SavePluginConfig(this.config);
-                    }
-                    catch
-                    {
-                        // ignore save errors
-                    }
+                        try
+                        {
+                            this.config.Characters?.Clear();
+                            SaveConfig();
+                        }
+                        catch
+                        {
+                            // ignore save errors
+                        }
                     ImGui.CloseCurrentPopup();
                 }
                 ImGui.SameLine();
@@ -375,7 +519,7 @@ namespace CrystalTerror.Gui
                     }
                     catch { }
 
-                    try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
+                    SaveConfig();
                     this.importResultMessage = $"Updated retainers for {name}@{world}.";
                     return;
                 }
@@ -406,7 +550,7 @@ namespace CrystalTerror.Gui
                 catch { }
 
                 this.config.Characters.Add(sc);
-                try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
+                SaveConfig();
                 this.importResultMessage = $"Imported character {name}@{world} from AutoRetainer.";
             }
             catch

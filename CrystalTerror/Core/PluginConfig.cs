@@ -40,5 +40,27 @@ namespace CrystalTerror
 
         /// <summary>If true, suppress warnings about missing or disabled external plugins in the UI.</summary>
         public bool IgnoreMissingPluginWarnings { get; set; } = false;
+
+        /// <summary>Warning thresholds and colors for inventory caps.</summary>
+        public WarningSettings Warnings { get; set; } = new WarningSettings();
+    }
+
+    [Serializable]
+    public class WarningSettings
+    {
+        public WarningLevel Level1 { get; set; } = new WarningLevel { Threshold = 8000, Color = new float[] { 1f, 0.9f, 0.0f, 1f }, Enabled = true };
+        public WarningLevel Level2 { get; set; } = new WarningLevel { Threshold = 9000, Color = new float[] { 1f, 0.6f, 0.15f, 1f }, Enabled = true };
+        public WarningLevel Level3 { get; set; } = new WarningLevel { Threshold = 9800, Color = new float[] { 1f, 0.15f, 0.15f, 1f }, Enabled = true };
+    }
+
+    [Serializable]
+    public class WarningLevel
+    {
+        // Whether this warning level is active and should be considered when coloring counts
+        public bool Enabled { get; set; } = true;
+        // Threshold near the cap (0..9999)
+        public int Threshold { get; set; }
+        // RGBA floats 0..1
+        public float[] Color { get; set; } = new float[] { 1f, 1f, 1f, 1f };
     }
 }
