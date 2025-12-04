@@ -548,24 +548,57 @@ namespace CrystalTerror.Gui
                                             {
                                                 if (d.RetainerData != null)
                                                 {
-                                                    ImGui.TextUnformatted("Retainers (AutoRetainer):");
-                                                    ImGui.Indent();
+                                                    // Build a cleaned list of retainer names from AutoRetainer
+                                                    var retNames = new List<string>();
                                                     try
                                                     {
                                                         foreach (var rd in d.RetainerData)
                                                         {
                                                             string rname = "(unknown)";
                                                             try { rname = rd.Name ?? rname; } catch { }
-                                                            ImGui.BulletText(rname);
+
+                                                            if (!string.IsNullOrEmpty(rname) && !retNames.Any(x => string.Equals(x, rname, StringComparison.OrdinalIgnoreCase)))
+                                                                retNames.Add(rname);
                                                         }
                                                     }
                                                     catch
                                                     {
-                                                        // if enumeration fails, ignore
+                                                        // ignore per-entry failures
                                                     }
-                                                    ImGui.Unindent();
-                                                    listed = true;
-                                                    break;
+
+                                                    if (retNames.Count > 0)
+                                                    {
+                                                        // Persist the retainer list for this character so UI only shows stored data
+                                                        try
+                                                        {
+                                                            if (c.Retainers == null) c.Retainers = new List<Retainer>();
+                                                            foreach (var rn in retNames)
+                                                            {
+                                                                if (!c.Retainers.Any(rr => string.Equals(rr.Name, rn, StringComparison.OrdinalIgnoreCase)))
+                                                                {
+                                                                    c.Retainers.Add(new Retainer(c) { Name = rn });
+                                                                }
+                                                            }
+                                                            try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
+                                                        }
+                                                        catch { }
+
+                                                        // Render the newly-persisted retainers
+                                                        ImGui.TextUnformatted("Retainers:");
+                                                        ImGui.Indent();
+                                                        try
+                                                        {
+                                                            foreach (var rr in c.Retainers)
+                                                            {
+                                                                ImGui.BulletText(rr?.Name ?? "(unknown)");
+                                                            }
+                                                        }
+                                                        catch { }
+                                                        ImGui.Unindent();
+
+                                                        listed = true;
+                                                        break;
+                                                    }
                                                 }
                                             }
                                             catch
