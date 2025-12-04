@@ -41,70 +41,12 @@ namespace CrystalTerror.Gui
             if (this.IsOpen && !this.wasOpen) ImGui.SetNextItemOpen(false, ImGuiCond.Once);
             if (ImGui.CollapsingHeader("General"))
             {
-                // Edit mode toggle
-                if (ImGui.Button(this.config.EditMode ? "Exit edit mode" : "Enter edit mode"))
-                {
-                    var entering = !this.config.EditMode;
-                    this.config.EditMode = entering;
-
-                    // When entering edit mode, switch view to persisted ordering (Custom)
-                    if (entering)
-                    {
-                        this.config.CharacterSort = CrystalTerror.CharacterSort.Custom;
-                    }
-
-                    try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
-                }
-                ImGui.SameLine();
-                ImGui.TextUnformatted(this.config.EditMode ? "Edit mode: ON" : "Edit mode: OFF");
-
-                ImGui.Spacing();
-
                 // Option: suppress external plugin warnings
                 var ignoreWarnings = this.config.IgnoreMissingPluginWarnings;
                 if (ImGui.Checkbox("Ignore missing plugin warnings (hide top-of-window warnings)", ref ignoreWarnings))
                 {
                     this.config.IgnoreMissingPluginWarnings = ignoreWarnings;
                     try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
-                }
-
-                // Character sort selection (dropdown)
-                ImGui.TextUnformatted("Character sort:");
-                var comboLabel = this.config.CharacterSort.ToString();
-                if (ImGui.BeginCombo("##CharacterSortCombo", comboLabel))
-                {
-                    if (ImGui.Selectable("Alphabetical", this.config.CharacterSort == CrystalTerror.CharacterSort.Alphabetical))
-                    {
-                        this.config.CharacterSort = CrystalTerror.CharacterSort.Alphabetical;
-                        try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
-                    }
-                    if (ImGui.Selectable("Reverse alphabetical", this.config.CharacterSort == CrystalTerror.CharacterSort.ReverseAlphabetical))
-                    {
-                        this.config.CharacterSort = CrystalTerror.CharacterSort.ReverseAlphabetical;
-                        try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
-                    }
-                    if (ImGui.Selectable("World", this.config.CharacterSort == CrystalTerror.CharacterSort.World))
-                    {
-                        this.config.CharacterSort = CrystalTerror.CharacterSort.World;
-                        try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
-                    }
-                    if (ImGui.Selectable("Reverse by world", this.config.CharacterSort == CrystalTerror.CharacterSort.ReverseWorld))
-                    {
-                        this.config.CharacterSort = CrystalTerror.CharacterSort.ReverseWorld;
-                        try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
-                    }
-                    if (ImGui.Selectable("Custom (persisted order)", this.config.CharacterSort == CrystalTerror.CharacterSort.Custom))
-                    {
-                        this.config.CharacterSort = CrystalTerror.CharacterSort.Custom;
-                        try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
-                    }
-                    if (ImGui.Selectable("AutoRetainer order", this.config.CharacterSort == CrystalTerror.CharacterSort.AutoRetainer))
-                    {
-                        this.config.CharacterSort = CrystalTerror.CharacterSort.AutoRetainer;
-                        try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
-                    }
-
-                    ImGui.EndCombo();
                 }
             }
 
@@ -162,6 +104,70 @@ namespace CrystalTerror.Gui
                     }
                 }
                 ImGui.Unindent();
+            }
+
+            // --- Storage / Import section ---
+            // --- Character Order ---
+            if (this.IsOpen && !this.wasOpen) ImGui.SetNextItemOpen(false, ImGuiCond.Once);
+            if (ImGui.CollapsingHeader("Character Order"))
+            {
+                // Edit mode toggle
+                if (ImGui.Button(this.config.EditMode ? "Exit edit mode" : "Enter edit mode"))
+                {
+                    var entering = !this.config.EditMode;
+                    this.config.EditMode = entering;
+
+                    // When entering edit mode, switch view to persisted ordering (Custom)
+                    if (entering)
+                    {
+                        this.config.CharacterSort = CrystalTerror.CharacterSort.Custom;
+                    }
+
+                    try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
+                }
+                ImGui.SameLine();
+                ImGui.TextUnformatted(this.config.EditMode ? "Edit mode: ON" : "Edit mode: OFF");
+
+                ImGui.Spacing();
+
+                // Character sort selection (dropdown)
+                ImGui.TextUnformatted("Character sort:");
+                var comboLabel = this.config.CharacterSort.ToString();
+                if (ImGui.BeginCombo("##CharacterSortCombo", comboLabel))
+                {
+                    if (ImGui.Selectable("Alphabetical", this.config.CharacterSort == CrystalTerror.CharacterSort.Alphabetical))
+                    {
+                        this.config.CharacterSort = CrystalTerror.CharacterSort.Alphabetical;
+                        try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
+                    }
+                    if (ImGui.Selectable("Reverse alphabetical", this.config.CharacterSort == CrystalTerror.CharacterSort.ReverseAlphabetical))
+                    {
+                        this.config.CharacterSort = CrystalTerror.CharacterSort.ReverseAlphabetical;
+                        try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
+                    }
+                    if (ImGui.Selectable("World", this.config.CharacterSort == CrystalTerror.CharacterSort.World))
+                    {
+                        this.config.CharacterSort = CrystalTerror.CharacterSort.World;
+                        try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
+                    }
+                    if (ImGui.Selectable("Reverse by world", this.config.CharacterSort == CrystalTerror.CharacterSort.ReverseWorld))
+                    {
+                        this.config.CharacterSort = CrystalTerror.CharacterSort.ReverseWorld;
+                        try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
+                    }
+                    if (ImGui.Selectable("Custom (persisted order)", this.config.CharacterSort == CrystalTerror.CharacterSort.Custom))
+                    {
+                        this.config.CharacterSort = CrystalTerror.CharacterSort.Custom;
+                        try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
+                    }
+                    if (ImGui.Selectable("AutoRetainer order", this.config.CharacterSort == CrystalTerror.CharacterSort.AutoRetainer))
+                    {
+                        this.config.CharacterSort = CrystalTerror.CharacterSort.AutoRetainer;
+                        try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
+                    }
+
+                    ImGui.EndCombo();
+                }
             }
 
             // --- Storage / Import section ---
