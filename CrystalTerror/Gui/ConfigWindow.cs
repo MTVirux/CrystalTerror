@@ -60,6 +60,14 @@ namespace CrystalTerror.Gui
 
                 ImGui.Spacing();
 
+                // Option: suppress external plugin warnings
+                var ignoreWarnings = this.config.IgnoreMissingPluginWarnings;
+                if (ImGui.Checkbox("Ignore missing plugin warnings (hide top-of-window warnings)", ref ignoreWarnings))
+                {
+                    this.config.IgnoreMissingPluginWarnings = ignoreWarnings;
+                    try { this.pluginInterface.SavePluginConfig(this.config); } catch { }
+                }
+
                 // Character sort selection (dropdown)
                 ImGui.TextUnformatted("Character sort:");
                 var comboLabel = this.config.CharacterSort.ToString();

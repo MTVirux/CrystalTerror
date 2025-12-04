@@ -19,14 +19,22 @@ namespace CrystalTerror.Gui
         private readonly dynamic? clientState;
         private readonly Func<(string? Name, string? World)>? getPlayerFunc;
         private readonly IDalamudPluginInterface pluginInterface;
+        private readonly Func<bool>? isAllaganEnabled;
+        private readonly Func<bool>? isAllaganInstalled;
+        private readonly Func<bool>? isAutoRetainerInstalled;
+        private readonly Func<bool>? isAutoRetainerEnabled;
         public Action? RequestOpenConfig;
-        public CrystalTerrorWindow(PluginConfig config, dynamic? clientState, Func<(string? Name, string? World)>? getPlayerFunc = null, IDalamudPluginInterface? pluginInterface = null)
+        public CrystalTerrorWindow(PluginConfig config, dynamic? clientState, Func<(string? Name, string? World)>? getPlayerFunc = null, IDalamudPluginInterface? pluginInterface = null, Func<bool>? isAllaganInstalled = null, Func<bool>? isAllaganEnabled = null, Func<bool>? isAutoRetainerInstalled = null, Func<bool>? isAutoRetainerEnabled = null)
             : base("CrystalTerror###CrystalTerrorMainWindow")
         {
             this.config = config;
             this.clientState = clientState;
             this.getPlayerFunc = getPlayerFunc;
             this.pluginInterface = pluginInterface ?? throw new ArgumentNullException(nameof(pluginInterface));
+            this.isAllaganInstalled = isAllaganInstalled;
+            this.isAllaganEnabled = isAllaganEnabled;
+            this.isAutoRetainerInstalled = isAutoRetainerInstalled;
+            this.isAutoRetainerEnabled = isAutoRetainerEnabled;
             SizeConstraints = new WindowSizeConstraints()
             {
                 MinimumSize = new System.Numerics.Vector2(300, 120),
@@ -151,14 +159,97 @@ namespace CrystalTerror.Gui
                 }
             }
 
+            // Show a prominent warning if AllaganTools isn't available (retainer IPC won't work).
+            try
+            {
+                // Compute three distinct signals for each external plugin:
+                // - installed: present in InstalledPlugins (manifest present)
+                // - loaded: InstalledPlugins entry IsLoaded == true (plugin is enabled/loaded)
+                // - ipcAvailable: an IPC subscriber for the expected registration exists
+                bool allaganInstalledBool = false;
+                bool allaganLoadedBool = false;
+                bool allaganIpcBool = false;
+                bool arInstalledBool = false;
+                bool arLoadedBool = false;
+                bool arIpcBool = false;
+
+                try
+                {
+                    allaganInstalledBool = this.isAllaganInstalled?.Invoke() ?? this.pluginInterface.InstalledPlugins.Any(x => x.InternalName == "InventoryTools");
+                    allaganLoadedBool = this.pluginInterface.InstalledPlugins.Any(x => x.InternalName == "InventoryTools" && x.IsLoaded);
+                    try { allaganIpcBool = this.pluginInterface.GetIpcSubscriber<uint, ulong, uint, uint>("AllaganTools.ItemCount") != null; } catch { allaganIpcBool = false; }
+
+                    arInstalledBool = this.isAutoRetainerInstalled?.Invoke() ?? this.pluginInterface.InstalledPlugins.Any(x => x.InternalName == "AutoRetainer");
+                    arLoadedBool = this.pluginInterface.InstalledPlugins.Any(x => x.InternalName == "AutoRetainer" && x.IsLoaded);
+                    try { arIpcBool = this.pluginInterface.GetIpcSubscriber<System.Collections.Generic.List<ulong>>("AutoRetainer.GetRegisteredCIDs") != null; } catch { arIpcBool = false; }
+                }
+                catch
+                {
+                    // fall back to false for any signal that failed to compute
+                }
+
+                // Render warnings based on installed vs loaded state. "Enabled" in the UI means the plugin is loaded (IsLoaded==true).
+                if (!this.config.IgnoreMissingPluginWarnings)
+                {
+                    if (!allaganInstalledBool)
+                    {
+                        ImGui.TextColored(new System.Numerics.Vector4(1f, 0.15f, 0.15f, 1f), "Warning: Allagan Tools is not installed — retainer inventory updates will be limited.");
+                        ImGui.Spacing();
+                    }
+                    else if (!allaganLoadedBool)
+                    {
+                        ImGui.TextColored(new System.Numerics.Vector4(1f, 0.6f, 0.15f, 1f), "Warning: Allagan Tools is installed but disabled — enable it for full retainer inventory updates.");
+                        ImGui.Spacing();
+                    }
+                    else if (!allaganIpcBool)
+                    {
+                        ImGui.TextColored(new System.Numerics.Vector4(1f, 0.9f, 0.3f, 1f), "Note: Allagan Tools is loaded but its IPC interface is not available — some features may be limited.");
+                        ImGui.Spacing();
+                    }
+
+                    if (!arInstalledBool)
+                    {
+                        ImGui.TextColored(new System.Numerics.Vector4(1f, 0.15f, 0.15f, 1f), "Warning: AutoRetainer is not installed — offline retainer data may be unavailable.");
+                        ImGui.Spacing();
+                    }
+                    else if (!arLoadedBool)
+                    {
+                        ImGui.TextColored(new System.Numerics.Vector4(1f, 0.6f, 0.15f, 1f), "Warning: AutoRetainer is installed but disabled — enable it to access offline retainer data.");
+                        ImGui.Spacing();
+                    }
+                    else if (!arIpcBool)
+                    {
+                        ImGui.TextColored(new System.Numerics.Vector4(1f, 0.9f, 0.3f, 1f), "Note: AutoRetainer is loaded but its IPC interface is not available — listing offline retainers may fail.");
+                        ImGui.Spacing();
+                    }
+                }
+
+                // Diagnostic: show raw detection values (installed / loaded / ipc) to help debug the environment
+#if DEBUG
+                try
+                {
+                    ImGui.TextDisabled($"[DEBUG] Allagan Installed={allaganInstalledBool}, Loaded={allaganLoadedBool}, IPC={allaganIpcBool}");
+                    ImGui.TextDisabled($"[DEBUG] AutoRetainer Installed={arInstalledBool}, Loaded={arLoadedBool}, IPC={arIpcBool}");
+                    ImGui.Spacing();
+                }
+                catch { }
+#endif
+            }
+            catch
+            {
+                // ignore errors
+            }
+
             ImGui.Spacing();
             ImGui.Bullet(); ImGui.TextUnformatted($"Logged in character: {playerName}@{playerWorld}");
 
+#if DEBUG
             ImGui.SameLine();
             if (ImGui.Button("AutoRetainer chars"))
             {
                 this.RequestOpenAutoRetainer?.Invoke();
             }
+#endif
 
             ImGui.Spacing();
             ImGui.TextUnformatted("Saved characters:");
@@ -309,6 +400,58 @@ namespace CrystalTerror.Gui
                     {
                         ImGui.Indent();
                         ImGui.TextUnformatted($"Last update (UTC): {c.LastUpdateUtc:u}");
+
+                        // Character inventory table (above retainers)
+                        try
+                        {
+                            var allElementsChar = Enum.GetValues(typeof(CrystalTerror.Element)).Cast<CrystalTerror.Element>();
+                            var charElements = allElementsChar.Where(e => this.config.EnabledElements.Contains(e)).ToArray();
+                            if (charElements.Length > 0)
+                            {
+                                ImGui.TextUnformatted("Character inventory:");
+                                ImGui.Indent();
+                                var colCountChar = 1 + Math.Max(0, charElements.Length);
+                                if (ImGui.BeginTable($"char_inv_table_{i}", colCountChar, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable))
+                                {
+                                    ImGui.TableSetupColumn("Character");
+                                    foreach (var el in charElements)
+                                        ImGui.TableSetupColumn(el.ToString());
+
+                                    ImGui.TableHeadersRow();
+
+                                    ImGui.TableNextRow();
+                                    ImGui.TableSetColumnIndex(0);
+                                    ImGui.TextUnformatted(c.Name);
+
+                                    for (var ei = 0; ei < charElements.Length; ++ei)
+                                    {
+                                        ImGui.TableSetColumnIndex(1 + ei);
+                                        try
+                                        {
+                                            var el = charElements[ei];
+                                            var inv = c.Inventory ?? new CrystalTerror.Inventory();
+                                            var parts = new System.Collections.Generic.List<string>();
+                                            var typeOrder = new[] { CrystalTerror.CrystalType.Shard, CrystalTerror.CrystalType.Crystal, CrystalTerror.CrystalType.Cluster };
+                                            foreach (var tt in typeOrder)
+                                            {
+                                                if (!this.config.EnabledTypes.Contains(tt)) continue;
+                                                parts.Add(inv.GetCount(el, tt).ToString());
+                                            }
+                                            var s = parts.Count > 0 ? string.Join("/", parts) : "-";;;
+                                            ImGui.TextUnformatted(s);
+                                        }
+                                        catch
+                                        {
+                                            ImGui.TextUnformatted("-");
+                                        }
+                                    }
+
+                                    ImGui.EndTable();
+                                }
+                                ImGui.Unindent();
+                            }
+                        }
+                        catch { }
 
                         // If we have stored retainers, show them in a table (rows = retainers, columns = elemental inventory)
                         if (c.Retainers != null && c.Retainers.Count > 0)

@@ -8,6 +8,7 @@ using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Lumina.Excel.Sheets;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using Dalamud.Game.Gui;
 using Dalamud.Game.ClientState;
 using Dalamud.Game.Text.SeStringHandling; 
@@ -35,6 +36,8 @@ namespace CrystalTerror
         private Dalamud.Plugin.Ipc.ICallGateSubscriber<uint, ulong, uint, uint>? allaganItemCountHQ;
         private string? lastSeenName;
         private string? lastSeenWorld;
+        private bool lastRetainerListOpen = false;
+        private readonly IGameGui gameGui;
         private bool isDisposed;
 
         public IDalamudPluginInterface PluginInterface { get; init; }
@@ -61,6 +64,7 @@ namespace CrystalTerror
 
             this.framework = framework;
             this.clientState = clientState;
+            this.gameGui = gameGui;
             this.dataManager = dataManager;
 
             // subscribe to login/logout events to trigger import on login
@@ -84,12 +88,49 @@ namespace CrystalTerror
             {
                 // ignore if AllaganTools not present
             }
+            // Diagnostic startup logging: list installed plugins and IPC subscriber presence.
+            try
+            {
+                this.Log.Information("CrystalTerror: Installed plugins summary:");
+                foreach (var p in this.PluginInterface.InstalledPlugins)
+                {
+                    try
+                    {
+                        this.Log.Information($" - InstalledPlugin: InternalName='{p.InternalName}', Name='{p.Name}', IsLoaded={p.IsLoaded}");
+                    }
+                    catch { }
+                }
+
+                var atIpc = allaganItemCount != null;
+                var atAdded = allaganItemAdded != null;
+                var atRemoved = allaganItemRemoved != null;
+                var arIpc = this.PluginInterface.GetIpcSubscriber<System.Collections.Generic.List<ulong>>("AutoRetainer.GetRegisteredCIDs") != null;
+
+                this.Log.Information($"CrystalTerror: IPC presence: Allagan.ItemCount={atIpc}, Allagan.Added={atAdded}, Allagan.Removed={atRemoved}, AutoRetainer.GetRegisteredCIDs={arIpc}");
+            }
+            catch
+            {
+                // ignore logging failures
+            }
             this.dataManager = dataManager;
 
             // subscribe to framework updates to detect login/logout and record characters
             this.framework.Update += OnFrameworkUpdate;
 
-            this.mainWindow = new Gui.CrystalTerrorWindow(this.config, clientState, () => (this.lastSeenName, this.lastSeenWorld), this.PluginInterface);
+            this.mainWindow = new Gui.CrystalTerrorWindow(
+                this.config,
+                clientState,
+                () => (this.lastSeenName, this.lastSeenWorld),
+                this.PluginInterface,
+                // AllaganTools installed (Internal name InventoryTools) — presence only (may be installed but disabled).
+                () => this.PluginInterface.InstalledPlugins.Any(x => x.InternalName == "InventoryTools"),
+                // AllaganTools enabled: plugin must be installed and either IPC present or the plugin loaded.
+                () => this.PluginInterface.InstalledPlugins.Any(x => x.InternalName == "InventoryTools") && (allaganItemCount != null || this.PluginInterface.InstalledPlugins.Any(x => x.InternalName == "InventoryTools" && x.IsLoaded)),
+                // AutoRetainer installed (presence only)
+                () => this.PluginInterface.InstalledPlugins.Any(x => x.InternalName == "AutoRetainer"),
+                // AutoRetainer enabled: plugin must be installed and either IPC present or the plugin loaded
+                () => this.PluginInterface.InstalledPlugins.Any(x => x.InternalName == "AutoRetainer") && (this.PluginInterface.GetIpcSubscriber<System.Collections.Generic.List<ulong>>("AutoRetainer.GetRegisteredCIDs") != null || this.PluginInterface.InstalledPlugins.Any(x => x.InternalName == "AutoRetainer" && x.IsLoaded))
+            );
             this.configWindow = new Gui.ConfigWindow(this.config, this.PluginInterface);
             this.autoRetainerWindow = new Gui.AutoRetainerCharsWindow(this.PluginInterface);
             this.autoRetainerRetainersWindow = new Gui.AutoRetainerRetainersWindow(this.PluginInterface);
@@ -126,7 +167,7 @@ namespace CrystalTerror
             });
 
             // support manual import via "/ct import"
-            this.CommandManager.AddHandler("/ctimport", new CommandInfo((c, a) => { TryImportForCurrentPlayer(); })
+            this.CommandManager.AddHandler("/ctimport", new CommandInfo((c, a) => { TryImportForCurrentPlayer(true); })
             {
                 HelpMessage = "Import current character inventory into CrystalTerror config",
             });
@@ -248,7 +289,7 @@ namespace CrystalTerror
             this.isDisposed = true;
         }
 
-        private void OnFrameworkUpdate(IFramework _)
+        private unsafe void OnFrameworkUpdate(IFramework _)
         {
             try
             {
@@ -330,6 +371,41 @@ namespace CrystalTerror
                         if (scPoll != null) PollTrackedCountsAndMaybeImport(scPoll);
                     }
                     catch { }
+                    // Also detect if the player opened the retainer bell UI and import retainer inventories when it opens.
+                    try
+                    {
+                        var retainerOpen = false;
+                        try
+                        {
+                            var addonObj = this.gameGui.GetAddonByName("RetainerList");
+                            var addr = addonObj.Address;
+                            if (addr != IntPtr.Zero)
+                            {
+                                var addon = (AtkUnitBase*)addr;
+                                if (addon != null && addon->IsVisible && addon->UldManager.LoadedState == FFXIVClientStructs.FFXIV.Component.GUI.AtkLoadState.Loaded)
+                                    retainerOpen = true;
+                            }
+                        }
+                        catch { }
+
+                        if (retainerOpen && !lastRetainerListOpen)
+                        {
+                            // retainer bell just opened — refresh retainer inventories for current character
+                            try
+                            {
+                                var scOpen = this.config.Characters.FirstOrDefault(c => c.Name == this.lastSeenName && c.World == this.lastSeenWorld);
+                                if (scOpen != null)
+                                {
+                                    try { ImportRetainersForCharacter(scOpen, false); } catch { }
+                                }
+                            }
+                            catch { }
+                        }
+
+                        lastRetainerListOpen = retainerOpen;
+                    }
+                    catch { }
+
                     return;
                 }
 
@@ -386,7 +462,7 @@ namespace CrystalTerror
             }
         }
 
-        private unsafe void TryImportForCurrentPlayer()
+        private unsafe void TryImportForCurrentPlayer(bool forceImportRetainers = false)
         {
             try
             {
@@ -416,7 +492,12 @@ namespace CrystalTerror
                 if (sc == null) return;
 
                 ImportInventoryForCharacter(sc);
-                try { ImportRetainersForCharacter(sc); } catch { }
+                // Only auto-import retainer data if there is no saved retainer data,
+                // unless the caller explicitly forces a retainer import (manual request).
+                if (forceImportRetainers || sc.Retainers == null || sc.Retainers.Count == 0)
+                {
+                    try { ImportRetainersForCharacter(sc); } catch { }
+                }
                 // initialize lastItemCounts for tracked items
                 try
                 {
@@ -458,14 +539,18 @@ namespace CrystalTerror
                     if (sc != null)
                     {
                         ImportInventoryForCharacter(sc);
-                        try { ImportRetainersForCharacter(sc); } catch { }
+                        // Only import retainer info if none is saved for this character.
+                        if (sc.Retainers == null || sc.Retainers.Count == 0)
+                        {
+                            try { ImportRetainersForCharacter(sc); } catch { }
+                        }
                     }
                 }
             }
             catch { }
         }
 
-        private unsafe void ImportRetainersForCharacter(StoredCharacter sc)
+        private unsafe void ImportRetainersForCharacter(StoredCharacter sc, bool allowCreateNew = true)
         {
             try
             {
@@ -496,18 +581,42 @@ namespace CrystalTerror
                         }
                         catch { }
 
-                        // find or create a Retainer entry by numeric atid or (legacy) numeric-name
-                        var stored = sc.Retainers.FirstOrDefault(r => r.atid == retId || r.Name == retId.ToString());
+                        // Normalize display name and attempt to match by atid or by name (accounting for possible world suffix)
+                        string normDisplay = null;
+                        try { normDisplay = string.IsNullOrEmpty(displayName) ? null : displayName.Trim(); } catch { }
+                        string strippedDisplay = null;
+                        try
+                        {
+                            if (!string.IsNullOrEmpty(normDisplay))
+                            {
+                                var idx = normDisplay.IndexOf('@');
+                                if (idx < 0) idx = normDisplay.IndexOf('＠');
+                                strippedDisplay = idx >= 0 ? normDisplay.Substring(0, idx).Trim() : normDisplay;
+                            }
+                        }
+                        catch { }
+
+                        var stored = sc.Retainers.FirstOrDefault(r => r.atid == retId
+                            || (!string.IsNullOrEmpty(normDisplay) && string.Equals(r.Name, normDisplay, StringComparison.OrdinalIgnoreCase))
+                            || (!string.IsNullOrEmpty(strippedDisplay) && string.Equals(r.Name, strippedDisplay, StringComparison.OrdinalIgnoreCase))
+                        );
+
                         if (stored == null)
                         {
-                            stored = new Retainer(sc) { atid = retId, Name = string.IsNullOrEmpty(displayName) ? retId.ToString() : displayName };
+                            if (!allowCreateNew)
+                            {
+                                // don't create new entries when caller requested a refresh-only import
+                                continue;
+                            }
+
+                            stored = new Retainer(sc) { atid = retId, Name = string.IsNullOrEmpty(normDisplay) ? retId.ToString() : normDisplay };
                             sc.Retainers.Add(stored);
                         }
                         else
                         {
                             // ensure persisted atid is set and update display name if available
                             stored.atid = retId;
-                            if (!string.IsNullOrEmpty(displayName)) stored.Name = displayName;
+                            if (!string.IsNullOrEmpty(normDisplay)) stored.Name = normDisplay;
                         }
 
                         // zero out counts first

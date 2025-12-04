@@ -37,5 +37,8 @@ namespace CrystalTerror
             CrystalType.Crystal,
             CrystalType.Cluster
         };
+
+        /// <summary>If true, suppress warnings about missing or disabled external plugins in the UI.</summary>
+        public bool IgnoreMissingPluginWarnings { get; set; } = false;
     }
 }
