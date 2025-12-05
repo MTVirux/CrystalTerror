@@ -146,21 +146,11 @@ namespace CrystalTerror
                 // Register addon lifecycle listener for RetainerList opens
                 try
                 {
-                    this.addonLifecycle.UnregisterListener(AddonEvent.PreSetup, "RetainerList", this.OnRetainerListSetup);
+                    this.addonLifecycle.RegisterListener(AddonEvent.PreSetup, "RetainerList", this.OnRetainerListSetup);
                 }
                 catch
                 {
-                    // ignore if already unregistered
-                }
-
-                // Unsubscribe from AutoRetainer IPC
-                try
-                {
-                    this.autoRetainerOnSendToVenture?.Unsubscribe(this.OnRetainerSendToVenture);
-                }
-                catch
-                {
-                    // ignore if already unsubscribed
+                    // ignore registration errors
                 }
 
                 // Initialize AutoRetainer IPC for setting ventures
@@ -299,106 +289,24 @@ namespace CrystalTerror
         private const double StatsUpdateThrottleSeconds = 2.0;
 
         private void OnRetainerListSetup(AddonEvent type, AddonArgs args)
-        {
-            try
-            {
-                try
-                {
-                    this.pluginLog.Information($"Retainer addon opened (ContentId={this.playerState.ContentId}). Triggering import.");
-                }
-                catch { }
+            => AutoRetainerHelper.HandleRetainerListSetup(
+                this.playerState,
+                this.objects,
+                this.dataManager,
+                this.Characters,
+                this.Config,
+                this.PluginInterface,
+                this.pluginLog);
 
-                var sc = CharacterHelper.ImportCurrentCharacter(this.playerState, this.objects, this.dataManager);
-                if (sc != null)
-                {
-                    CharacterHelper.MergeInto(this.Characters, new[] { sc }, CharacterHelper.MergePolicy.Overwrite);
-                    try
-                    {
-                        this.Config.Characters = this.Characters;
-                        this.PluginInterface.SavePluginConfig(this.Config);
-                    }
-                    catch { }
-                }
-            }
-            catch
-            {
-                // swallow handler errors
-            }
-        }
-
-        /// <summary>
-        /// Handler for AutoRetainer.OnSendRetainerToVenture IPC hook.
-        /// Called just before AutoRetainer sends a retainer to a venture.
-        /// Calculates the appropriate venture based on crystal/shard inventory.
-        /// </summary>
         private void OnRetainerSendToVenture(string retainerName)
-        {
-            try
-            {
-                // Only process if auto-venture is enabled
-                if (!this.Config.AutoVentureEnabled || this.autoRetainerSetVenture == null)
-                    return;
-
-                this.pluginLog.Information($"[CrystalTerror] AutoRetainer venture hook triggered for retainer: {retainerName}");
-
-                // Find the current character
-                var contentId = this.playerState.ContentId;
-                var playerName = this.objects.LocalPlayer?.Name.TextValue;
-                var currentChar = this.Characters.FirstOrDefault(c => c.Name == playerName && contentId != 0);
-
-                if (currentChar == null)
-                {
-                    this.pluginLog.Warning($"[CrystalTerror] Could not find character data for {playerName}");
-                    return;
-                }
-
-                // Find the retainer
-                var retainer = currentChar.Retainers.FirstOrDefault(r => r.Name == retainerName);
-                if (retainer == null)
-                {
-                    this.pluginLog.Warning($"[CrystalTerror] Could not find retainer {retainerName} in character data");
-                    return;
-                }
-
-                // Log retainer stats for debugging
-                this.pluginLog.Debug($"[CrystalTerror] {retainer.Name}: Level={retainer.Level}, Gathering={retainer.Gathering}, Job={ClassJobExtensions.GetAbreviation(retainer.Job)}");
-
-                // Check if retainer is eligible
-                if (retainer.Job == null || !VentureHelper.IsRetainerEligibleForVenture(retainer, CrystalType.Shard))
-                {
-                    var jobName = retainer.Job.HasValue ? ClassJobExtensions.GetAbreviation(retainer.Job) : "Unknown";
-                    this.pluginLog.Information($"[CrystalTerror] ✗ Skipping {retainer.Name} - Job: {jobName} (not MIN/BTN/FSH)");
-                    return;
-                }
-
-                // Determine the best venture
-                var ventureId = VentureHelper.DetermineLowestCrystalVenture(retainer, this.Config, this.pluginLog);
-                if (ventureId.HasValue)
-                {
-                    this.pluginLog.Information($"[CrystalTerror] ✓ Overriding venture for {retainer.Name} with {VentureHelper.GetVentureName(ventureId.Value)} (ID: {(uint)ventureId.Value})");
-                    this.autoRetainerSetVenture.InvokeAction((uint)ventureId.Value);
-                }
-                else
-                {
-                    // If threshold is configured and all crystals are above it, assign quick venture as fallback
-                    if (this.Config.AutoVentureThreshold > 0)
-                    {
-                        this.pluginLog.Information($"[CrystalTerror] ✓ All types above threshold for {retainer.Name}, assigning Quick Exploration (ID: {(uint)VentureId.QuickExploration})");
-                        this.autoRetainerSetVenture.InvokeAction((uint)VentureId.QuickExploration);
-                    }
-                    else
-                    {
-                        this.pluginLog.Information($"[CrystalTerror] ✗ No suitable venture for {retainer.Name} - Level: {retainer.Level}, Gathering: {retainer.Gathering}");
-                        this.pluginLog.Debug($"  (Crystals require Level > 26 AND Gathering > 90)");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                this.pluginLog.Error($"[CrystalTerror] Error in venture override handler: {ex.Message}");
-                this.pluginLog.Error($"  Stack trace: {ex.StackTrace}");
-            }
-        }
+            => AutoRetainerHelper.HandleRetainerSendToVenture(
+                retainerName,
+                this.Config,
+                this.autoRetainerSetVenture,
+                this.playerState,
+                this.objects,
+                this.Characters,
+                this.pluginLog);
 
         private void OnOpenCommand(string command, string arguments)
         {

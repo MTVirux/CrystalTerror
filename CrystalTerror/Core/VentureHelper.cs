@@ -111,6 +111,7 @@ namespace CrystalTerror
                 {
                     // All crystal/shard types are above threshold, return null to skip venture assignment
                     log?.Information($"[VentureHelper] All crystal/shard types for {retainer.Name} are above threshold ({config.AutoVentureThreshold}). Lowest count: {candidates.Min(c => c.count)}");
+                    log?.Information($"  Counts: {string.Join(", ", candidates.OrderBy(c => c.element).ThenBy(c => c.type).Select(c => $"{c.element} {c.type}={c.count}"))}");
                     return null;
                 }
             }
@@ -169,72 +170,6 @@ namespace CrystalTerror
                 VentureId.Water_Crystal => "Water Crystal",
                 _ => "Unknown"
             };
-        }
-
-        /// <summary>
-        /// Assign ventures to all retainers in a character based on their crystal/shard inventory.
-        /// NOTE: This is deprecated in favor of the OnSendRetainerToVenture hook approach.
-        /// </summary>
-        public static void AssignVenturesToRetainers(
-            StoredCharacter character,
-            Configuration config,
-            Dalamud.Plugin.Ipc.ICallGateSubscriber<uint, object>? autoRetainerSetVenture,
-            IPluginLog log)
-        {
-            if (character?.Retainers == null || autoRetainerSetVenture == null)
-            {
-                log.Warning("[CrystalTerror] Cannot assign ventures: character or retainers data is null, or AutoRetainer IPC unavailable.");
-                return;
-            }
-
-            log.Information($"[CrystalTerror] Processing {character.Retainers.Count} retainer(s) for {character.Name}@{character.World}");
-            log.Information($"[CrystalTerror] Config: Shards={config.AutoVentureShardsEnabled}, Crystals={config.AutoVentureCrystalsEnabled}, Threshold={config.AutoVentureThreshold}");
-
-            foreach (var retainer in character.Retainers)
-            {
-                try
-                {
-                    log.Debug($"[CrystalTerror] ─────────────────────────────────────────");
-                    log.Debug($"[CrystalTerror] Processing retainer: {retainer.Name}");
-                    
-                    // Check if retainer is a gathering job (MIN/BTN/FSH)
-                    if (retainer.Job == null || !IsRetainerEligibleForVenture(retainer, CrystalType.Shard))
-                    {
-                        var jobName = retainer.Job.HasValue ? ClassJobExtensions.GetAbreviation(retainer.Job) : "Unknown";
-                        log.Information($"[CrystalTerror] ✗ Skipping {retainer.Name} - Job: {jobName} (not MIN/BTN/FSH)");
-                        continue;
-                    }
-
-                    var ventureId = DetermineLowestCrystalVenture(retainer, config, log);
-                    if (ventureId.HasValue)
-                    {
-                        log.Information($"[CrystalTerror] ✓ Would assign {GetVentureName(ventureId.Value)} to {retainer.Name}");
-                        log.Debug($"  Venture ID: {(uint)ventureId.Value}, Retainer ATID: {retainer.atid}");
-                        log.Warning($"[CrystalTerror] NOTE: AssignVenturesToRetainers is deprecated. Use OnSendRetainerToVenture hook instead.");
-                    }
-                    else
-                    {
-                        // If threshold is configured and all crystals are above it, assign quick venture as fallback
-                        if (config.AutoVentureThreshold > 0)
-                        {
-                            log.Information($"[CrystalTerror] ✓ Would assign Quick Exploration to {retainer.Name}");
-                            log.Warning($"[CrystalTerror] NOTE: AssignVenturesToRetainers is deprecated. Use OnSendRetainerToVenture hook instead.");
-                        }
-                        else
-                        {
-                            log.Warning($"[CrystalTerror] ✗ No suitable venture for {retainer.Name} - Level: {retainer.Level}, Gathering: {retainer.Gathering}");
-                            log.Debug($"  (Crystals require Level > 26 AND Gathering > 90)");
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    log.Error($"[CrystalTerror] ✗ Failed to assign venture to {retainer.Name}: {ex.Message}");
-                    log.Error($"  Stack trace: {ex.StackTrace}");
-                }
-            }
-            
-            log.Information($"[CrystalTerror] Venture assignment complete for {character.Name}@{character.World}");
         }
     }
 }

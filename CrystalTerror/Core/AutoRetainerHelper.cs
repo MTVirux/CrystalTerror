@@ -13,6 +13,8 @@ namespace CrystalTerror
     {
         public record RetainerInfo(string Name, ulong Atid, int? Job, int Level, int Ilvl, int Gathering, int Perception, string OwnerName, string OwnerWorld);
 
+        private static bool isProcessingVenture = false;
+
         /// <summary>
         /// Query AutoRetainer IPC to collect retainers for all registered characters.
         /// Returns an empty list if AutoRetainer IPC is unavailable.
@@ -85,6 +87,138 @@ namespace CrystalTerror
             }
 
             return outList;
+        }
+
+        /// <summary>
+        /// Handler for RetainerList addon opening. Imports current character and retainer data.
+        /// </summary>
+        public static void HandleRetainerListSetup(
+            Dalamud.Plugin.Services.IPlayerState playerState,
+            Dalamud.Plugin.Services.IObjectTable objects,
+            Dalamud.Plugin.Services.IDataManager dataManager,
+            List<StoredCharacter> characters,
+            Configuration config,
+            IDalamudPluginInterface pluginInterface,
+            Dalamud.Plugin.Services.IPluginLog log)
+        {
+            try
+            {
+                try
+                {
+                    log.Information($"Retainer addon opened (ContentId={playerState.ContentId}). Triggering import.");
+                }
+                catch { }
+
+                var sc = CharacterHelper.ImportCurrentCharacter(playerState, objects, dataManager);
+                if (sc != null)
+                {
+                    CharacterHelper.MergeInto(characters, new[] { sc }, CharacterHelper.MergePolicy.Overwrite);
+                    try
+                    {
+                        config.Characters = characters;
+                        pluginInterface.SavePluginConfig(config);
+                    }
+                    catch { }
+                }
+            }
+            catch
+            {
+                // swallow handler errors
+            }
+        }
+
+        /// <summary>
+        /// Handler for AutoRetainer.OnSendRetainerToVenture IPC hook.
+        /// Called just before AutoRetainer sends a retainer to a venture.
+        /// Calculates the appropriate venture based on crystal/shard inventory.
+        /// </summary>
+        public static void HandleRetainerSendToVenture(
+            string retainerName,
+            Configuration config,
+            Dalamud.Plugin.Ipc.ICallGateSubscriber<uint, object>? autoRetainerSetVenture,
+            Dalamud.Plugin.Services.IPlayerState playerState,
+            Dalamud.Plugin.Services.IObjectTable objects,
+            List<StoredCharacter> characters,
+            Dalamud.Plugin.Services.IPluginLog log)
+        {
+            try
+            {
+                // Check if we're already processing a venture to prevent multiple triggers
+                if (isProcessingVenture)
+                {
+                    log.Debug($"[CrystalTerror] Venture processing already in progress, ignoring duplicate trigger for {retainerName}");
+                    return;
+                }
+
+                // Only process if auto-venture is enabled
+                if (!config.AutoVentureEnabled || autoRetainerSetVenture == null)
+                    return;
+
+                isProcessingVenture = true;
+                log.Information($"[CrystalTerror] AutoRetainer venture hook triggered for retainer: {retainerName}");
+
+                // Find the current character
+                var contentId = playerState.ContentId;
+                var playerName = objects.LocalPlayer?.Name.TextValue;
+                var currentChar = characters.FirstOrDefault(c => c.Name == playerName && contentId != 0);
+
+                if (currentChar == null)
+                {
+                    log.Warning($"[CrystalTerror] Could not find character data for {playerName}");
+                    return;
+                }
+
+                // Find the retainer
+                var retainer = currentChar.Retainers.FirstOrDefault(r => r.Name == retainerName);
+                if (retainer == null)
+                {
+                    log.Warning($"[CrystalTerror] Could not find retainer {retainerName} in character data");
+                    return;
+                }
+
+                // Log retainer stats for debugging
+                log.Debug($"[CrystalTerror] {retainer.Name}: Level={retainer.Level}, Gathering={retainer.Gathering}, Job={ClassJobExtensions.GetAbreviation(retainer.Job)}");
+
+                // Check if retainer is eligible
+                if (retainer.Job == null || !VentureHelper.IsRetainerEligibleForVenture(retainer, CrystalType.Shard))
+                {
+                    var jobName = retainer.Job.HasValue ? ClassJobExtensions.GetAbreviation(retainer.Job) : "Unknown";
+                    log.Information($"[CrystalTerror] ✗ Skipping {retainer.Name} - Job: {jobName} (not MIN/BTN/FSH)");
+                    return;
+                }
+
+                // Determine the best venture
+                var ventureId = VentureHelper.DetermineLowestCrystalVenture(retainer, config, log);
+                if (ventureId.HasValue)
+                {
+                    log.Information($"[CrystalTerror] ✓ Overriding venture for {retainer.Name} with {VentureHelper.GetVentureName(ventureId.Value)} (ID: {(uint)ventureId.Value})");
+                    autoRetainerSetVenture.InvokeAction((uint)ventureId.Value);
+                }
+                else
+                {
+                    // If threshold is configured and all crystals are above it, assign quick venture as fallback
+                    if (config.AutoVentureThreshold > 0)
+                    {
+                        log.Information($"[CrystalTerror] ✓ All types above threshold ({config.AutoVentureThreshold}) for {retainer.Name}, assigning Quick Exploration (ID: {(uint)VentureId.QuickExploration})");
+                        autoRetainerSetVenture.InvokeAction((uint)VentureId.QuickExploration);
+                    }
+                    else
+                    {
+                        log.Information($"[CrystalTerror] ✗ No suitable venture for {retainer.Name} - Level: {retainer.Level}, Gathering: {retainer.Gathering}");
+                        log.Debug($"  (Crystals require Level > 26 AND Gathering > 90)");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Error($"[CrystalTerror] Error in venture override handler: {ex.Message}");
+                log.Error($"  Stack trace: {ex.StackTrace}");
+            }
+            finally
+            {
+                // Always release the lock when we're done
+                isProcessingVenture = false;
+            }
         }
     }
 }
