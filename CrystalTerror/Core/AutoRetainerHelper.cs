@@ -19,16 +19,14 @@ namespace CrystalTerror
         /// Query AutoRetainer IPC to collect retainers for all registered characters.
         /// Returns an empty list if AutoRetainer IPC is unavailable.
         /// </summary>
-        public static List<RetainerInfo> GetAllRetainersViaAutoRetainer(IDalamudPluginInterface pluginInterface)
+        public static List<RetainerInfo> GetAllRetainersViaAutoRetainer()
         {
-            if (pluginInterface == null) throw new ArgumentNullException(nameof(pluginInterface));
-
             var outList = new List<RetainerInfo>();
 
-            var getRegistered = pluginInterface.GetIpcSubscriber<List<ulong>>("AutoRetainer.GetRegisteredCIDs");
+            var getRegistered = Services.PluginInterface.GetIpcSubscriber<List<ulong>>("AutoRetainer.GetRegisteredCIDs");
             var cids = getRegistered?.InvokeFunc() ?? new List<ulong>();
 
-            var getOffline = pluginInterface.GetIpcSubscriber<ulong, object>("AutoRetainer.GetOfflineCharacterData");
+            var getOffline = Services.PluginInterface.GetIpcSubscriber<ulong, object>("AutoRetainer.GetOfflineCharacterData");
             if (getOffline == null)
                 return outList; // AutoRetainer not installed or no IPC available.
 
@@ -63,7 +61,7 @@ namespace CrystalTerror
                                 int perception = 0;
                                 try
                                 {
-                                    var getAdditional = pluginInterface.GetIpcSubscriber<ulong, string, object>("AutoRetainer.GetAdditionalRetainerData");
+                                    var getAdditional = Services.PluginInterface.GetIpcSubscriber<ulong, string, object>("AutoRetainer.GetAdditionalRetainerData");
                                     if (getAdditional != null)
                                     {
                                         var additionalData = getAdditional.InvokeFunc(cid, name);
@@ -98,7 +96,6 @@ namespace CrystalTerror
             Dalamud.Plugin.Services.IDataManager dataManager,
             List<StoredCharacter> characters,
             Configuration config,
-            IDalamudPluginInterface pluginInterface,
             Dalamud.Plugin.Services.IPluginLog log)
         {
             try
@@ -116,7 +113,7 @@ namespace CrystalTerror
                     try
                     {
                         config.Characters = characters;
-                        pluginInterface.SavePluginConfig(config);
+                        Services.PluginInterface.SavePluginConfig(config);
                     }
                     catch { }
                 }
@@ -146,7 +143,7 @@ namespace CrystalTerror
                 // Check if we're already processing a venture to prevent multiple triggers
                 if (isProcessingVenture)
                 {
-                    log.Debug($"[CrystalTerror] Venture processing already in progress, ignoring duplicate trigger for {retainerName}");
+                    log.Information($"[CrystalTerror] Venture processing already in progress, ignoring duplicate trigger for {retainerName}");
                     return;
                 }
 
@@ -164,7 +161,6 @@ namespace CrystalTerror
 
                 if (currentChar == null)
                 {
-                    log.Warning($"[CrystalTerror] Could not find character data for {playerName}");
                     return;
                 }
 
@@ -172,12 +168,11 @@ namespace CrystalTerror
                 var retainer = currentChar.Retainers.FirstOrDefault(r => r.Name == retainerName);
                 if (retainer == null)
                 {
-                    log.Warning($"[CrystalTerror] Could not find retainer {retainerName} in character data");
                     return;
                 }
 
-                // Log retainer stats for debugging
-                log.Debug($"[CrystalTerror] {retainer.Name}: Level={retainer.Level}, Gathering={retainer.Gathering}, Job={ClassJobExtensions.GetAbreviation(retainer.Job)}");
+                // Log retainer stats for Informationging
+                log.Information($"[CrystalTerror] {retainer.Name}: Level={retainer.Level}, Gathering={retainer.Gathering}, Job={ClassJobExtensions.GetAbreviation(retainer.Job)}");
 
                 // Check if retainer is eligible
                 if (retainer.Job == null || !VentureHelper.IsRetainerEligibleForVenture(retainer, CrystalType.Shard))
@@ -196,16 +191,10 @@ namespace CrystalTerror
                 }
                 else
                 {
-                    // If threshold is configured and all crystals are above it, assign quick venture as fallback
-                    if (config.AutoVentureThreshold > 0)
-                    {
-                        log.Information($"[CrystalTerror] ✓ All types above threshold ({config.AutoVentureThreshold}) for {retainer.Name}, assigning Quick Exploration (ID: {(uint)VentureId.QuickExploration})");
-                        autoRetainerSetVenture.InvokeAction((uint)VentureId.QuickExploration);
-                    }
-                    else
+                    // No suitable venture found
                     {
                         log.Information($"[CrystalTerror] ✗ No suitable venture for {retainer.Name} - Level: {retainer.Level}, Gathering: {retainer.Gathering}");
-                        log.Debug($"  (Crystals require Level > 26 AND Gathering > 90)");
+                        log.Information($"  (Crystals require Level > 26 AND Gathering > 90)");
                     }
                 }
             }

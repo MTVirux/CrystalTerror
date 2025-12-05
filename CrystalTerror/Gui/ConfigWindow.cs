@@ -212,7 +212,7 @@ public class ConfigWindow : Window, IDisposable
             ImGui.SameLine();
             if (ImGui.Button("Import From AutoRetainer"))
             {
-                var list = CharacterHelper.ImportFromAutoRetainer(this.plugin.PluginInterface);
+                var list = CharacterHelper.ImportFromAutoRetainer();
                 CharacterHelper.MergeInto(this.plugin.Characters, list, CharacterHelper.MergePolicy.Overwrite);
                 this.plugin.Config.Characters = this.plugin.Characters;
                 this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);

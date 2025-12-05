@@ -151,7 +151,58 @@ namespace CrystalTerror
                                 rname = string.Empty;
                             }
 
-                            var ret = RetainerHelper.Create(sc, string.IsNullOrEmpty(rname) ? string.Empty : rname, rptr->RetainerId, (int)rptr->ClassJob, rptr->Level, 0);
+                            // Try to calculate retainer stats from equipped gear if accessible
+                            int ilvl = 0;
+                            int gathering = 0;
+                            int perception = 0;
+                            bool statsObtained = false;
+                            
+                            if (dataManager != null)
+                            {
+                                try
+                                {
+                                    var (calculatedIlvl, calculatedGathering, calculatedPerception) = RetainerStatsHelper.CalculateRetainerStats(dataManager);
+                                    if (calculatedIlvl.HasValue)
+                                    {
+                                        // Gear is accessible, use calculated values
+                                        ilvl = calculatedIlvl.Value;
+                                        gathering = calculatedGathering;
+                                        perception = calculatedPerception;
+                                        statsObtained = true;
+                                    }
+                                }
+                                catch
+                                {
+                                    // Calculation failed, gear not accessible
+                                }
+                            }
+                            
+                            // If gear not accessible, try to get stats from AutoRetainer
+                            if (!statsObtained)
+                            {
+                                try
+                                {
+                                    var getAdditional = Services.PluginInterface.GetIpcSubscriber<ulong, string, object>("AutoRetainer.GetAdditionalRetainerData");
+                                    if (getAdditional != null)
+                                    {
+                                        var additionalData = getAdditional.InvokeFunc(playerState.ContentId, rname);
+                                        if (additionalData != null)
+                                        {
+                                            dynamic adata = additionalData;
+                                            try { ilvl = (int?)(adata.Ilvl ?? 0) ?? 0; } catch { }
+                                            try { gathering = (int?)(adata.Gathering ?? 0) ?? 0; } catch { }
+                                            try { perception = (int?)(adata.Perception ?? 0) ?? 0; } catch { }
+                                            statsObtained = true;
+                                        }
+                                    }
+                                }
+                                catch
+                                {
+                                    // AutoRetainer not available or data not found
+                                }
+                            }
+
+                            var ret = RetainerHelper.Create(sc, string.IsNullOrEmpty(rname) ? string.Empty : rname, rptr->RetainerId, (int)rptr->ClassJob, rptr->Level, ilvl, gathering, perception);
 
                             // Try to populate crystal/shard/cluster counts from the client's ItemFinder cache
                             try
@@ -207,13 +258,11 @@ namespace CrystalTerror
         /// and constructs a <see cref="StoredCharacter"/> for each owner. Returns an empty list
         /// if AutoRetainer IPC is unavailable or no retainers found.
         /// </summary>
-        public static List<StoredCharacter> ImportFromAutoRetainer(IDalamudPluginInterface pluginInterface)
+        public static List<StoredCharacter> ImportFromAutoRetainer()
         {
-            if (pluginInterface == null) throw new ArgumentNullException(nameof(pluginInterface));
-
             var outChars = new List<StoredCharacter>();
 
-            var retInfos = AutoRetainerHelper.GetAllRetainersViaAutoRetainer(pluginInterface);
+            var retInfos = AutoRetainerHelper.GetAllRetainersViaAutoRetainer();
             if (retInfos == null || retInfos.Count == 0) return outChars;
 
             var grouped = retInfos.GroupBy(r => new { OwnerName = r.OwnerName ?? string.Empty, OwnerWorld = r.OwnerWorld ?? string.Empty });
@@ -278,6 +327,26 @@ namespace CrystalTerror
                     case MergePolicy.Skip:
                         break;
                     case MergePolicy.Overwrite:
+                        // Preserve existing retainer stats when gear wasn't accessible during import (new values are 0)
+                        foreach (var newRetainer in sc.Retainers)
+                        {
+                            var existingRetainer = existing.Retainers.FirstOrDefault(er => 
+                                (er.atid != 0 && er.atid == newRetainer.atid) || 
+                                string.Equals(er.Name, newRetainer.Name, StringComparison.OrdinalIgnoreCase));
+                            
+                            if (existingRetainer != null)
+                            {
+                                // If new stats are 0 but existing stats are non-zero, preserve them
+                                // This happens when gear isn't accessible (retainer not summoned)
+                                if (newRetainer.Ilvl == 0 && existingRetainer.Ilvl > 0)
+                                    newRetainer.Ilvl = existingRetainer.Ilvl;
+                                if (newRetainer.Gathering == 0 && existingRetainer.Gathering > 0)
+                                    newRetainer.Gathering = existingRetainer.Gathering;
+                                if (newRetainer.Perception == 0 && existingRetainer.Perception > 0)
+                                    newRetainer.Perception = existingRetainer.Perception;
+                            }
+                        }
+                        
                         existing.Retainers = sc.Retainers;
                         RetainerHelper.SetOwnerForRetainers(existing);
                         existing.Inventory = sc.Inventory;
@@ -293,6 +362,18 @@ namespace CrystalTerror
                                 // ensure owner is set to existing character
                                 r.OwnerCharacter = existing;
                                 existing.Retainers.Add(r);
+                            }
+                            else
+                            {
+                                // Update match with new data
+                                match.Name = r.Name;
+                                match.atid = r.atid;
+                                if (r.Job.HasValue) match.Job = r.Job;
+                                match.Level = r.Level;
+                                match.Ilvl = r.Ilvl;
+                                match.Gathering = r.Gathering;
+                                match.Perception = r.Perception;
+                                if (r.Inventory != null) match.Inventory = r.Inventory;
                             }
                         }
 

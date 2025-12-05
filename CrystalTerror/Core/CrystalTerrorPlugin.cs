@@ -51,6 +51,9 @@ namespace CrystalTerror
         public CrystalTerrorPlugin(IDalamudPluginInterface pluginInterface, ICommandManager commandManager, Dalamud.Plugin.Services.IPlayerState playerState, Dalamud.Plugin.Services.IObjectTable objects, IDataManager dataManager, IFramework framework, IGameGui gameGui, IAddonLifecycle addonLifecycle, ICondition condition, IPluginLog pluginLog)
         {
             this.PluginInterface = pluginInterface;
+            
+            // Initialize global service locator
+            Services.Initialize(pluginInterface);
 
             this.Config = this.PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
@@ -295,7 +298,6 @@ namespace CrystalTerror
                 this.dataManager,
                 this.Characters,
                 this.Config,
-                this.PluginInterface,
                 this.pluginLog);
 
         private void OnRetainerSendToVenture(string retainerName)
