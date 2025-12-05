@@ -126,6 +126,69 @@ public class ConfigWindow : Window, IDisposable
             ImGui.Unindent();
         }
 
+        // Character Sorting
+        if (ImGui.CollapsingHeader("Character Sorting"))
+        {
+            ImGui.Text("Sort characters by:");
+            ImGui.Indent();
+
+            var currentSort = (int)cfg.CharacterSortOption;
+            var sortOptions = new string[]
+            {
+                "Alphabetical (A-Z)",
+                "Reverse Alphabetical (Z-A)",
+                "World (A-Z)",
+                "Reverse World (Z-A)",
+                "AutoRetainer Order",
+                "Custom Order"
+            };
+
+            if (ImGui.Combo("Sort Order", ref currentSort, sortOptions, sortOptions.Length))
+            {
+                cfg.CharacterSortOption = (CharacterSortOptions)currentSort;
+                
+                // Exit edit mode if switching away from Custom
+                if (cfg.CharacterSortOption != CharacterSortOptions.Custom)
+                {
+                    cfg.IsEditMode = false;
+                }
+                
+                this.plugin.PluginInterface.SavePluginConfig(cfg);
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Change how characters are sorted in the main window.");
+            }
+
+            // Show Edit Order button only when Custom is selected
+            if (cfg.CharacterSortOption == CharacterSortOptions.Custom)
+            {
+                ImGui.Spacing();
+                var editButtonText = cfg.IsEditMode ? "Exit Edit Mode" : "Edit Order";
+                if (ImGui.Button(editButtonText))
+                {
+                    cfg.IsEditMode = !cfg.IsEditMode;
+                    this.plugin.PluginInterface.SavePluginConfig(cfg);
+                    
+                    // Open main window when entering edit mode
+                    if (cfg.IsEditMode)
+                    {
+                        this.plugin.OpenMainUi();
+                    }
+                }
+                
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.SetTooltip(cfg.IsEditMode 
+                        ? "Exit edit mode to return to normal view." 
+                        : "Enter edit mode to reorder characters with up/down arrows.");
+                }
+            }
+
+            ImGui.Unindent();
+        }
+
         // Automatic Venture Assignment
         if (ImGui.CollapsingHeader("Automatic Venture Assignment"))
         {

@@ -1,6 +1,7 @@
 namespace CrystalTerror.Gui;
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Dalamud.Interface.Windowing;
 using Dalamud.Bindings.ImGui;
@@ -42,7 +43,7 @@ public class MainWindow : Window, IDisposable
 	private string FormatCrystalCounts(long shard, long crystal, long cluster)
 	{
 		var cfg = this.plugin.Config;
-		var parts = new System.Collections.Generic.List<string>();
+		var parts = new List<string>();
 		
 		if (cfg.ShowShards)
 			parts.Add(shard.ToString());
@@ -54,11 +55,24 @@ public class MainWindow : Window, IDisposable
 		return parts.Count > 0 ? string.Join("/", parts) : "-";
 	}
 
+	private List<StoredCharacter> GetSortedCharacters()
+	{
+		var characters = this.plugin.Characters.ToList();
+		
+		return this.plugin.Config.CharacterSortOption switch
+		{
+			CharacterSortOptions.Alphabetical => characters.OrderBy(c => c.Name).ToList(),
+			CharacterSortOptions.ReverseAlphabetical => characters.OrderByDescending(c => c.Name).ToList(),
+			CharacterSortOptions.World => characters.OrderBy(c => c.World).ThenBy(c => c.Name).ToList(),
+			CharacterSortOptions.ReverseWorld => characters.OrderByDescending(c => c.World).ThenByDescending(c => c.Name).ToList(),
+			CharacterSortOptions.AutoRetainer => characters, // Keep original order (assumed to be AutoRetainer order)
+			CharacterSortOptions.Custom => characters, // Keep original order (user-defined)
+			_ => characters
+		};
+	}
+
 	public override void Draw()
 	{
-		ImGui.Text("Crystal Terror");
-		ImGui.Separator();
-
 
 		if (ImGui.Button("Open Config"))
 		{
@@ -78,9 +92,68 @@ public class MainWindow : Window, IDisposable
 		}
 		else
 		{
-			for (int i = 0; i < this.plugin.Characters.Count; ++i)
+			var sortedCharacters = this.GetSortedCharacters();
+			for (int i = 0; i < sortedCharacters.Count; ++i)
 			{
-				var c = this.plugin.Characters[i];
+				var c = sortedCharacters[i];
+				
+				// Show up/down buttons in edit mode for Custom sort
+				if (this.plugin.Config.IsEditMode && this.plugin.Config.CharacterSortOption == CharacterSortOptions.Custom)
+				{
+					var canMoveUp = i > 0;
+					var canMoveDown = i < sortedCharacters.Count - 1;
+					
+					if (!canMoveUp)
+					{
+						ImGui.BeginDisabled();
+					}
+					if (ImGui.ArrowButton($"up_{i}", ImGuiDir.Up))
+					{
+						// Move character up
+						var idx = this.plugin.Characters.IndexOf(c);
+						if (idx > 0)
+						{
+							this.plugin.Characters.RemoveAt(idx);
+							this.plugin.Characters.Insert(idx - 1, c);
+							
+							// Save updated order
+							this.plugin.Config.Characters = this.plugin.Characters;
+							this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
+						}
+					}
+					if (!canMoveUp)
+					{
+						ImGui.EndDisabled();
+					}
+					
+					ImGui.SameLine();
+					
+					if (!canMoveDown)
+					{
+						ImGui.BeginDisabled();
+					}
+					if (ImGui.ArrowButton($"down_{i}", ImGuiDir.Down))
+					{
+						// Move character down
+						var idx = this.plugin.Characters.IndexOf(c);
+						if (idx >= 0 && idx < this.plugin.Characters.Count - 1)
+						{
+							this.plugin.Characters.RemoveAt(idx);
+							this.plugin.Characters.Insert(idx + 1, c);
+							
+							// Save updated order
+							this.plugin.Config.Characters = this.plugin.Characters;
+							this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
+						}
+					}
+					if (!canMoveDown)
+					{
+						ImGui.EndDisabled();
+					}
+					
+					ImGui.SameLine();
+				}
+				
 				var header = $"{c.Name} @ {c.World} — Retainers: {c.Retainers?.Count ?? 0}";
 				if (ImGui.CollapsingHeader(header))
 				{

@@ -51,5 +51,15 @@ namespace CrystalTerror
         public bool ShowShards { get; set; } = true;
         public bool ShowCrystals { get; set; } = true;
         public bool ShowClusters { get; set; } = true;
+
+        /// <summary>
+        /// How characters should be sorted in the main window.
+        /// </summary>
+        public CharacterSortOptions CharacterSortOption { get; set; } = CharacterSortOptions.Alphabetical;
+
+        /// <summary>
+        /// Whether the main window is in edit mode for custom character ordering.
+        /// </summary>
+        public bool IsEditMode { get; set; } = false;
     }
 }
