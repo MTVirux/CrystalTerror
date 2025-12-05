@@ -38,5 +38,18 @@ namespace CrystalTerror
         /// Set to 0 to disable threshold checking (always assign ventures).
         /// </summary>
         public long AutoVentureThreshold { get; set; } = 9879;
+
+        // Display Filters - Elements
+        public bool ShowFireElement { get; set; } = true;
+        public bool ShowIceElement { get; set; } = true;
+        public bool ShowWindElement { get; set; } = true;
+        public bool ShowLightningElement { get; set; } = true;
+        public bool ShowEarthElement { get; set; } = true;
+        public bool ShowWaterElement { get; set; } = true;
+
+        // Display Filters - Crystal Types
+        public bool ShowShards { get; set; } = true;
+        public bool ShowCrystals { get; set; } = true;
+        public bool ShowClusters { get; set; } = true;
     }
 }

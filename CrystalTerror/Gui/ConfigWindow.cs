@@ -173,6 +173,91 @@ public class ConfigWindow : Window, IDisposable
         }
 
         ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.Text("Display Filters");
+        ImGui.Separator();
+
+        ImGui.Text("Elements:");
+        ImGui.Indent();
+        
+        var showFire = cfg.ShowFireElement;
+        if (ImGui.Checkbox("Fire", ref showFire))
+        {
+            cfg.ShowFireElement = showFire;
+            this.plugin.PluginInterface.SavePluginConfig(cfg);
+        }
+        ImGui.SameLine();
+        
+        var showIce = cfg.ShowIceElement;
+        if (ImGui.Checkbox("Ice", ref showIce))
+        {
+            cfg.ShowIceElement = showIce;
+            this.plugin.PluginInterface.SavePluginConfig(cfg);
+        }
+        ImGui.SameLine();
+        
+        var showWind = cfg.ShowWindElement;
+        if (ImGui.Checkbox("Wind", ref showWind))
+        {
+            cfg.ShowWindElement = showWind;
+            this.plugin.PluginInterface.SavePluginConfig(cfg);
+        }
+        
+        var showLightning = cfg.ShowLightningElement;
+        if (ImGui.Checkbox("Lightning", ref showLightning))
+        {
+            cfg.ShowLightningElement = showLightning;
+            this.plugin.PluginInterface.SavePluginConfig(cfg);
+        }
+        ImGui.SameLine();
+        
+        var showEarth = cfg.ShowEarthElement;
+        if (ImGui.Checkbox("Earth", ref showEarth))
+        {
+            cfg.ShowEarthElement = showEarth;
+            this.plugin.PluginInterface.SavePluginConfig(cfg);
+        }
+        ImGui.SameLine();
+        
+        var showWater = cfg.ShowWaterElement;
+        if (ImGui.Checkbox("Water", ref showWater))
+        {
+            cfg.ShowWaterElement = showWater;
+            this.plugin.PluginInterface.SavePluginConfig(cfg);
+        }
+        
+        ImGui.Unindent();
+        ImGui.Spacing();
+        
+        ImGui.Text("Crystal Types:");
+        ImGui.Indent();
+        
+        var showShards = cfg.ShowShards;
+        if (ImGui.Checkbox("Shards", ref showShards))
+        {
+            cfg.ShowShards = showShards;
+            this.plugin.PluginInterface.SavePluginConfig(cfg);
+        }
+        ImGui.SameLine();
+        
+        var showCrystals = cfg.ShowCrystals;
+        if (ImGui.Checkbox("Crystals", ref showCrystals))
+        {
+            cfg.ShowCrystals = showCrystals;
+            this.plugin.PluginInterface.SavePluginConfig(cfg);
+        }
+        ImGui.SameLine();
+        
+        var showClusters = cfg.ShowClusters;
+        if (ImGui.Checkbox("Clusters", ref showClusters))
+        {
+            cfg.ShowClusters = showClusters;
+            this.plugin.PluginInterface.SavePluginConfig(cfg);
+        }
+        
+        ImGui.Unindent();
+
+        ImGui.Spacing();
         // Configuration is saved immediately on change; no explicit Save button required.
         if (ImGui.Button("Close"))
             this.IsOpen = false;
