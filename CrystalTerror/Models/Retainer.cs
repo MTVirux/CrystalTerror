@@ -11,8 +11,23 @@ namespace CrystalTerror
         /// <summary>Retainer display name.</summary>
         public string Name { get; set; } = string.Empty;
 
-        /// <summary>Persisted AllaganTools/retainer identifier (atid).</summary>
+        /// <summary>Persisted retainer identifier (atid).</summary>
         public ulong atid { get; set; }
+
+        /// <summary>Retainer job/class id (if available from AutoRetainer offline data). Null = unknown.</summary>
+        public int? Job { get; set; } = null;
+
+        /// <summary>Retainer level.</summary>
+        public int Level { get; set; } = 0;
+
+        /// <summary>Retainer item level / average gear level.</summary>
+        public int Ilvl { get; set; } = 0;
+
+        /// <summary>Gathering stat for non-combat retainers (when available from AutoRetainer).</summary>
+        public int Gathering { get; set; } = 0;
+
+        /// <summary>Perception stat for non-combat retainers (when available from AutoRetainer).</summary>
+        public int Perception { get; set; } = 0;
 
         /// <summary>Item counts for the retainer's inventory.</summary>
         public Inventory Inventory { get; set; } = new Inventory();
