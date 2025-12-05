@@ -2,6 +2,7 @@ namespace CrystalTerror.Gui;
 
 using System;
 using Dalamud.Interface.Windowing;
+using Dalamud.Bindings.ImGui;
 using ImGui = Dalamud.Bindings.ImGui.ImGui;
 
 public class ConfigWindow : Window, IDisposable
@@ -38,12 +39,68 @@ public class ConfigWindow : Window, IDisposable
         }
 
         ImGui.Spacing();
-        if (ImGui.Button("Save"))
+        // Import / Purge controls moved to config window
+        if (ImGui.Button("Import Current Character"))
         {
-            this.plugin.PluginInterface.SavePluginConfig(cfg);
+            var sc = CharacterHelper.ImportCurrentCharacter(this.plugin.PlayerState, this.plugin.Objects, this.plugin.DataManager);
+            if (sc != null)
+            {
+                CharacterHelper.MergeInto(this.plugin.Characters, new[] { sc }, CharacterHelper.MergePolicy.Skip);
+                this.plugin.Config.Characters = this.plugin.Characters;
+                this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
+            }
+        }
+        ImGui.SameLine();
+        if (ImGui.Button("Import From AutoRetainer"))
+        {
+            var list = CharacterHelper.ImportFromAutoRetainer(this.plugin.PluginInterface);
+            CharacterHelper.MergeInto(this.plugin.Characters, list, CharacterHelper.MergePolicy.Overwrite);
+            this.plugin.Config.Characters = this.plugin.Characters;
+            this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
+        }
+        ImGui.SameLine();
+        if (ImGui.Button("Purge Characters"))
+        {
+            ImGui.OpenPopup("PurgeConfirm");
         }
 
-        ImGui.SameLine();
+        if (ImGui.BeginPopupModal("PurgeConfirm", ImGuiWindowFlags.AlwaysAutoResize))
+        {
+            ImGui.TextWrapped("Are you sure you want to permanently purge all imported character data? This cannot be undone.");
+            ImGui.Spacing();
+            if (ImGui.Button("Yes, Purge"))
+            {
+                this.plugin.Characters.Clear();
+                this.plugin.Config.Characters.Clear();
+                // Save cleared config
+                this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
+                // Try to import the currently-logged-in character immediately after purging
+                try
+                {
+                    var sc = CharacterHelper.ImportCurrentCharacter(this.plugin.PlayerState, this.plugin.Objects, this.plugin.DataManager);
+                    if (sc != null)
+                    {
+                        CharacterHelper.MergeInto(this.plugin.Characters, new[] { sc }, CharacterHelper.MergePolicy.Skip);
+                        this.plugin.Config.Characters = this.plugin.Characters;
+                        this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
+                    }
+                }
+                catch
+                {
+                    // ignore errors during import
+                }
+                ImGui.CloseCurrentPopup();
+            }
+            ImGui.SameLine();
+            if (ImGui.Button("Cancel"))
+            {
+                ImGui.CloseCurrentPopup();
+            }
+            ImGui.EndPopup();
+        }
+
+        ImGui.Spacing();
+        // Configuration is saved immediately on change; no explicit Save button required.
         if (ImGui.Button("Close"))
             this.IsOpen = false;
     }
