@@ -11,7 +11,7 @@ namespace CrystalTerror
     /// </summary>
     public static class AutoRetainerHelper
     {
-        public record RetainerInfo(string Name, ulong Atid, int? Job, int Level, int Ilvl, string OwnerName, string OwnerWorld);
+        public record RetainerInfo(string Name, ulong Atid, int? Job, int Level, int Ilvl, int Gathering, int Perception, string OwnerName, string OwnerWorld);
 
         /// <summary>
         /// Query AutoRetainer IPC to collect retainers for all registered characters.
@@ -55,8 +55,27 @@ namespace CrystalTerror
                                 try { job = rr.Job == null ? null : (int?)rr.Job; } catch { }
                                 int level = 0; try { level = (int?)(rr.Level ?? 0) ?? 0; } catch { }
                                 int ilvl = 0; try { ilvl = (int?)(rr.Ilvl ?? 0) ?? 0; } catch { }
+                                
+                                // Try to get gathering and perception from AdditionalRetainerData
+                                int gathering = 0;
+                                int perception = 0;
+                                try
+                                {
+                                    var getAdditional = pluginInterface.GetIpcSubscriber<ulong, string, object>("AutoRetainer.GetAdditionalRetainerData");
+                                    if (getAdditional != null)
+                                    {
+                                        var additionalData = getAdditional.InvokeFunc(cid, name);
+                                        if (additionalData != null)
+                                        {
+                                            dynamic adata = additionalData;
+                                            try { gathering = (int?)(adata.Gathering ?? 0) ?? 0; } catch { }
+                                            try { perception = (int?)(adata.Perception ?? 0) ?? 0; } catch { }
+                                        }
+                                    }
+                                }
+                                catch { /* AdditionalRetainerData not available */ }
 
-                                outList.Add(new RetainerInfo(name, atid, job, level, ilvl, ownerName, ownerWorld));
+                                outList.Add(new RetainerInfo(name, atid, job, level, ilvl, gathering, perception, ownerName, ownerWorld));
                             }
                             catch { /* tolerate malformed entries */ }
                         }

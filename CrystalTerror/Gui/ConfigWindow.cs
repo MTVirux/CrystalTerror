@@ -100,6 +100,79 @@ public class ConfigWindow : Window, IDisposable
         }
 
         ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.Text("Automatic Venture Assignment");
+        ImGui.Separator();
+
+        var autoVentureEnabled = cfg.AutoVentureEnabled;
+        if (ImGui.Checkbox("Enable Automatic Venture Assignment", ref autoVentureEnabled))
+        {
+            cfg.AutoVentureEnabled = autoVentureEnabled;
+            this.plugin.PluginInterface.SavePluginConfig(cfg);
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("Automatically assign ventures to retainers based on their lowest crystal/shard counts when opening the retainer list.");
+        }
+
+        // Only show detailed options if auto-venture is enabled
+        if (cfg.AutoVentureEnabled)
+        {
+            ImGui.Indent();
+
+            var shardsEnabled = cfg.AutoVentureShardsEnabled;
+            if (ImGui.Checkbox("Include Shards", ref shardsEnabled))
+            {
+                cfg.AutoVentureShardsEnabled = shardsEnabled;
+                this.plugin.PluginInterface.SavePluginConfig(cfg);
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Consider shard counts when determining which venture to assign.");
+            }
+
+            var crystalsEnabled = cfg.AutoVentureCrystalsEnabled;
+            if (ImGui.Checkbox("Include Crystals", ref crystalsEnabled))
+            {
+                cfg.AutoVentureCrystalsEnabled = crystalsEnabled;
+                this.plugin.PluginInterface.SavePluginConfig(cfg);
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Consider crystal counts when determining which venture to assign.");
+            }
+
+            ImGui.Unindent();
+
+            if (!cfg.AutoVentureShardsEnabled && !cfg.AutoVentureCrystalsEnabled)
+            {
+                ImGui.TextColored(new System.Numerics.Vector4(1.0f, 0.5f, 0.0f, 1.0f), "Warning: At least one crystal type must be enabled.");
+            }
+
+            ImGui.Spacing();
+            ImGui.Text("Threshold Settings:");
+            
+            var threshold = (int)cfg.AutoVentureThreshold;
+            ImGui.SetNextItemWidth(200);
+            if (ImGui.InputInt("Minimum Threshold", ref threshold))
+            {
+                if (threshold < 0) threshold = 0;
+                cfg.AutoVentureThreshold = threshold;
+                this.plugin.PluginInterface.SavePluginConfig(cfg);
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("If all enabled crystal/shard types are above this value, assign Quick Exploration instead.\nSet to 0 to always assign crystal/shard ventures.");
+            }
+
+            ImGui.Unindent();
+        }
+
+        ImGui.Spacing();
         // Configuration is saved immediately on change; no explicit Save button required.
         if (ImGui.Button("Close"))
             this.IsOpen = false;

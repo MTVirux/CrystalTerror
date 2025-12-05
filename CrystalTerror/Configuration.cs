@@ -17,5 +17,26 @@ namespace CrystalTerror
         /// Stored characters persisted by Dalamud's plugin config system.
         /// </summary>
         public List<StoredCharacter> Characters { get; set; } = new List<StoredCharacter>();
+
+        /// <summary>
+        /// If true, automatically assign ventures to retainers based on lowest crystal/shard counts.
+        /// </summary>
+        public bool AutoVentureEnabled { get; set; } = false;
+
+        /// <summary>
+        /// If true, automatic venture assignment will consider shards when determining lowest crystal type.
+        /// </summary>
+        public bool AutoVentureShardsEnabled { get; set; } = true;
+
+        /// <summary>
+        /// If true, automatic venture assignment will consider crystals when determining lowest crystal type.
+        /// </summary>
+        public bool AutoVentureCrystalsEnabled { get; set; } = true;
+
+        /// <summary>
+        /// If all enabled crystal/shard types for a retainer are above this threshold, skip venture assignment for that retainer.
+        /// Set to 0 to disable threshold checking (always assign ventures).
+        /// </summary>
+        public long AutoVentureThreshold { get; set; } = 9879;
     }
 }

@@ -21,5 +21,10 @@ namespace CrystalTerror
         Earth_Crystal = 114,
         Lightning_Crystal = 115,
         Water_Crystal = 116,
+
+        /// <summary>
+        /// Quick Exploration venture ID (from AutoRetainer).
+        /// </summary>
+        QuickExploration = 395,
     }
 }

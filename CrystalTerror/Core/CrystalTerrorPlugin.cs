@@ -27,6 +27,7 @@ namespace CrystalTerror
         private readonly IFramework framework;
         private readonly IGameGui gameGui;
         private readonly IAddonLifecycle addonLifecycle;
+        private readonly ICondition condition;
         private ulong lastLocalContentId;
         private bool lastRetainerOpen;
         private string lastPlayerKey = string.Empty;
@@ -34,6 +35,10 @@ namespace CrystalTerror
 
         private bool disposed;
         private readonly IPluginLog pluginLog;
+
+        // AutoRetainer IPC for setting ventures
+        private Dalamud.Plugin.Ipc.ICallGateSubscriber<uint, object>? autoRetainerSetVenture;
+        private Dalamud.Plugin.Ipc.ICallGateSubscriber<string, object>? autoRetainerOnSendToVenture;
 
         // In-memory list of imported/stored characters for the UI.
         public List<StoredCharacter> Characters { get; } = new();
@@ -43,7 +48,7 @@ namespace CrystalTerror
         public Dalamud.Plugin.Services.IObjectTable Objects => this.objects;
         public IDataManager DataManager => this.dataManager;
 
-        public CrystalTerrorPlugin(IDalamudPluginInterface pluginInterface, ICommandManager commandManager, Dalamud.Plugin.Services.IPlayerState playerState, Dalamud.Plugin.Services.IObjectTable objects, IDataManager dataManager, IFramework framework, IGameGui gameGui, IAddonLifecycle addonLifecycle, IPluginLog pluginLog)
+        public CrystalTerrorPlugin(IDalamudPluginInterface pluginInterface, ICommandManager commandManager, Dalamud.Plugin.Services.IPlayerState playerState, Dalamud.Plugin.Services.IObjectTable objects, IDataManager dataManager, IFramework framework, IGameGui gameGui, IAddonLifecycle addonLifecycle, ICondition condition, IPluginLog pluginLog)
         {
             this.PluginInterface = pluginInterface;
 
@@ -56,6 +61,7 @@ namespace CrystalTerror
             this.framework = framework;
             this.gameGui = gameGui;
             this.addonLifecycle = addonLifecycle;
+            this.condition = condition;
             this.pluginLog = pluginLog;
 
             // Initialize local content id tracking and subscribe to framework updates to detect character changes
@@ -140,11 +146,37 @@ namespace CrystalTerror
                 // Register addon lifecycle listener for RetainerList opens
                 try
                 {
-                    this.addonLifecycle.RegisterListener(AddonEvent.PreSetup, "RetainerList", this.OnRetainerListSetup);
+                    this.addonLifecycle.UnregisterListener(AddonEvent.PreSetup, "RetainerList", this.OnRetainerListSetup);
                 }
                 catch
                 {
-                    // ignore registration errors
+                    // ignore if already unregistered
+                }
+
+                // Unsubscribe from AutoRetainer IPC
+                try
+                {
+                    this.autoRetainerOnSendToVenture?.Unsubscribe(this.OnRetainerSendToVenture);
+                }
+                catch
+                {
+                    // ignore if already unsubscribed
+                }
+
+                // Initialize AutoRetainer IPC for setting ventures
+                try
+                {
+                    this.autoRetainerSetVenture = this.PluginInterface.GetIpcSubscriber<uint, object>("AutoRetainer.SetVenture");
+                    this.autoRetainerOnSendToVenture = this.PluginInterface.GetIpcSubscriber<string, object>("AutoRetainer.OnSendRetainerToVenture");
+                    
+                    // Subscribe to the venture override hook
+                    this.autoRetainerOnSendToVenture.Subscribe(this.OnRetainerSendToVenture);
+                    this.pluginLog.Information("[CrystalTerror] Subscribed to AutoRetainer.OnSendRetainerToVenture hook");
+                }
+                catch (Exception ex)
+                {
+                    // AutoRetainer not available
+                    this.pluginLog.Warning($"AutoRetainer IPC not available: {ex.Message}");
                 }
             }
             catch
@@ -245,12 +277,26 @@ namespace CrystalTerror
                     this.lastLocalContentId = 0;
                     this.lastPlayerKey = string.Empty;
                 }
+
+                // Update retainer stats when at summoning bell
+                RetainerStatsHelper.UpdateRetainerStatsIfNeeded(
+                    this.condition,
+                    this.dataManager,
+                    this.playerState,
+                    this.objects,
+                    this.Characters,
+                    ref this.lastStatsUpdate,
+                    StatsUpdateThrottleSeconds,
+                    this.pluginLog);
             }
             catch
             {
                 // swallow to avoid throwing in framework update
             }
         }
+
+        private DateTime lastStatsUpdate = DateTime.MinValue;
+        private const double StatsUpdateThrottleSeconds = 2.0;
 
         private void OnRetainerListSetup(AddonEvent type, AddonArgs args)
         {
@@ -277,6 +323,80 @@ namespace CrystalTerror
             catch
             {
                 // swallow handler errors
+            }
+        }
+
+        /// <summary>
+        /// Handler for AutoRetainer.OnSendRetainerToVenture IPC hook.
+        /// Called just before AutoRetainer sends a retainer to a venture.
+        /// Calculates the appropriate venture based on crystal/shard inventory.
+        /// </summary>
+        private void OnRetainerSendToVenture(string retainerName)
+        {
+            try
+            {
+                // Only process if auto-venture is enabled
+                if (!this.Config.AutoVentureEnabled || this.autoRetainerSetVenture == null)
+                    return;
+
+                this.pluginLog.Information($"[CrystalTerror] AutoRetainer venture hook triggered for retainer: {retainerName}");
+
+                // Find the current character
+                var contentId = this.playerState.ContentId;
+                var playerName = this.objects.LocalPlayer?.Name.TextValue;
+                var currentChar = this.Characters.FirstOrDefault(c => c.Name == playerName && contentId != 0);
+
+                if (currentChar == null)
+                {
+                    this.pluginLog.Warning($"[CrystalTerror] Could not find character data for {playerName}");
+                    return;
+                }
+
+                // Find the retainer
+                var retainer = currentChar.Retainers.FirstOrDefault(r => r.Name == retainerName);
+                if (retainer == null)
+                {
+                    this.pluginLog.Warning($"[CrystalTerror] Could not find retainer {retainerName} in character data");
+                    return;
+                }
+
+                // Log retainer stats for debugging
+                this.pluginLog.Debug($"[CrystalTerror] {retainer.Name}: Level={retainer.Level}, Gathering={retainer.Gathering}, Job={ClassJobExtensions.GetAbreviation(retainer.Job)}");
+
+                // Check if retainer is eligible
+                if (retainer.Job == null || !VentureHelper.IsRetainerEligibleForVenture(retainer, CrystalType.Shard))
+                {
+                    var jobName = retainer.Job.HasValue ? ClassJobExtensions.GetAbreviation(retainer.Job) : "Unknown";
+                    this.pluginLog.Information($"[CrystalTerror] ✗ Skipping {retainer.Name} - Job: {jobName} (not MIN/BTN/FSH)");
+                    return;
+                }
+
+                // Determine the best venture
+                var ventureId = VentureHelper.DetermineLowestCrystalVenture(retainer, this.Config, this.pluginLog);
+                if (ventureId.HasValue)
+                {
+                    this.pluginLog.Information($"[CrystalTerror] ✓ Overriding venture for {retainer.Name} with {VentureHelper.GetVentureName(ventureId.Value)} (ID: {(uint)ventureId.Value})");
+                    this.autoRetainerSetVenture.InvokeAction((uint)ventureId.Value);
+                }
+                else
+                {
+                    // If threshold is configured and all crystals are above it, assign quick venture as fallback
+                    if (this.Config.AutoVentureThreshold > 0)
+                    {
+                        this.pluginLog.Information($"[CrystalTerror] ✓ All types above threshold for {retainer.Name}, assigning Quick Exploration (ID: {(uint)VentureId.QuickExploration})");
+                        this.autoRetainerSetVenture.InvokeAction((uint)VentureId.QuickExploration);
+                    }
+                    else
+                    {
+                        this.pluginLog.Information($"[CrystalTerror] ✗ No suitable venture for {retainer.Name} - Level: {retainer.Level}, Gathering: {retainer.Gathering}");
+                        this.pluginLog.Debug($"  (Crystals require Level > 26 AND Gathering > 90)");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                this.pluginLog.Error($"[CrystalTerror] Error in venture override handler: {ex.Message}");
+                this.pluginLog.Error($"  Stack trace: {ex.StackTrace}");
             }
         }
 

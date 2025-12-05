@@ -8,7 +8,7 @@ namespace CrystalTerror
     /// </summary>
     public static class RetainerHelper
     {
-        public static Retainer Create(StoredCharacter owner, string name, ulong atid, int? job, int level, int ilvl)
+        public static Retainer Create(StoredCharacter owner, string name, ulong atid, int? job, int level, int ilvl, int gathering = 0, int perception = 0)
         {
             if (owner == null) throw new ArgumentNullException(nameof(owner));
 
@@ -19,15 +19,17 @@ namespace CrystalTerror
                 Job = job,
                 Level = level,
                 Ilvl = ilvl,
+                Gathering = gathering,
+                Perception = perception,
                 Inventory = new Inventory()
             };
 
             return r;
         }
 
-        public static Retainer CreateFromAutoRetainer(StoredCharacter owner, string? name, ulong atid, int? job, int level, int ilvl)
+        public static Retainer CreateFromAutoRetainer(StoredCharacter owner, string? name, ulong atid, int? job, int level, int ilvl, int gathering = 0, int perception = 0)
         {
-            return Create(owner, name ?? string.Empty, atid, job, level, ilvl);
+            return Create(owner, name ?? string.Empty, atid, job, level, ilvl, gathering, perception);
         }
 
         public static void SetOwnerForRetainers(StoredCharacter owner)

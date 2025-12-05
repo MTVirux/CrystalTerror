@@ -6,6 +6,7 @@ using Dalamud.Plugin.Services;
 using Dalamud.Data;
 using Lumina.Excel.Sheets;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using System.Text;
 using System.IO;
 using Newtonsoft.Json;
@@ -76,6 +77,49 @@ namespace CrystalTerror
                 Inventory = new Inventory()
             };
 
+            // Try to populate character crystal inventory from InventoryManager
+            try
+            {
+                unsafe
+                {
+                    var invMgr = FFXIVClientStructs.FFXIV.Client.Game.InventoryManager.Instance();
+                    if (invMgr != null)
+                    {
+                        var crystalContainer = invMgr->GetInventoryContainer(FFXIVClientStructs.FFXIV.Client.Game.InventoryType.Crystals);
+                        if (crystalContainer != null)
+                        {
+                            // Crystal item IDs in FFXIV (ordered by element then type)
+                            // Shards: 2-7, Crystals: 8-13, Clusters: 14-19
+                            var crystalItemIds = new uint[] {
+                                2,  8,  14, // Fire
+                                3,  9,  15, // Ice
+                                4,  10, 16, // Wind
+                                5,  11, 17, // Lightning
+                                6,  12, 18, // Earth
+                                7,  13, 19  // Water
+                            };
+                            var elements = new Element[] { Element.Fire, Element.Ice, Element.Wind, Element.Lightning, Element.Earth, Element.Water };
+
+                            for (int ei = 0; ei < elements.Length; ++ei)
+                            {
+                                for (int ti = 0; ti < 3; ++ti)
+                                {
+                                    int idx = ei * 3 + ti;
+                                    uint itemId = crystalItemIds[idx];
+                                    int count = invMgr->GetItemCountInContainer(itemId, FFXIVClientStructs.FFXIV.Client.Game.InventoryType.Crystals);
+                                    CrystalType ct = ti == 0 ? CrystalType.Shard : (ti == 1 ? CrystalType.Crystal : CrystalType.Cluster);
+                                    try { sc.Inventory.SetCount(elements[ei], ct, count); } catch { }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // ignore if InventoryManager not available or access fails
+            }
+
             // Try to populate retainers from in-memory client structs (when available).
             try
             {
@@ -108,6 +152,44 @@ namespace CrystalTerror
                             }
 
                             var ret = RetainerHelper.Create(sc, string.IsNullOrEmpty(rname) ? string.Empty : rname, rptr->RetainerId, (int)rptr->ClassJob, rptr->Level, 0);
+
+                            // Try to populate crystal/shard/cluster counts from the client's ItemFinder cache
+                            try
+                            {
+                                var ifm = ItemFinderModule.Instance();
+                                if (ifm != null)
+                                {
+                                    // The map stores pointers to ItemFinderRetainerInventory; try to get by retainer id
+                                    if (ifm->RetainerInventories.TryGetValuePointer(rptr->RetainerId, out var invPtr) && invPtr != null)
+                                    {
+                                        // invPtr is a pointer to a Pointer<ItemFinderRetainerInventory> (i.e. Pointer<ItemFinderRetainerInventory>*).
+                                        // Dereference to obtain the underlying ItemFinderRetainerInventory* via the Pointer<T> implicit conversion.
+                                        ItemFinderRetainerInventory* inv = (ItemFinderRetainerInventory*)(*invPtr);
+                                        if (inv != null)
+                                        {
+                                            // Crystal quantities: 6 elements * 3 types = 18 entries
+                                            // InteropGenerator creates a public Span<ushort> CrystalQuantities accessor
+                                            var crystals = inv->CrystalQuantities;
+                                            var elements = new Element[] { Element.Fire, Element.Ice, Element.Wind, Element.Lightning, Element.Earth, Element.Water };
+                                            for (int ei = 0; ei < elements.Length; ++ei)
+                                            {
+                                                for (int ti = 0; ti < 3; ++ti)
+                                                {
+                                                    int idx = ei * 3 + ti;
+                                                    ushort val = crystals[idx];
+                                                    CrystalType ct = ti == 0 ? CrystalType.Shard : (ti == 1 ? CrystalType.Crystal : CrystalType.Cluster);
+                                                    try { ret.Inventory.SetCount(elements[ei], ct, val); } catch { }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            catch
+                            {
+                                // ignore any errors reading ItemFinderModule
+                            }
+
                             sc.Retainers.Add(ret);
                         }
                     }
@@ -150,7 +232,7 @@ namespace CrystalTerror
 
                 foreach (var ri in g)
                 {
-                    var r = RetainerHelper.CreateFromAutoRetainer(sc, ri.Name, ri.Atid, ri.Job, ri.Level, ri.Ilvl);
+                    var r = RetainerHelper.CreateFromAutoRetainer(sc, ri.Name, ri.Atid, ri.Job, ri.Level, ri.Ilvl, ri.Gathering, ri.Perception);
                     sc.Retainers.Add(r);
                 }
 
