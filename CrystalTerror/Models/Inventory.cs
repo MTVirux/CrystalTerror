@@ -40,7 +40,6 @@ namespace CrystalTerror
         public long Water_Shard { get; set; }
         public long Water_Crystal { get; set; }
         public long Water_Cluster { get; set; }
-        // Light and Dark removed
 
         public Inventory()
         {
@@ -151,9 +150,7 @@ namespace CrystalTerror
 
                 { nameof(Water_Shard), Water_Shard },
                 { nameof(Water_Crystal), Water_Crystal },
-                { nameof(Water_Cluster), Water_Cluster },
-
-                // Light/Dark removed
+                { nameof(Water_Cluster), Water_Cluster }
             };
         }
 

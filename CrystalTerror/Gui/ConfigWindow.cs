@@ -201,7 +201,7 @@ public class ConfigWindow : Window, IDisposable
         {
             if (ImGui.Button("Import Current Character"))
             {
-                var sc = CharacterHelper.ImportCurrentCharacter(this.plugin.PlayerState, this.plugin.Objects, this.plugin.DataManager);
+                var sc = CharacterHelper.ImportCurrentCharacter();
                 if (sc != null)
                 {
                     CharacterHelper.MergeInto(this.plugin.Characters, new[] { sc }, CharacterHelper.MergePolicy.Skip);
@@ -236,7 +236,7 @@ public class ConfigWindow : Window, IDisposable
                     // Try to import the currently-logged-in character immediately after purging
                     try
                     {
-                        var sc = CharacterHelper.ImportCurrentCharacter(this.plugin.PlayerState, this.plugin.Objects, this.plugin.DataManager);
+                        var sc = CharacterHelper.ImportCurrentCharacter();
                         if (sc != null)
                         {
                             CharacterHelper.MergeInto(this.plugin.Characters, new[] { sc }, CharacterHelper.MergePolicy.Skip);

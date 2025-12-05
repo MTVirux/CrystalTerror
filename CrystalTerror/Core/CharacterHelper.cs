@@ -15,8 +15,7 @@ namespace CrystalTerror
 {
     /// <summary>
     /// Helper utilities for character-related import functions.
-    /// Provides import from the currently logged-in character (via Dalamud's IClientState)
-    /// and mass import from AutoRetainer IPC.
+    /// Provides import from the currently logged-in character and mass import from AutoRetainer IPC.
     /// </summary>
     public static class CharacterHelper
     {
@@ -24,15 +23,12 @@ namespace CrystalTerror
         /// Create a <see cref="StoredCharacter"/> representing the currently logged-in player.
         /// Returns null if the client is not logged in or LocalPlayer is unavailable.
         /// </summary>
-        public static StoredCharacter? ImportCurrentCharacter(Dalamud.Plugin.Services.IPlayerState playerState, Dalamud.Plugin.Services.IObjectTable objects, IDataManager? dataManager = null)
+        public static StoredCharacter? ImportCurrentCharacter()
         {
-            if (playerState == null) throw new ArgumentNullException(nameof(playerState));
-            if (objects == null) throw new ArgumentNullException(nameof(objects));
-
             // Use ContentId to determine login state and IObjectTable to access the local player.
-            if (playerState.ContentId == 0) return null;
+            if (Services.PlayerService.State.ContentId == 0) return null;
 
-            var local = objects.LocalPlayer;
+            var local = Services.PlayerService.Objects.LocalPlayer;
             if (local == null) return null;
 
             // Default to the numeric home world id
@@ -46,25 +42,22 @@ namespace CrystalTerror
                 worldStr = string.Empty;
             }
 
-            // If a data manager is supplied, try to resolve the human-readable world name
-            if (dataManager != null)
+            // Try to resolve the human-readable world name from game data
+            try
             {
-                try
+                var sheet = Services.DataService.Manager.GetExcelSheet<Lumina.Excel.Sheets.World>();
+                if (sheet != null)
                 {
-                        var sheet = dataManager.GetExcelSheet<Lumina.Excel.Sheets.World>();
-                    if (sheet != null)
+                    var row = sheet.GetRowOrDefault((uint)local.HomeWorld.RowId);
+                    if (row.HasValue)
                     {
-                        var row = sheet.GetRowOrDefault((uint)local.HomeWorld.RowId);
-                        if (row.HasValue)
-                        {
-                            worldStr = row.Value.Name.ExtractText();
-                        }
+                        worldStr = row.Value.Name.ExtractText();
                     }
                 }
-                catch
-                {
-                    // ignore and keep numeric id
-                }
+            }
+            catch
+            {
+                // ignore and keep numeric id
             }
 
             var sc = new StoredCharacter
@@ -157,24 +150,21 @@ namespace CrystalTerror
                             int perception = 0;
                             bool statsObtained = false;
                             
-                            if (dataManager != null)
+                            try
                             {
-                                try
+                                var (calculatedIlvl, calculatedGathering, calculatedPerception) = RetainerStatsHelper.CalculateRetainerStats();
+                                if (calculatedIlvl.HasValue)
                                 {
-                                    var (calculatedIlvl, calculatedGathering, calculatedPerception) = RetainerStatsHelper.CalculateRetainerStats(dataManager);
-                                    if (calculatedIlvl.HasValue)
-                                    {
-                                        // Gear is accessible, use calculated values
-                                        ilvl = calculatedIlvl.Value;
-                                        gathering = calculatedGathering;
-                                        perception = calculatedPerception;
-                                        statsObtained = true;
-                                    }
+                                    // Gear is accessible, use calculated values
+                                    ilvl = calculatedIlvl.Value;
+                                    gathering = calculatedGathering;
+                                    perception = calculatedPerception;
+                                    statsObtained = true;
                                 }
-                                catch
-                                {
-                                    // Calculation failed, gear not accessible
-                                }
+                            }
+                            catch
+                            {
+                                // Calculation failed, gear not accessible
                             }
                             
                             // If gear not accessible, try to get stats from AutoRetainer
@@ -182,10 +172,10 @@ namespace CrystalTerror
                             {
                                 try
                                 {
-                                    var getAdditional = Services.PluginInterface.GetIpcSubscriber<ulong, string, object>("AutoRetainer.GetAdditionalRetainerData");
+                                    var getAdditional = Services.PluginInterfaceService.Interface.GetIpcSubscriber<ulong, string, object>("AutoRetainer.GetAdditionalRetainerData");
                                     if (getAdditional != null)
                                     {
-                                        var additionalData = getAdditional.InvokeFunc(playerState.ContentId, rname);
+                                        var additionalData = getAdditional.InvokeFunc(Services.PlayerService.State.ContentId, rname);
                                         if (additionalData != null)
                                         {
                                             dynamic adata = additionalData;
@@ -390,9 +380,5 @@ namespace CrystalTerror
                 }
             }
         }
-
-        // Persistence is now handled via Dalamud plugin config (Configuration.Characters).
-        // Legacy file-based helpers were removed; callers should update the plugin config
-        // and call `PluginInterface.SavePluginConfig(Configuration)` after modifying characters.
     }
 }

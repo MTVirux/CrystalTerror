@@ -25,11 +25,9 @@ namespace CrystalTerror
         private readonly Dalamud.Plugin.Services.IPlayerState playerState;
         private readonly Dalamud.Plugin.Services.IObjectTable objects;
         private readonly IFramework framework;
-        private readonly IGameGui gameGui;
         private readonly IAddonLifecycle addonLifecycle;
         private readonly ICondition condition;
         private ulong lastLocalContentId;
-        private bool lastRetainerOpen;
         private string lastPlayerKey = string.Empty;
         private readonly IDataManager dataManager;
 
@@ -43,17 +41,12 @@ namespace CrystalTerror
         // In-memory list of imported/stored characters for the UI.
         public List<StoredCharacter> Characters { get; } = new();
 
-        // Expose client state and data manager for helper usage (e.g., importing current character)
-        public Dalamud.Plugin.Services.IPlayerState PlayerState => this.playerState;
-        public Dalamud.Plugin.Services.IObjectTable Objects => this.objects;
-        public IDataManager DataManager => this.dataManager;
-
-        public CrystalTerrorPlugin(IDalamudPluginInterface pluginInterface, ICommandManager commandManager, Dalamud.Plugin.Services.IPlayerState playerState, Dalamud.Plugin.Services.IObjectTable objects, IDataManager dataManager, IFramework framework, IGameGui gameGui, IAddonLifecycle addonLifecycle, ICondition condition, IPluginLog pluginLog)
+        public CrystalTerrorPlugin(IDalamudPluginInterface pluginInterface, ICommandManager commandManager, Dalamud.Plugin.Services.IPlayerState playerState, Dalamud.Plugin.Services.IObjectTable objects, IDataManager dataManager, IFramework framework, IAddonLifecycle addonLifecycle, ICondition condition, IPluginLog pluginLog)
         {
             this.PluginInterface = pluginInterface;
             
-            // Initialize global service locator
-            Services.Initialize(pluginInterface);
+            // Initialize global services
+            Services.ServiceManager.Initialize(pluginInterface, playerState, objects, dataManager, pluginLog, condition);
 
             this.Config = this.PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
@@ -62,14 +55,12 @@ namespace CrystalTerror
             this.objects = objects;
             this.dataManager = dataManager;
             this.framework = framework;
-            this.gameGui = gameGui;
             this.addonLifecycle = addonLifecycle;
             this.condition = condition;
             this.pluginLog = pluginLog;
 
             // Initialize local content id tracking and subscribe to framework updates to detect character changes
             this.lastLocalContentId = 0;
-            this.lastRetainerOpen = false;
             this.framework.Update += this.OnFrameworkUpdate;
 
             this.mainWindow = new Gui.MainWindow(this);
@@ -120,7 +111,7 @@ namespace CrystalTerror
                     if (current != 0 && current != this.lastLocalContentId)
                     {
                         // character changed (or first login) — import current character automatically
-                        var sc = CharacterHelper.ImportCurrentCharacter(this.playerState, this.objects, this.dataManager);
+                        var sc = CharacterHelper.ImportCurrentCharacter();
                         if (sc != null)
                         {
                             CharacterHelper.MergeInto(this.Characters, new[] { sc }, CharacterHelper.MergePolicy.Skip);
@@ -247,7 +238,7 @@ namespace CrystalTerror
                 if (contentId != 0 && currentKey != this.lastPlayerKey)
                 {
                     // character changed (or first login) — import current character automatically
-                    var sc = CharacterHelper.ImportCurrentCharacter(this.playerState, this.objects, this.dataManager);
+                    var sc = CharacterHelper.ImportCurrentCharacter();
                     if (sc != null)
                     {
                         CharacterHelper.MergeInto(this.Characters, new[] { sc }, CharacterHelper.MergePolicy.Skip);
@@ -273,14 +264,9 @@ namespace CrystalTerror
 
                 // Update retainer stats when at summoning bell
                 RetainerStatsHelper.UpdateRetainerStatsIfNeeded(
-                    this.condition,
-                    this.dataManager,
-                    this.playerState,
-                    this.objects,
                     this.Characters,
                     ref this.lastStatsUpdate,
-                    StatsUpdateThrottleSeconds,
-                    this.pluginLog);
+                    StatsUpdateThrottleSeconds);
             }
             catch
             {
@@ -293,20 +279,14 @@ namespace CrystalTerror
 
         private void OnRetainerListSetup(AddonEvent type, AddonArgs args)
             => AutoRetainerHelper.HandleRetainerListSetup(
-                this.playerState,
-                this.objects,
-                this.dataManager,
                 this.Characters,
-                this.Config,
-                this.pluginLog);
+                this.Config);
 
         private void OnRetainerSendToVenture(string retainerName)
             => AutoRetainerHelper.HandleRetainerSendToVenture(
                 retainerName,
                 this.Config,
                 this.autoRetainerSetVenture,
-                this.playerState,
-                this.objects,
                 this.Characters,
                 this.pluginLog);
 

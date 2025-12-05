@@ -26,17 +26,15 @@ namespace CrystalTerror
         /// Calculate retainer stats (item level, gathering, perception) from their currently equipped gear.
         /// Returns null if retainer inventory is not accessible.
         /// </summary>
-        public static unsafe (int? ItemLevel, int Gathering, int Perception) CalculateRetainerStats(IDataManager dataManager)
+        public static unsafe (int? ItemLevel, int Gathering, int Perception) CalculateRetainerStats()
         {
-            if (dataManager == null) throw new ArgumentNullException(nameof(dataManager));
-
             int gathering = 0;
             int perception = 0;
 
             var container = InventoryManager.Instance()->GetInventoryContainer(InventoryType.RetainerEquippedItems);
             if (container == null) return (null, 0, 0);
 
-            var sheet = dataManager.GetExcelSheet<Item>();
+            var sheet = Services.DataService.Manager.GetExcelSheet<Item>();
             if (sheet == null) return (null, 0, 0);
 
             uint sum = 0;
@@ -123,19 +121,14 @@ namespace CrystalTerror
         /// Update retainer stats if at summoning bell and throttle is met.
         /// </summary>
         public static unsafe void UpdateRetainerStatsIfNeeded(
-            ICondition condition,
-            IDataManager dataManager,
-            Dalamud.Plugin.Services.IPlayerState playerState,
-            Dalamud.Plugin.Services.IObjectTable objects,
             System.Collections.Generic.List<StoredCharacter> characters,
             ref DateTime lastStatsUpdate,
-            double throttleSeconds,
-            IPluginLog log)
+            double throttleSeconds)
         {
             try
             {
                 // Only update if we're at a summoning bell
-                if (!condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.OccupiedSummoningBell])
+                if (!Services.GameStateService.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.OccupiedSummoningBell])
                     return;
 
                 // Throttle updates
@@ -145,7 +138,7 @@ namespace CrystalTerror
                 lastStatsUpdate = DateTime.UtcNow;
 
                 // Calculate stats for current retainer
-                var (itemLevel, gathering, perception) = CalculateRetainerStats(dataManager);
+                var (itemLevel, gathering, perception) = CalculateRetainerStats();
                 if (itemLevel == null)
                     return;
 
@@ -159,8 +152,8 @@ namespace CrystalTerror
                     return;
 
                 // Find this retainer in our stored characters
-                var contentId = playerState.ContentId;
-                var currentChar = characters.FirstOrDefault(c => c.Name == objects.LocalPlayer?.Name.TextValue && contentId != 0);
+                var contentId = Services.PlayerService.State.ContentId;
+                var currentChar = characters.FirstOrDefault(c => c.Name == Services.PlayerService.Objects.LocalPlayer?.Name.TextValue && contentId != 0);
                 if (currentChar == null)
                     return;
 
@@ -173,30 +166,13 @@ namespace CrystalTerror
                 retainer.Gathering = gathering;
                 retainer.Perception = perception;
 
-                log.Debug($"Updated stats for retainer {retainer.Name}: Ilvl={itemLevel}, Gathering={gathering}, Perception={perception}");
+                Services.LogService.Log.Debug($"Updated stats for retainer {retainer.Name}: Ilvl={itemLevel}, Gathering={gathering}, Perception={perception}");
             }
             catch (Exception ex)
             {
-                log.Warning($"Error updating retainer stats: {ex.Message}");
+                Services.LogService.Log.Warning($"Error updating retainer stats: {ex.Message}");
             }
         }
 
-        /// <summary>
-        /// Log stats for all retainers in a character (stats are loaded from AutoRetainer).
-        /// </summary>
-        public static void UpdateAllRetainerStats(StoredCharacter character, IPluginLog log)
-        {
-            if (character?.Retainers == null)
-                return;
-
-            log.Debug($"[CrystalTerror] Verifying stats for {character.Retainers.Count} retainer(s)...");
-
-            // Stats are now loaded from AutoRetainer's AdditionalRetainerData during import
-            // Log what we have for debugging
-            foreach (var retainer in character.Retainers)
-            {
-                log.Debug($"[CrystalTerror] {retainer.Name}: Level={retainer.Level}, Gathering={retainer.Gathering}, Perception={retainer.Perception}, Job={ClassJobExtensions.GetAbreviation(retainer.Job)}");
-            }
-        }
     }
 }

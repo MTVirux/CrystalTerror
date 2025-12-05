@@ -23,10 +23,10 @@ namespace CrystalTerror
         {
             var outList = new List<RetainerInfo>();
 
-            var getRegistered = Services.PluginInterface.GetIpcSubscriber<List<ulong>>("AutoRetainer.GetRegisteredCIDs");
+            var getRegistered = Services.PluginInterfaceService.Interface.GetIpcSubscriber<List<ulong>>("AutoRetainer.GetRegisteredCIDs");
             var cids = getRegistered?.InvokeFunc() ?? new List<ulong>();
 
-            var getOffline = Services.PluginInterface.GetIpcSubscriber<ulong, object>("AutoRetainer.GetOfflineCharacterData");
+            var getOffline = Services.PluginInterfaceService.Interface.GetIpcSubscriber<ulong, object>("AutoRetainer.GetOfflineCharacterData");
             if (getOffline == null)
                 return outList; // AutoRetainer not installed or no IPC available.
 
@@ -61,7 +61,7 @@ namespace CrystalTerror
                                 int perception = 0;
                                 try
                                 {
-                                    var getAdditional = Services.PluginInterface.GetIpcSubscriber<ulong, string, object>("AutoRetainer.GetAdditionalRetainerData");
+                                    var getAdditional = Services.PluginInterfaceService.Interface.GetIpcSubscriber<ulong, string, object>("AutoRetainer.GetAdditionalRetainerData");
                                     if (getAdditional != null)
                                     {
                                         var additionalData = getAdditional.InvokeFunc(cid, name);
@@ -91,29 +91,25 @@ namespace CrystalTerror
         /// Handler for RetainerList addon opening. Imports current character and retainer data.
         /// </summary>
         public static void HandleRetainerListSetup(
-            Dalamud.Plugin.Services.IPlayerState playerState,
-            Dalamud.Plugin.Services.IObjectTable objects,
-            Dalamud.Plugin.Services.IDataManager dataManager,
             List<StoredCharacter> characters,
-            Configuration config,
-            Dalamud.Plugin.Services.IPluginLog log)
+            Configuration config)
         {
             try
             {
                 try
                 {
-                    log.Information($"Retainer addon opened (ContentId={playerState.ContentId}). Triggering import.");
+                    Services.LogService.Log.Information($"Retainer addon opened (ContentId={Services.PlayerService.State.ContentId}). Triggering import.");
                 }
                 catch { }
 
-                var sc = CharacterHelper.ImportCurrentCharacter(playerState, objects, dataManager);
+                var sc = CharacterHelper.ImportCurrentCharacter();
                 if (sc != null)
                 {
                     CharacterHelper.MergeInto(characters, new[] { sc }, CharacterHelper.MergePolicy.Overwrite);
                     try
                     {
                         config.Characters = characters;
-                        Services.PluginInterface.SavePluginConfig(config);
+                        Services.PluginInterfaceService.Interface.SavePluginConfig(config);
                     }
                     catch { }
                 }
@@ -133,8 +129,6 @@ namespace CrystalTerror
             string retainerName,
             Configuration config,
             Dalamud.Plugin.Ipc.ICallGateSubscriber<uint, object>? autoRetainerSetVenture,
-            Dalamud.Plugin.Services.IPlayerState playerState,
-            Dalamud.Plugin.Services.IObjectTable objects,
             List<StoredCharacter> characters,
             Dalamud.Plugin.Services.IPluginLog log)
         {
@@ -155,8 +149,8 @@ namespace CrystalTerror
                 log.Information($"[CrystalTerror] AutoRetainer venture hook triggered for retainer: {retainerName}");
 
                 // Find the current character
-                var contentId = playerState.ContentId;
-                var playerName = objects.LocalPlayer?.Name.TextValue;
+                var contentId = Services.PlayerService.State.ContentId;
+                var playerName = Services.PlayerService.Objects.LocalPlayer?.Name.TextValue;
                 var currentChar = characters.FirstOrDefault(c => c.Name == playerName && contentId != 0);
 
                 if (currentChar == null)
