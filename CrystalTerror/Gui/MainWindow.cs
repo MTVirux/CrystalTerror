@@ -126,6 +126,93 @@ public class MainWindow : Window, IDisposable
 		return parts.Count > 0 ? string.Join("/", parts) : "-";
 	}
 
+	private System.Numerics.Vector4? GetWarningColor(long value)
+	{
+		var cfg = this.plugin.Config;
+		
+		// Build list of enabled thresholds and sort by value (ascending) to prioritize lower thresholds
+		var thresholds = new List<(int value, System.Numerics.Vector4 color)>();
+		
+		if (cfg.WarningThreshold1Enabled)
+			thresholds.Add((cfg.WarningThreshold1Value, cfg.WarningThreshold1Color));
+		
+		if (cfg.WarningThreshold2Enabled)
+			thresholds.Add((cfg.WarningThreshold2Value, cfg.WarningThreshold2Color));
+		
+		if (cfg.WarningThreshold3Enabled)
+			thresholds.Add((cfg.WarningThreshold3Value, cfg.WarningThreshold3Color));
+		
+		// Sort ascending so we check the lowest threshold first
+		// This ensures higher threshold values (e.g., 1000) take priority over lower ones (e.g., 100)
+		// when a value is below multiple thresholds
+		thresholds.Sort((a, b) => a.value.CompareTo(b.value));
+		
+		// Return color of the last (highest) threshold that the value is at or below
+		System.Numerics.Vector4? result = null;
+		foreach (var threshold in thresholds)
+		{
+			if (value <= threshold.value)
+				result = threshold.color;
+		}
+		
+		return result;
+	}
+
+	private void RenderColoredCrystalCounts(long shard, long crystal, long cluster)
+	{
+		var cfg = this.plugin.Config;
+		var parts = new List<(long value, System.Numerics.Vector4? color)>();
+		
+		if (cfg.ShowShards)
+			parts.Add((shard, GetWarningColor(shard)));
+		if (cfg.ShowCrystals)
+			parts.Add((crystal, GetWarningColor(crystal)));
+		if (cfg.ShowClusters)
+			parts.Add((cluster, GetWarningColor(cluster)));
+		
+		if (parts.Count == 0)
+		{
+			ImGui.TextUnformatted("-");
+			return;
+		}
+		
+		// Check if all parts have the same color
+		var firstColor = parts[0].color;
+		bool allSameColor = parts.All(p => p.color == firstColor);
+		
+		if (allSameColor && firstColor.HasValue)
+		{
+			// Render entire text in one color
+			var displayText = string.Join("/", parts.Select(p => p.value.ToString()));
+			ImGui.TextColored(firstColor.Value, displayText);
+		}
+		else if (allSameColor)
+		{
+			// No color, render as plain text
+			var displayText = string.Join("/", parts.Select(p => p.value.ToString()));
+			ImGui.TextUnformatted(displayText);
+		}
+		else
+		{
+			// Mixed colors - render each part with SameLine
+			for (int i = 0; i < parts.Count; i++)
+			{
+				if (i > 0)
+				{
+					ImGui.SameLine(0, 0);
+					ImGui.TextUnformatted("/");
+					ImGui.SameLine(0, 0);
+				}
+				
+				var colorValue = parts[i].color;
+				if (colorValue.HasValue)
+					ImGui.TextColored(colorValue.Value, parts[i].value.ToString());
+				else
+					ImGui.TextUnformatted(parts[i].value.ToString());
+			}
+		}
+	}
+
 	private List<StoredCharacter> GetSortedCharacters()
 	{
 		var characters = this.plugin.Characters.ToList();
@@ -277,18 +364,20 @@ public class MainWindow : Window, IDisposable
 						{
 							ImGui.TableSetColumnIndex(2 + col);
 							var el = elements[col];
-							var displayText = this.FormatCrystalCounts(
-								c.Inventory.GetCount(el, CrystalType.Shard),
-								c.Inventory.GetCount(el, CrystalType.Crystal),
-								c.Inventory.GetCount(el, CrystalType.Cluster));
+							long shard = c.Inventory.GetCount(el, CrystalType.Shard);
+							long crystal = c.Inventory.GetCount(el, CrystalType.Crystal);
+							long cluster = c.Inventory.GetCount(el, CrystalType.Cluster);
 							
-							// Center the text in the cell
+							// Calculate width for centering
+							var displayText = this.FormatCrystalCounts(shard, crystal, cluster);
 							var textSize = ImGui.CalcTextSize(displayText);
 							var cellWidth = ImGui.GetContentRegionAvail().X;
 							var offset = (cellWidth - textSize.X) * 0.5f;
 							if (offset > 0)
 								ImGui.SetCursorPosX(ImGui.GetCursorPosX() + offset);
-							ImGui.TextUnformatted(displayText);
+							
+							// Render with color
+							this.RenderColoredCrystalCounts(shard, crystal, cluster);
 						}							ImGui.EndTable();
 						}
 					}
@@ -400,15 +489,17 @@ public class MainWindow : Window, IDisposable
 									long shard = r.Inventory?.GetCount(el, CrystalType.Shard) ?? 0;
 									long crystal = r.Inventory?.GetCount(el, CrystalType.Crystal) ?? 0;
 									long cluster = r.Inventory?.GetCount(el, CrystalType.Cluster) ?? 0;
-									var displayText = this.FormatCrystalCounts(shard, crystal, cluster);
 									
-									// Center the text in the cell
+									// Calculate width for centering
+									var displayText = this.FormatCrystalCounts(shard, crystal, cluster);
 									var textSize = ImGui.CalcTextSize(displayText);
 									var cellWidth = ImGui.GetContentRegionAvail().X;
 									var offset = (cellWidth - textSize.X) * 0.5f;
 									if (offset > 0)
 										ImGui.SetCursorPosX(ImGui.GetCursorPosX() + offset);
-									ImGui.TextUnformatted(displayText);
+									
+									// Render with color
+									this.RenderColoredCrystalCounts(shard, crystal, cluster);
 								}
 							}
 

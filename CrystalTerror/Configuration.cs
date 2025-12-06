@@ -96,5 +96,51 @@ namespace CrystalTerror
         /// Saved size for the config window when pinned.
         /// </summary>
         public System.Numerics.Vector2 ConfigWindowSize { get; set; } = new System.Numerics.Vector2(600, 400);
+
+        // Warning Thresholds
+        /// <summary>
+        /// If true, warning threshold 1 is enabled.
+        /// </summary>
+        public bool WarningThreshold1Enabled { get; set; } = false;
+
+        /// <summary>
+        /// Value for warning threshold 1 (1-9999).
+        /// </summary>
+        public int WarningThreshold1Value { get; set; } = 8000;
+
+        /// <summary>
+        /// Color for warning threshold 1 (RGBA format).
+        /// </summary>
+        public System.Numerics.Vector4 WarningThreshold1Color { get; set; } = new System.Numerics.Vector4(1.0f, 0.0f, 0.0f, 1.0f); // Red
+
+        /// <summary>
+        /// If true, warning threshold 2 is enabled.
+        /// </summary>
+        public bool WarningThreshold2Enabled { get; set; } = false;
+
+        /// <summary>
+        /// Value for warning threshold 2 (1-9999).
+        /// </summary>
+        public int WarningThreshold2Value { get; set; } = 9879;
+
+        /// <summary>
+        /// Color for warning threshold 2 (RGBA format).
+        /// </summary>
+        public System.Numerics.Vector4 WarningThreshold2Color { get; set; } = new System.Numerics.Vector4(1.0f, 0.65f, 0.0f, 1.0f); // Orange
+
+        /// <summary>
+        /// If true, warning threshold 3 is enabled.
+        /// </summary>
+        public bool WarningThreshold3Enabled { get; set; } = false;
+
+        /// <summary>
+        /// Value for warning threshold 3 (1-9999).
+        /// </summary>
+        public int WarningThreshold3Value { get; set; } = 9999;
+
+        /// <summary>
+        /// Color for warning threshold 3 (RGBA format).
+        /// </summary>
+        public System.Numerics.Vector4 WarningThreshold3Color { get; set; } = new System.Numerics.Vector4(1.0f, 1.0f, 0.0f, 1.0f); // Yellow
     }
 }

@@ -253,6 +253,131 @@ public class ConfigWindow : Window, IDisposable
             ImGui.Unindent();
         }
 
+        // Warning Thresholds
+        if (ImGui.CollapsingHeader("Warning Thresholds"))
+        {
+            ImGui.TextWrapped("Configure up to 3 color-coded warning thresholds for crystal counts in the main window.");
+            ImGui.Spacing();
+
+            // Warning Threshold 1
+            var threshold1Enabled = cfg.WarningThreshold1Enabled;
+            if (ImGui.Checkbox("Enable Warning Threshold 1", ref threshold1Enabled))
+            {
+                cfg.WarningThreshold1Enabled = threshold1Enabled;
+                this.plugin.PluginInterface.SavePluginConfig(cfg);
+            }
+
+            if (cfg.WarningThreshold1Enabled)
+            {
+                ImGui.Indent();
+
+                ImGui.Text("Threshold Value:");
+                ImGui.SameLine();
+                var threshold1Value = cfg.WarningThreshold1Value;
+                ImGui.SetNextItemWidth(250);
+                if (ImGui.SliderInt("##threshold1value", ref threshold1Value, 1, 9999))
+                {
+                    cfg.WarningThreshold1Value = threshold1Value;
+                    this.plugin.PluginInterface.SavePluginConfig(cfg);
+                }
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.SetTooltip("Values at or below this threshold will be colored (1-9999)");
+                }
+
+                ImGui.Text("Warning Color:");
+                ImGui.SameLine();
+                var threshold1Color = cfg.WarningThreshold1Color;
+                if (ImGui.ColorEdit4("##threshold1color", ref threshold1Color, ImGuiColorEditFlags.NoInputs))
+                {
+                    cfg.WarningThreshold1Color = threshold1Color;
+                    this.plugin.PluginInterface.SavePluginConfig(cfg);
+                }
+
+                ImGui.Unindent();
+            }
+
+            ImGui.Spacing();
+
+            // Warning Threshold 2
+            var threshold2Enabled = cfg.WarningThreshold2Enabled;
+            if (ImGui.Checkbox("Enable Warning Threshold 2", ref threshold2Enabled))
+            {
+                cfg.WarningThreshold2Enabled = threshold2Enabled;
+                this.plugin.PluginInterface.SavePluginConfig(cfg);
+            }
+
+            if (cfg.WarningThreshold2Enabled)
+            {
+                ImGui.Indent();
+
+                ImGui.Text("Threshold Value:");
+                ImGui.SameLine();
+                var threshold2Value = cfg.WarningThreshold2Value;
+                ImGui.SetNextItemWidth(250);
+                if (ImGui.SliderInt("##threshold2value", ref threshold2Value, 1, 9999))
+                {
+                    cfg.WarningThreshold2Value = threshold2Value;
+                    this.plugin.PluginInterface.SavePluginConfig(cfg);
+                }
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.SetTooltip("Values at or below this threshold will be colored (1-9999)");
+                }
+
+                ImGui.Text("Warning Color:");
+                ImGui.SameLine();
+                var threshold2Color = cfg.WarningThreshold2Color;
+                if (ImGui.ColorEdit4("##threshold2color", ref threshold2Color, ImGuiColorEditFlags.NoInputs))
+                {
+                    cfg.WarningThreshold2Color = threshold2Color;
+                    this.plugin.PluginInterface.SavePluginConfig(cfg);
+                }
+
+                ImGui.Unindent();
+            }
+
+            ImGui.Spacing();
+
+            // Warning Threshold 3
+            var threshold3Enabled = cfg.WarningThreshold3Enabled;
+            if (ImGui.Checkbox("Enable Warning Threshold 3", ref threshold3Enabled))
+            {
+                cfg.WarningThreshold3Enabled = threshold3Enabled;
+                this.plugin.PluginInterface.SavePluginConfig(cfg);
+            }
+
+            if (cfg.WarningThreshold3Enabled)
+            {
+                ImGui.Indent();
+
+                ImGui.Text("Threshold Value:");
+                ImGui.SameLine();
+                var threshold3Value = cfg.WarningThreshold3Value;
+                ImGui.SetNextItemWidth(250);
+                if (ImGui.SliderInt("##threshold3value", ref threshold3Value, 1, 9999))
+                {
+                    cfg.WarningThreshold3Value = threshold3Value;
+                    this.plugin.PluginInterface.SavePluginConfig(cfg);
+                }
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.SetTooltip("Values at or below this threshold will be colored (1-9999)");
+                }
+
+                ImGui.Text("Warning Color:");
+                ImGui.SameLine();
+                var threshold3Color = cfg.WarningThreshold3Color;
+                if (ImGui.ColorEdit4("##threshold3color", ref threshold3Color, ImGuiColorEditFlags.NoInputs))
+                {
+                    cfg.WarningThreshold3Color = threshold3Color;
+                    this.plugin.PluginInterface.SavePluginConfig(cfg);
+                }
+
+                ImGui.Unindent();
+            }
+        }
+
         // Automatic Venture Assignment
         if (ImGui.CollapsingHeader("Automatic Venture Assignment"))
         {
