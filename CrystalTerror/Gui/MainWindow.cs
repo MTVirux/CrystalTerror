@@ -459,9 +459,9 @@ public class MainWindow : Window, IDisposable
 					ImGui.EndDisabled();
 				}
 				
-			ImGui.SameLine();
-		}
-		
+				ImGui.SameLine();
+			}
+
 		// Calculate totals for visible elements
 		var headerElements = new[] { Element.Fire, Element.Ice, Element.Wind, Element.Lightning, Element.Earth, Element.Water };
 		var headerVisibleElements = headerElements.Where(el => this.IsElementVisible(el)).ToArray();
@@ -633,21 +633,22 @@ public class MainWindow : Window, IDisposable
 		if (headerOpen)
 		{
 			#if DEBUG
-						ImGui.TextUnformatted($"LastUpdateUtc: {c.LastUpdateUtc:u}");
-						ImGui.Separator();				// Character inventory table
+			ImGui.TextUnformatted($"LastUpdateUtc: {c.LastUpdateUtc:u}");
+			ImGui.Separator();
 			#endif
-				if (c.Inventory != null)
+			// Character inventory table
+			if (c.Inventory != null)
+			{
+				ImGui.Text("Character Inventory:");
+				var allElements = new[] { Element.Fire, Element.Ice, Element.Wind, Element.Lightning, Element.Earth, Element.Water };
+				var elements = allElements.Where(el => this.IsElementVisible(el)).ToArray();
+				
+				if (elements.Length == 0)
 				{
-					ImGui.Text("Character Inventory:");
-					var allElements = new[] { Element.Fire, Element.Ice, Element.Wind, Element.Lightning, Element.Earth, Element.Water };
-					var elements = allElements.Where(el => this.IsElementVisible(el)).ToArray();
-					
-					if (elements.Length == 0)
-					{
-						ImGui.TextWrapped("No elements selected in filters. Check config to enable elements.");
-					}
-					else
-					{
+					ImGui.TextWrapped("No elements selected in filters. Check config to enable elements.");
+				}
+				else
+				{
 					var colCount = 2 + elements.Length;
 					var charTableId = $"char_inventory_table_{i}";
 					if (ImGui.BeginTable(charTableId, colCount, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg))
@@ -655,41 +656,41 @@ public class MainWindow : Window, IDisposable
 						ImGui.TableSetupColumn("Character", ImGuiTableColumnFlags.WidthFixed, ConfigStatic.RetainerNameColumnWidth);
 						ImGui.TableSetupColumn("World", ImGuiTableColumnFlags.WidthFixed, ConfigStatic.JobLevelColumnWidth);
 						foreach (var el in elements)
-							{
-								ImGui.TableSetupColumn(el.ToString(), ImGuiTableColumnFlags.WidthStretch);
-							}
+						{
+							ImGui.TableSetupColumn(el.ToString(), ImGuiTableColumnFlags.WidthStretch);
+						}
 
-							ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
-							ImGui.TableSetColumnIndex(0);
-							ImGui.TableHeader("Character");
-							ImGui.TableSetColumnIndex(1);
-							ImGui.TableHeader("World");
-							for (int col = 0; col < elements.Length; ++col)
-							{
-								ImGui.TableSetColumnIndex(2 + col);
-								var headerText = elements[col].ToString();
-								var textSize = ImGui.CalcTextSize(headerText);
-								var cellWidth = ImGui.GetContentRegionAvail().X;
-								var offset = (cellWidth - textSize.X) * 0.5f;
-								if (offset > 0)
-									ImGui.SetCursorPosX(ImGui.GetCursorPosX() + offset);
-								ImGui.TableHeader(headerText);
-							}
+					ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
+					ImGui.TableSetColumnIndex(0);
+					ImGui.TableHeader("Character");
+					ImGui.TableSetColumnIndex(1);
+					ImGui.TableHeader("World");
+						for (int col = 0; col < elements.Length; ++col)
+						{
+							ImGui.TableSetColumnIndex(2 + col);
+							var headerText = elements[col].ToString();
+							var textSize = ImGui.CalcTextSize(headerText);
+							var cellWidth = ImGui.GetContentRegionAvail().X;
+							var offset = (cellWidth - textSize.X) * 0.5f;
+							if (offset > 0)
+								ImGui.SetCursorPosX(ImGui.GetCursorPosX() + offset);
+						ImGui.TableHeader(headerText);
+					}
 
 					// Character inventory row (format: shard/crystal/cluster per element)
 					ImGui.TableNextRow();
-					ImGui.TableSetColumnIndex(0);
-					ImGui.TextUnformatted(c.Name);
-					ImGui.TableSetColumnIndex(1);
-					{
-						var worldText = c.World;
-						var textSize = ImGui.CalcTextSize(worldText);
-						var cellWidth = ImGui.GetContentRegionAvail().X;
-						var offset = (cellWidth - textSize.X) * 0.5f;
-						if (offset > 0)
-							ImGui.SetCursorPosX(ImGui.GetCursorPosX() + offset);
-						ImGui.TextUnformatted(worldText);
-					}
+						ImGui.TableSetColumnIndex(0);
+						ImGui.TextUnformatted(c.Name);
+						ImGui.TableSetColumnIndex(1);
+						{
+							var worldText = c.World;
+							var textSize = ImGui.CalcTextSize(worldText);
+							var cellWidth = ImGui.GetContentRegionAvail().X;
+							var offset = (cellWidth - textSize.X) * 0.5f;
+							if (offset > 0)
+								ImGui.SetCursorPosX(ImGui.GetCursorPosX() + offset);
+							ImGui.TextUnformatted(worldText);
+						}
 						for (int col = 0; col < elements.Length; ++col)
 						{
 							ImGui.TableSetColumnIndex(2 + col);
@@ -707,14 +708,13 @@ public class MainWindow : Window, IDisposable
 								ImGui.SetCursorPosX(ImGui.GetCursorPosX() + offset);
 							
 							// Render with color
-							this.RenderColoredCrystalCounts(shard, crystal, cluster);
-						}							ImGui.EndTable();
-						}
+						this.RenderColoredCrystalCounts(shard, crystal, cluster);
 					}
-					ImGui.Separator();
+					ImGui.EndTable();
 				}
-
-				if (c.Retainers == null || c.Retainers.Count == 0)
+			}
+				ImGui.Separator();
+			}				if (c.Retainers == null || c.Retainers.Count == 0)
 				{
 					ImGui.TextWrapped("No retainers for this character.");
 				}
@@ -728,12 +728,12 @@ public class MainWindow : Window, IDisposable
 					{
 						ImGui.TextWrapped("No elements selected in filters. Check config to enable elements.");
 					}
-					else
+				else
+				{
+					var colCount = 2 + elements.Length; // retainer name + job/level + element columns
+					var tableId = $"retainers_table_{i}";
+					if (ImGui.BeginTable(tableId, colCount, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg))
 					{
-						var colCount = 2 + elements.Length; // retainer name + job/level + element columns
-						var tableId = $"retainers_table_{i}";
-						if (ImGui.BeginTable(tableId, colCount, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg))
-						{
 						ImGui.TableSetupColumn("Retainer", ImGuiTableColumnFlags.WidthFixed, ConfigStatic.RetainerNameColumnWidth);
 						ImGui.TableSetupColumn("Job", ImGuiTableColumnFlags.WidthFixed, ConfigStatic.JobLevelColumnWidth);
 						foreach (var el in elements)
@@ -745,7 +745,7 @@ public class MainWindow : Window, IDisposable
 						ImGui.TableSetColumnIndex(0);
 						ImGui.TableHeader("Retainer");
 						ImGui.TableSetColumnIndex(1);
-						ImGui.TableHeader("Job");
+					ImGui.TableHeader("Job");
 						for (int col = 0; col < elements.Length; ++col)
 						{
 							ImGui.TableSetColumnIndex(2 + col);
@@ -759,81 +759,81 @@ public class MainWindow : Window, IDisposable
 						}
 
 						for (int j = 0; j < c.Retainers.Count; ++j)
-							{
-								var r = c.Retainers[j];
+						{
+						var r = c.Retainers[j];
 
-								ImGui.TableNextRow();
-								ImGui.TableSetColumnIndex(0);
-								
-								// Display checkbox before retainer name if auto venture is enabled
-								if (this.plugin.Config.AutoVentureEnabled)
+						ImGui.TableNextRow();
+						ImGui.TableSetColumnIndex(0);
+						
+						// Display checkbox before retainer name if auto venture is enabled
+						if (this.plugin.Config.AutoVentureEnabled)
+						{
+							// Only show checkbox for gathering retainers (MIN=16, BTN=17, FSH=18)
+							bool isGatheringRetainer = r.Job.HasValue && (r.Job.Value == 16 || r.Job.Value == 17 || r.Job.Value == 18);
+							
+							if (isGatheringRetainer)
+							{
+								bool enableAutoVenture = r.EnableAutoVenture;
+								if (ImGui.Checkbox($"##auto_venture_{r.atid}", ref enableAutoVenture))
 								{
-									// Only show checkbox for gathering retainers (MIN=16, BTN=17, FSH=18)
-									bool isGatheringRetainer = r.Job.HasValue && (r.Job.Value == 16 || r.Job.Value == 17 || r.Job.Value == 18);
-									
-									if (isGatheringRetainer)
-									{
-										bool enableAutoVenture = r.EnableAutoVenture;
-										if (ImGui.Checkbox($"##auto_venture_{r.atid}", ref enableAutoVenture))
-										{
-											r.EnableAutoVenture = enableAutoVenture;
-											this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
-										}
-										if (ImGui.IsItemHovered())
-										{
-											ImGui.SetTooltip(enableAutoVenture ? "Auto crystal venture enabled for this retainer" : "Auto crystal venture disabled for this retainer");
-										}
-									}
-									else
-									{
-										// Add invisible checkbox to maintain spacing
-										ImGui.Dummy(new System.Numerics.Vector2(ImGui.GetFrameHeight(), ImGui.GetFrameHeight()));
-									}
-									ImGui.SameLine();
+									r.EnableAutoVenture = enableAutoVenture;
+									this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
 								}
-								
-								// Display retainer name
-								ImGui.TextUnformatted($"{r.Name}");
-								
-								ImGui.TableSetColumnIndex(1);
-								
-								// Display job icon and level
-								uint iconId = r.Job.HasValue && r.Job.Value > 0 ? 062100u + (uint)r.Job.Value : 62143u;
-								var iconTexture = this.textureProvider.GetFromGameIcon(new Dalamud.Interface.Textures.GameIconLookup(iconId)).GetWrapOrDefault();
-								if (iconTexture != null)
+								if (ImGui.IsItemHovered())
 								{
-									ImGui.Image(iconTexture.Handle, new System.Numerics.Vector2(24, 24));
-								}
-								else
-								{
-									ImGui.Dummy(new System.Numerics.Vector2(24, 24));
-								}
-								
-								ImGui.SameLine(0, 2);
-								ImGui.TextUnformatted($"Lvl {r.Level}");
-								
-								for (int col = 0; col < elements.Length; ++col)
-								{
-									ImGui.TableSetColumnIndex(2 + col);
-									var el = elements[col];
-									long shard = r.Inventory?.GetCount(el, CrystalType.Shard) ?? 0;
-									long crystal = r.Inventory?.GetCount(el, CrystalType.Crystal) ?? 0;
-									long cluster = r.Inventory?.GetCount(el, CrystalType.Cluster) ?? 0;
-									
-									// Calculate width for centering
-									var displayText = this.FormatCrystalCounts(shard, crystal, cluster);
-									var textSize = ImGui.CalcTextSize(displayText);
-									var cellWidth = ImGui.GetContentRegionAvail().X;
-									var offset = (cellWidth - textSize.X) * 0.5f;
-									if (offset > 0)
-										ImGui.SetCursorPosX(ImGui.GetCursorPosX() + offset);
-									
-									// Render with color
-									this.RenderColoredCrystalCounts(shard, crystal, cluster);
+									ImGui.SetTooltip(enableAutoVenture ? "Auto crystal venture enabled for this retainer" : "Auto crystal venture disabled for this retainer");
 								}
 							}
+							else
+							{
+								// Add invisible checkbox to maintain spacing
+								ImGui.Dummy(new System.Numerics.Vector2(ImGui.GetFrameHeight(), ImGui.GetFrameHeight()));
+							}
+							ImGui.SameLine();
+						}
+						
+						// Display retainer name
+						ImGui.TextUnformatted($"{r.Name}");
+						
+						ImGui.TableSetColumnIndex(1);
+						
+						// Display job icon and level
+						uint iconId = r.Job.HasValue && r.Job.Value > 0 ? 062100u + (uint)r.Job.Value : 62143u;
+						var iconTexture = this.textureProvider.GetFromGameIcon(new Dalamud.Interface.Textures.GameIconLookup(iconId)).GetWrapOrDefault();
+						if (iconTexture != null)
+						{
+							ImGui.Image(iconTexture.Handle, new System.Numerics.Vector2(24, 24));
+						}
+						else
+						{
+							ImGui.Dummy(new System.Numerics.Vector2(24, 24));
+						}
+						
+						ImGui.SameLine(0, 2);
+						ImGui.TextUnformatted($"Lvl {r.Level}");
+						
+						for (int col = 0; col < elements.Length; ++col)
+						{
+							ImGui.TableSetColumnIndex(2 + col);
+							var el = elements[col];
+							long shard = r.Inventory?.GetCount(el, CrystalType.Shard) ?? 0;
+							long crystal = r.Inventory?.GetCount(el, CrystalType.Crystal) ?? 0;
+							long cluster = r.Inventory?.GetCount(el, CrystalType.Cluster) ?? 0;
+							
+							// Calculate width for centering
+							var displayText = this.FormatCrystalCounts(shard, crystal, cluster);
+							var textSize = ImGui.CalcTextSize(displayText);
+							var cellWidth = ImGui.GetContentRegionAvail().X;
+							var offset = (cellWidth - textSize.X) * 0.5f;
+							if (offset > 0)
+								ImGui.SetCursorPosX(ImGui.GetCursorPosX() + offset);
+							
+							// Render with color
+							this.RenderColoredCrystalCounts(shard, crystal, cluster);
+						}
+					}
 
-							ImGui.EndTable();
+					ImGui.EndTable();
 						}
 					}
 				}
