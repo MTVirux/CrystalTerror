@@ -133,14 +133,14 @@ public class MainWindow : Window, IDisposable
 		// Build list of enabled thresholds and sort by value (descending) to prioritize lower thresholds
 		var thresholds = new List<(int value, System.Numerics.Vector4 color)>();
 		
-		if (cfg.WarningThreshold1Enabled)
-			thresholds.Add((cfg.WarningThreshold1Value, cfg.WarningThreshold1Color));
+		if (cfg.RetainerCrystalThreshold1Enabled)
+			thresholds.Add((cfg.RetainerCrystalThreshold1Value, cfg.RetainerCrystalThreshold1Color));
 		
-		if (cfg.WarningThreshold2Enabled)
-			thresholds.Add((cfg.WarningThreshold2Value, cfg.WarningThreshold2Color));
+		if (cfg.RetainerCrystalThreshold2Enabled)
+			thresholds.Add((cfg.RetainerCrystalThreshold2Value, cfg.RetainerCrystalThreshold2Color));
 		
-		if (cfg.WarningThreshold3Enabled)
-			thresholds.Add((cfg.WarningThreshold3Value, cfg.WarningThreshold3Color));
+		if (cfg.RetainerCrystalThreshold3Enabled)
+			thresholds.Add((cfg.RetainerCrystalThreshold3Value, cfg.RetainerCrystalThreshold3Color));
 		
 		// Sort ascending so we check the lowest threshold first
 		// This ensures higher threshold values take priority when a value is at or above multiple thresholds
@@ -511,8 +511,10 @@ public class MainWindow : Window, IDisposable
 		
 		if (headerOpen)
 		{
-			ImGui.TextUnformatted($"LastUpdateUtc: {c.LastUpdateUtc:u}");
-			ImGui.Separator();				// Character inventory table
+			#if DEBUG
+						ImGui.TextUnformatted($"LastUpdateUtc: {c.LastUpdateUtc:u}");
+						ImGui.Separator();				// Character inventory table
+			#endif
 				if (c.Inventory != null)
 				{
 					ImGui.Text("Character Inventory:");

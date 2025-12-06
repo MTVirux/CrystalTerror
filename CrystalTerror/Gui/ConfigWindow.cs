@@ -366,24 +366,24 @@ public class ConfigWindow : Window, IDisposable
                 ImGui.Spacing();
 
                 // Warning Threshold 1
-            var threshold1Enabled = cfg.WarningThreshold1Enabled;
+            var threshold1Enabled = cfg.RetainerCrystalThreshold1Enabled;
             if (ImGui.Checkbox("Enable Warning Threshold 1", ref threshold1Enabled))
             {
-                cfg.WarningThreshold1Enabled = threshold1Enabled;
+                cfg.RetainerCrystalThreshold1Enabled = threshold1Enabled;
                 this.plugin.PluginInterface.SavePluginConfig(cfg);
             }
 
-            if (cfg.WarningThreshold1Enabled)
+            if (cfg.RetainerCrystalThreshold1Enabled)
             {
                 ImGui.Indent();
 
                 ImGui.Text("Threshold Value:");
                 ImGui.SameLine();
-                var threshold1Value = cfg.WarningThreshold1Value;
+                var threshold1Value = cfg.RetainerCrystalThreshold1Value;
                 ImGui.SetNextItemWidth(250);
                 if (ImGui.SliderInt("##threshold1value", ref threshold1Value, 1, 9999))
                 {
-                    cfg.WarningThreshold1Value = threshold1Value;
+                    cfg.RetainerCrystalThreshold1Value = threshold1Value;
                     this.plugin.PluginInterface.SavePluginConfig(cfg);
                 }
                 if (ImGui.IsItemHovered())
@@ -393,10 +393,10 @@ public class ConfigWindow : Window, IDisposable
 
                 ImGui.Text("Warning Color:");
                 ImGui.SameLine();
-                var threshold1Color = cfg.WarningThreshold1Color;
+                var threshold1Color = cfg.RetainerCrystalThreshold1Color;
                 if (ImGui.ColorEdit4("##threshold1color", ref threshold1Color, ImGuiColorEditFlags.NoInputs))
                 {
-                    cfg.WarningThreshold1Color = threshold1Color;
+                    cfg.RetainerCrystalThreshold1Color = threshold1Color;
                     this.plugin.PluginInterface.SavePluginConfig(cfg);
                 }
 
@@ -406,24 +406,24 @@ public class ConfigWindow : Window, IDisposable
             ImGui.Spacing();
 
             // Warning Threshold 2
-            var threshold2Enabled = cfg.WarningThreshold2Enabled;
+            var threshold2Enabled = cfg.RetainerCrystalThreshold2Enabled;
             if (ImGui.Checkbox("Enable Warning Threshold 2", ref threshold2Enabled))
             {
-                cfg.WarningThreshold2Enabled = threshold2Enabled;
+                cfg.RetainerCrystalThreshold2Enabled = threshold2Enabled;
                 this.plugin.PluginInterface.SavePluginConfig(cfg);
             }
 
-            if (cfg.WarningThreshold2Enabled)
+            if (cfg.RetainerCrystalThreshold2Enabled)
             {
                 ImGui.Indent();
 
                 ImGui.Text("Threshold Value:");
                 ImGui.SameLine();
-                var threshold2Value = cfg.WarningThreshold2Value;
+                var threshold2Value = cfg.RetainerCrystalThreshold2Value;
                 ImGui.SetNextItemWidth(250);
                 if (ImGui.SliderInt("##threshold2value", ref threshold2Value, 1, 9999))
                 {
-                    cfg.WarningThreshold2Value = threshold2Value;
+                    cfg.RetainerCrystalThreshold2Value = threshold2Value;
                     this.plugin.PluginInterface.SavePluginConfig(cfg);
                 }
                 if (ImGui.IsItemHovered())
@@ -433,10 +433,10 @@ public class ConfigWindow : Window, IDisposable
 
                 ImGui.Text("Warning Color:");
                 ImGui.SameLine();
-                var threshold2Color = cfg.WarningThreshold2Color;
+                var threshold2Color = cfg.RetainerCrystalThreshold2Color;
                 if (ImGui.ColorEdit4("##threshold2color", ref threshold2Color, ImGuiColorEditFlags.NoInputs))
                 {
-                    cfg.WarningThreshold2Color = threshold2Color;
+                    cfg.RetainerCrystalThreshold2Color = threshold2Color;
                     this.plugin.PluginInterface.SavePluginConfig(cfg);
                 }
 
@@ -446,24 +446,24 @@ public class ConfigWindow : Window, IDisposable
             ImGui.Spacing();
 
             // Warning Threshold 3
-            var threshold3Enabled = cfg.WarningThreshold3Enabled;
+            var threshold3Enabled = cfg.RetainerCrystalThreshold3Enabled;
             if (ImGui.Checkbox("Enable Warning Threshold 3", ref threshold3Enabled))
             {
-                cfg.WarningThreshold3Enabled = threshold3Enabled;
+                cfg.RetainerCrystalThreshold3Enabled = threshold3Enabled;
                 this.plugin.PluginInterface.SavePluginConfig(cfg);
             }
 
-            if (cfg.WarningThreshold3Enabled)
+            if (cfg.RetainerCrystalThreshold3Enabled)
             {
                 ImGui.Indent();
 
                 ImGui.Text("Threshold Value:");
                 ImGui.SameLine();
-                var threshold3Value = cfg.WarningThreshold3Value;
+                var threshold3Value = cfg.RetainerCrystalThreshold3Value;
                 ImGui.SetNextItemWidth(250);
                 if (ImGui.SliderInt("##threshold3value", ref threshold3Value, 1, 9999))
                 {
-                    cfg.WarningThreshold3Value = threshold3Value;
+                    cfg.RetainerCrystalThreshold3Value = threshold3Value;
                     this.plugin.PluginInterface.SavePluginConfig(cfg);
                 }
                 if (ImGui.IsItemHovered())
@@ -473,10 +473,10 @@ public class ConfigWindow : Window, IDisposable
 
                 ImGui.Text("Warning Color:");
                 ImGui.SameLine();
-                var threshold3Color = cfg.WarningThreshold3Color;
+                var threshold3Color = cfg.RetainerCrystalThreshold3Color;
                 if (ImGui.ColorEdit4("##threshold3color", ref threshold3Color, ImGuiColorEditFlags.NoInputs))
                 {
-                    cfg.WarningThreshold3Color = threshold3Color;
+                    cfg.RetainerCrystalThreshold3Color = threshold3Color;
                     this.plugin.PluginInterface.SavePluginConfig(cfg);
                 }
 
@@ -508,14 +508,14 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SameLine();
                     var charThreshold1Value = cfg.CharacterTotalThreshold1Value;
                     ImGui.SetNextItemWidth(250);
-                    if (ImGui.SliderInt("##charThreshold1value", ref charThreshold1Value, 1, 99990))
+                    if (ImGui.SliderInt("##charThreshold1value", ref charThreshold1Value, 1, 599940))
                     {
                         cfg.CharacterTotalThreshold1Value = charThreshold1Value;
                         this.plugin.PluginInterface.SavePluginConfig(cfg);
                     }
                     if (ImGui.IsItemHovered())
                     {
-                        ImGui.SetTooltip("Character totals at or above this threshold will be colored (1-99990)");
+                        ImGui.SetTooltip("Character totals at or above this threshold will be colored (1-599940)");
                     }
 
                     ImGui.Text("Warning Color:");
@@ -548,14 +548,14 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SameLine();
                     var charThreshold2Value = cfg.CharacterTotalThreshold2Value;
                     ImGui.SetNextItemWidth(250);
-                    if (ImGui.SliderInt("##charThreshold2value", ref charThreshold2Value, 1, 99990))
+                    if (ImGui.SliderInt("##charThreshold2value", ref charThreshold2Value, 1, 599940))
                     {
                         cfg.CharacterTotalThreshold2Value = charThreshold2Value;
                         this.plugin.PluginInterface.SavePluginConfig(cfg);
                     }
                     if (ImGui.IsItemHovered())
                     {
-                        ImGui.SetTooltip("Character totals at or above this threshold will be colored (1-99990)");
+                        ImGui.SetTooltip("Character totals at or above this threshold will be colored (1-599940)");
                     }
 
                     ImGui.Text("Warning Color:");
@@ -588,14 +588,14 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SameLine();
                     var charThreshold3Value = cfg.CharacterTotalThreshold3Value;
                     ImGui.SetNextItemWidth(250);
-                    if (ImGui.SliderInt("##charThreshold3value", ref charThreshold3Value, 1, 99990))
+                    if (ImGui.SliderInt("##charThreshold3value", ref charThreshold3Value, 1, 599940))
                     {
                         cfg.CharacterTotalThreshold3Value = charThreshold3Value;
                         this.plugin.PluginInterface.SavePluginConfig(cfg);
                     }
                     if (ImGui.IsItemHovered())
                     {
-                        ImGui.SetTooltip("Character totals at or above this threshold will be colored (1-99990)");
+                        ImGui.SetTooltip("Character totals at or above this threshold will be colored (1-599940)");
                     }
 
                     ImGui.Text("Warning Color:");

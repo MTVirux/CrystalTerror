@@ -8,6 +8,15 @@ namespace CrystalTerror
         /// <inheritdoc />
         public int Version { get; set; } = 1;
 
+        // ===== Data Storage =====
+        
+        /// <summary>
+        /// Stored characters persisted by Dalamud's plugin config system.
+        /// </summary>
+        public List<StoredCharacter> Characters { get; set; } = new List<StoredCharacter>();
+
+        // ===== General Settings =====
+
         /// <summary>
         /// If true, the main window is opened on plugin start.
         /// </summary>
@@ -29,11 +38,6 @@ namespace CrystalTerror
         public bool ShowCurrentCharacterAtTop { get; set; } = false;
 
         /// <summary>
-        /// If true, use abbreviated element names (first 2 characters) in character headers.
-        /// </summary>
-        public bool UseAbbreviatedElementNames { get; set; } = false;
-
-        /// <summary>
         /// If true, show crystal totals in character headers.
         /// </summary>
         public bool ShowTotalsInHeaders { get; set; } = true;
@@ -42,6 +46,11 @@ namespace CrystalTerror
         /// If true, show element names in header totals (e.g., "Fire: 100/200/300" vs "100/200/300").
         /// </summary>
         public bool ShowElementNamesInTotals { get; set; } = true;
+
+        /// <summary>
+        /// If true, use abbreviated element names (first 2 characters) in character headers.
+        /// </summary>
+        public bool UseAbbreviatedElementNames { get; set; } = false;
 
         /// <summary>
         /// If true, color the currently logged in character's header.
@@ -53,23 +62,62 @@ namespace CrystalTerror
         /// </summary>
         public System.Numerics.Vector4 CurrentCharacterColor { get; set; } = new System.Numerics.Vector4(0.2f, 0.8f, 0.2f, 1.0f);
 
+        // ===== Display Filters =====
+
+        // Elements
+        public bool ShowFireElement { get; set; } = true;
+        public bool ShowIceElement { get; set; } = true;
+        public bool ShowWindElement { get; set; } = true;
+        public bool ShowLightningElement { get; set; } = true;
+        public bool ShowEarthElement { get; set; } = true;
+        public bool ShowWaterElement { get; set; } = true;
+
+        // Crystal Types
+        public bool ShowShards { get; set; } = true;
+        public bool ShowCrystals { get; set; } = true;
+        public bool ShowClusters { get; set; } = true;
+
+        // ===== Character Sorting =====
+
+        /// <summary>
+        /// How characters should be sorted in the main window.
+        /// </summary>
+        public CharacterSortOptions CharacterSortOption { get; set; } = CharacterSortOptions.Alphabetical;
+
+        /// <summary>
+        /// Whether the main window is in edit mode for custom character ordering.
+        /// </summary>
+        public bool IsEditMode { get; set; } = false;
+
+        // ===== Warning Thresholds =====
+
+        // Retainer Crystal Warning Thresholds
+        public bool RetainerCrystalThreshold1Enabled { get; set; } = false;
+        public int RetainerCrystalThreshold1Value { get; set; } = 8000;
+        public System.Numerics.Vector4 RetainerCrystalThreshold1Color { get; set; } = new System.Numerics.Vector4(0.0f, 1.0f, 0.0f, 1.0f); // Green
+
+        public bool RetainerCrystalThreshold2Enabled { get; set; } = false;
+        public int RetainerCrystalThreshold2Value { get; set; } = 9879;
+        public System.Numerics.Vector4 RetainerCrystalThreshold2Color { get; set; } = new System.Numerics.Vector4(1.0f, 1.0f, 0.0f, 1.0f); // Yellow
+
+        public bool RetainerCrystalThreshold3Enabled { get; set; } = false;
+        public int RetainerCrystalThreshold3Value { get; set; } = 9999;
+        public System.Numerics.Vector4 RetainerCrystalThreshold3Color { get; set; } = new System.Numerics.Vector4(1.0f, 0.0f, 0.0f, 1.0f); // Red
+
         // Character Total Warning Thresholds
         public bool CharacterTotalThreshold1Enabled { get; set; } = false;
         public int CharacterTotalThreshold1Value { get; set; } = 5000;
-        public System.Numerics.Vector4 CharacterTotalThreshold1Color { get; set; } = new System.Numerics.Vector4(1.0f, 0.0f, 0.0f, 1.0f);
+        public System.Numerics.Vector4 CharacterTotalThreshold1Color { get; set; } = new System.Numerics.Vector4(0.0f, 1.0f, 0.0f, 1.0f); // Green
 
         public bool CharacterTotalThreshold2Enabled { get; set; } = false;
         public int CharacterTotalThreshold2Value { get; set; } = 8000;
-        public System.Numerics.Vector4 CharacterTotalThreshold2Color { get; set; } = new System.Numerics.Vector4(1.0f, 0.65f, 0.0f, 1.0f);
+        public System.Numerics.Vector4 CharacterTotalThreshold2Color { get; set; } = new System.Numerics.Vector4(1.0f, 1.0f, 0.0f, 1.0f); // Yellow
 
         public bool CharacterTotalThreshold3Enabled { get; set; } = false;
         public int CharacterTotalThreshold3Value { get; set; } = 9879;
-        public System.Numerics.Vector4 CharacterTotalThreshold3Color { get; set; } = new System.Numerics.Vector4(1.0f, 1.0f, 0.0f, 1.0f);
+        public System.Numerics.Vector4 CharacterTotalThreshold3Color { get; set; } = new System.Numerics.Vector4(1.0f, 0.0f, 0.0f, 1.0f); // Red
 
-        /// <summary>
-        /// Stored characters persisted by Dalamud's plugin config system.
-        /// </summary>
-        public List<StoredCharacter> Characters { get; set; } = new List<StoredCharacter>();
+        // ===== Automatic Venture Assignment =====
 
         /// <summary>
         /// If true, automatically assign ventures to retainers based on lowest crystal/shard counts.
@@ -92,28 +140,7 @@ namespace CrystalTerror
         /// </summary>
         public long AutoVentureThreshold { get; set; } = 9879;
 
-        // Display Filters - Elements
-        public bool ShowFireElement { get; set; } = true;
-        public bool ShowIceElement { get; set; } = true;
-        public bool ShowWindElement { get; set; } = true;
-        public bool ShowLightningElement { get; set; } = true;
-        public bool ShowEarthElement { get; set; } = true;
-        public bool ShowWaterElement { get; set; } = true;
-
-        // Display Filters - Crystal Types
-        public bool ShowShards { get; set; } = true;
-        public bool ShowCrystals { get; set; } = true;
-        public bool ShowClusters { get; set; } = true;
-
-        /// <summary>
-        /// How characters should be sorted in the main window.
-        /// </summary>
-        public CharacterSortOptions CharacterSortOption { get; set; } = CharacterSortOptions.Alphabetical;
-
-        /// <summary>
-        /// Whether the main window is in edit mode for custom character ordering.
-        /// </summary>
-        public bool IsEditMode { get; set; } = false;
+        // ===== Window Settings =====
 
         /// <summary>
         /// If true, the main window position and size are locked.
@@ -144,51 +171,5 @@ namespace CrystalTerror
         /// Saved size for the config window when pinned.
         /// </summary>
         public System.Numerics.Vector2 ConfigWindowSize { get; set; } = new System.Numerics.Vector2(600, 400);
-
-        // Warning Thresholds
-        /// <summary>
-        /// If true, warning threshold 1 is enabled.
-        /// </summary>
-        public bool WarningThreshold1Enabled { get; set; } = false;
-
-        /// <summary>
-        /// Value for warning threshold 1 (1-9999).
-        /// </summary>
-        public int WarningThreshold1Value { get; set; } = 8000;
-
-        /// <summary>
-        /// Color for warning threshold 1 (RGBA format).
-        /// </summary>
-        public System.Numerics.Vector4 WarningThreshold1Color { get; set; } = new System.Numerics.Vector4(1.0f, 0.0f, 0.0f, 1.0f); // Red
-
-        /// <summary>
-        /// If true, warning threshold 2 is enabled.
-        /// </summary>
-        public bool WarningThreshold2Enabled { get; set; } = false;
-
-        /// <summary>
-        /// Value for warning threshold 2 (1-9999).
-        /// </summary>
-        public int WarningThreshold2Value { get; set; } = 9879;
-
-        /// <summary>
-        /// Color for warning threshold 2 (RGBA format).
-        /// </summary>
-        public System.Numerics.Vector4 WarningThreshold2Color { get; set; } = new System.Numerics.Vector4(1.0f, 0.65f, 0.0f, 1.0f); // Orange
-
-        /// <summary>
-        /// If true, warning threshold 3 is enabled.
-        /// </summary>
-        public bool WarningThreshold3Enabled { get; set; } = false;
-
-        /// <summary>
-        /// Value for warning threshold 3 (1-9999).
-        /// </summary>
-        public int WarningThreshold3Value { get; set; } = 9999;
-
-        /// <summary>
-        /// Color for warning threshold 3 (RGBA format).
-        /// </summary>
-        public System.Numerics.Vector4 WarningThreshold3Color { get; set; } = new System.Numerics.Vector4(1.0f, 1.0f, 0.0f, 1.0f); // Yellow
     }
 }
