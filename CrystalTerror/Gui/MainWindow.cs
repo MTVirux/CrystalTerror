@@ -116,17 +116,30 @@ public class MainWindow : Window, IDisposable
 		};
 	}
 
+	private string FormatNumber(long value, bool useReducedNotation)
+	{
+		if (!useReducedNotation)
+			return value.ToString();
+		
+		if (value >= 1000000)
+			return $"{value / 1000000.0:0.#}M";
+		if (value >= 1000)
+			return $"{value / 1000.0:0.#}k";
+		
+		return value.ToString();
+	}
+
 	private string FormatCrystalCounts(long shard, long crystal, long cluster)
 	{
 		var cfg = this.plugin.Config;
 		var parts = new List<string>();
 		
 		if (cfg.ShowShards)
-			parts.Add(shard.ToString());
+			parts.Add(FormatNumber(shard, cfg.UseReducedNotationInTables));
 		if (cfg.ShowCrystals)
-			parts.Add(crystal.ToString());
+			parts.Add(FormatNumber(crystal, cfg.UseReducedNotationInTables));
 		if (cfg.ShowClusters)
-			parts.Add(cluster.ToString());
+			parts.Add(FormatNumber(cluster, cfg.UseReducedNotationInTables));
 		
 		return parts.Count > 0 ? string.Join("/", parts) : "-";
 	}
@@ -187,13 +200,13 @@ public class MainWindow : Window, IDisposable
 		if (allSameColor && firstColor.HasValue)
 		{
 			// Render entire text in one color
-			var displayText = string.Join("/", parts.Select(p => p.value.ToString()));
+			var displayText = string.Join("/", parts.Select(p => FormatNumber(p.value, cfg.UseReducedNotationInTables)));
 			ImGui.TextColored(firstColor.Value, displayText);
 		}
 		else if (allSameColor)
 		{
 			// No color, render as plain text
-			var displayText = string.Join("/", parts.Select(p => p.value.ToString()));
+			var displayText = string.Join("/", parts.Select(p => FormatNumber(p.value, cfg.UseReducedNotationInTables)));
 			ImGui.TextUnformatted(displayText);
 		}
 		else
@@ -210,9 +223,9 @@ public class MainWindow : Window, IDisposable
 				
 				var colorValue = parts[i].color;
 				if (colorValue.HasValue)
-					ImGui.TextColored(colorValue.Value, parts[i].value.ToString());
+					ImGui.TextColored(colorValue.Value, FormatNumber(parts[i].value, cfg.UseReducedNotationInTables));
 				else
-					ImGui.TextUnformatted(parts[i].value.ToString());
+					ImGui.TextUnformatted(FormatNumber(parts[i].value, cfg.UseReducedNotationInTables));
 			}
 		}
 	}
@@ -484,7 +497,16 @@ public class MainWindow : Window, IDisposable
 			if (this.plugin.Config.ShowClusters) elementTotal += totalCluster;
 			
 			var warningColor = this.GetWarningColor(elementTotal / 6);
-			var elementTotalStr = this.FormatCrystalCounts(totalShard, totalCrystal, totalCluster);
+			
+			// Format crystal counts for header - use reduced notation if enabled
+			var headerParts = new List<string>();
+			if (this.plugin.Config.ShowShards)
+				headerParts.Add(FormatNumber(totalShard, this.plugin.Config.UseReducedNotationInHeaders));
+			if (this.plugin.Config.ShowCrystals)
+				headerParts.Add(FormatNumber(totalCrystal, this.plugin.Config.UseReducedNotationInHeaders));
+			if (this.plugin.Config.ShowClusters)
+				headerParts.Add(FormatNumber(totalCluster, this.plugin.Config.UseReducedNotationInHeaders));
+			var elementTotalStr = headerParts.Count > 0 ? string.Join("/", headerParts) : "-";
 			
 			if (this.plugin.Config.ShowElementNamesInTotals)
 			{

@@ -11,9 +11,12 @@ namespace CrystalTerror
     using Dalamud.Data;
     using Dalamud.Game.Addon.Lifecycle;
     using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+    using ECommons;
 
     public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
     {
+        public static CrystalTerrorPlugin Instance { get; private set; } = null!;
+
         public IDalamudPluginInterface PluginInterface { get; init; }
 
         public Configuration Config { get; private set; } = new Configuration();
@@ -43,7 +46,11 @@ namespace CrystalTerror
 
         public CrystalTerrorPlugin(IDalamudPluginInterface pluginInterface, ICommandManager commandManager, Dalamud.Plugin.Services.IPlayerState playerState, Dalamud.Plugin.Services.IObjectTable objects, IDataManager dataManager, IFramework framework, IAddonLifecycle addonLifecycle, ICondition condition, IPluginLog pluginLog, Dalamud.Plugin.Services.ITextureProvider textureProvider)
         {
+            Instance = this;
             this.PluginInterface = pluginInterface;
+            
+            // Initialize ECommons first (required for logging and other services)
+            ECommons.ECommonsMain.Init(pluginInterface, this);
             
             // Initialize global services
             Services.ServiceManager.Initialize(pluginInterface, playerState, objects, dataManager, pluginLog, condition);
@@ -222,6 +229,9 @@ namespace CrystalTerror
                 }
 
                 this.commandManager.RemoveHandler("/ct");
+                
+                // Dispose ECommons
+                ECommons.ECommonsMain.Dispose();
             }
 
             this.disposed = true;

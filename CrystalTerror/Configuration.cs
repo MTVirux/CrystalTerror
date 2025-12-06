@@ -53,6 +53,16 @@ namespace CrystalTerror
         public bool UseAbbreviatedElementNames { get; set; } = false;
 
         /// <summary>
+        /// If true, use reduced notation (22k, 1.5M) for numbers in character headers.
+        /// </summary>
+        public bool UseReducedNotationInHeaders { get; set; } = false;
+
+        /// <summary>
+        /// If true, use reduced notation (22k, 1.5M) for numbers in table cells.
+        /// </summary>
+        public bool UseReducedNotationInTables { get; set; } = false;
+
+        /// <summary>
         /// If true, color the currently logged in character's header.
         /// </summary>
         public bool ColorCurrentCharacter { get; set; } = false;
