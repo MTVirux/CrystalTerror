@@ -41,7 +41,7 @@ namespace CrystalTerror
         // In-memory list of imported/stored characters for the UI.
         public List<StoredCharacter> Characters { get; } = new();
 
-        public CrystalTerrorPlugin(IDalamudPluginInterface pluginInterface, ICommandManager commandManager, Dalamud.Plugin.Services.IPlayerState playerState, Dalamud.Plugin.Services.IObjectTable objects, IDataManager dataManager, IFramework framework, IAddonLifecycle addonLifecycle, ICondition condition, IPluginLog pluginLog)
+        public CrystalTerrorPlugin(IDalamudPluginInterface pluginInterface, ICommandManager commandManager, Dalamud.Plugin.Services.IPlayerState playerState, Dalamud.Plugin.Services.IObjectTable objects, IDataManager dataManager, IFramework framework, IAddonLifecycle addonLifecycle, ICondition condition, IPluginLog pluginLog, Dalamud.Plugin.Services.ITextureProvider textureProvider)
         {
             this.PluginInterface = pluginInterface;
             
@@ -63,7 +63,7 @@ namespace CrystalTerror
             this.lastLocalContentId = 0;
             this.framework.Update += this.OnFrameworkUpdate;
 
-            this.mainWindow = new Gui.MainWindow(this);
+            this.mainWindow = new Gui.MainWindow(this, textureProvider);
             this.configWindow = new Gui.ConfigWindow(this);
 
             this.windowSystem.AddWindow(this.mainWindow);

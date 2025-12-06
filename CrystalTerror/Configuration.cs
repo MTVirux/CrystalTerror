@@ -61,5 +61,35 @@ namespace CrystalTerror
         /// Whether the main window is in edit mode for custom character ordering.
         /// </summary>
         public bool IsEditMode { get; set; } = false;
+
+        /// <summary>
+        /// If true, the main window position and size are locked.
+        /// </summary>
+        public bool PinMainWindow { get; set; } = false;
+
+        /// <summary>
+        /// Saved position for the main window when pinned.
+        /// </summary>
+        public System.Numerics.Vector2 MainWindowPos { get; set; } = new System.Numerics.Vector2(100, 100);
+
+        /// <summary>
+        /// Saved size for the main window when pinned.
+        /// </summary>
+        public System.Numerics.Vector2 MainWindowSize { get; set; } = new System.Numerics.Vector2(600, 400);
+
+        /// <summary>
+        /// If true, the config window position and size are locked.
+        /// </summary>
+        public bool PinConfigWindow { get; set; } = false;
+
+        /// <summary>
+        /// Saved position for the config window when pinned.
+        /// </summary>
+        public System.Numerics.Vector2 ConfigWindowPos { get; set; } = new System.Numerics.Vector2(100, 100);
+
+        /// <summary>
+        /// Saved size for the config window when pinned.
+        /// </summary>
+        public System.Numerics.Vector2 ConfigWindowSize { get; set; } = new System.Numerics.Vector2(600, 400);
     }
 }

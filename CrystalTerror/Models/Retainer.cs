@@ -29,6 +29,9 @@ namespace CrystalTerror
         /// <summary>Perception stat for non-combat retainers (when available from AutoRetainer).</summary>
         public int Perception { get; set; } = 0;
 
+        /// <summary>If true, this retainer will be included in automatic venture handling. Defaults to true.</summary>
+        public bool EnableAutoVenture { get; set; } = true;
+
         /// <summary>Item counts for the retainer's inventory.</summary>
         public Inventory Inventory { get; set; } = new Inventory();
 

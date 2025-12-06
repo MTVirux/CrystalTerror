@@ -168,6 +168,13 @@ namespace CrystalTerror
                 // Log retainer stats for Informationging
                 log.Information($"[CrystalTerror] {retainer.Name}: Level={retainer.Level}, Gathering={retainer.Gathering}, Job={ClassJobExtensions.GetAbreviation(retainer.Job)}");
 
+                // Check if auto venture is enabled for this retainer
+                if (!retainer.EnableAutoVenture)
+                {
+                    log.Information($"[CrystalTerror] ✗ Skipping {retainer.Name} - Auto venture disabled for this retainer");
+                    return;
+                }
+
                 // Check if retainer is eligible
                 if (retainer.Job == null || !VentureHelper.IsRetainerEligibleForVenture(retainer, CrystalType.Shard))
                 {

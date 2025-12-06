@@ -3,11 +3,13 @@ namespace CrystalTerror.Gui;
 using System;
 using Dalamud.Interface.Windowing;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
 using ImGui = Dalamud.Bindings.ImGui.ImGui;
 
 public class ConfigWindow : Window, IDisposable
 {
     private readonly CrystalTerrorPlugin plugin;
+    private TitleBarButton lockButton;
 
     public ConfigWindow(CrystalTerrorPlugin plugin)
         : base("CrystalTerrorConfigWindow")
@@ -18,10 +20,61 @@ public class ConfigWindow : Window, IDisposable
             MinimumSize = new System.Numerics.Vector2(300, 100),
             MaximumSize = ImGui.GetIO().DisplaySize,
         };
+
+        // Initialize lock button
+        lockButton = new TitleBarButton
+        {
+            Click = OnLockButtonClick,
+            Icon = plugin.Config.PinConfigWindow ? FontAwesomeIcon.Lock : FontAwesomeIcon.LockOpen,
+            IconOffset = new System.Numerics.Vector2(3, 2),
+            ShowTooltip = () => ImGui.SetTooltip("Lock window position and size"),
+        };
+
+        // Add lock button to title bar
+        TitleBarButtons.Add(lockButton);
     }
 
     public void Dispose()
     {
+    }
+
+    private void OnLockButtonClick(ImGuiMouseButton button)
+    {
+        if (button == ImGuiMouseButton.Left)
+        {
+            this.plugin.Config.PinConfigWindow = !this.plugin.Config.PinConfigWindow;
+            lockButton.Icon = this.plugin.Config.PinConfigWindow ? FontAwesomeIcon.Lock : FontAwesomeIcon.LockOpen;
+
+            // Save current position and size when locking
+            if (this.plugin.Config.PinConfigWindow)
+            {
+                this.plugin.Config.ConfigWindowPos = ImGui.GetWindowPos();
+                this.plugin.Config.ConfigWindowSize = ImGui.GetWindowSize();
+            }
+
+            this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
+        }
+    }
+
+    public override void PreDraw()
+    {
+        if (this.plugin.Config.PinConfigWindow)
+        {
+            Flags |= ImGuiWindowFlags.NoMove;
+            Flags &= ~ImGuiWindowFlags.NoResize;
+            ImGui.SetNextWindowPos(this.plugin.Config.ConfigWindowPos);
+            ImGui.SetNextWindowSize(this.plugin.Config.ConfigWindowSize);
+        }
+        else
+        {
+            Flags &= ~ImGuiWindowFlags.NoMove;
+        }
+    }
+
+    public override void PostDraw()
+    {
+        // When locked, the PreDraw will reset size next frame
+        // allowing temporary stretching during the current frame only
     }
 
     public override void Draw()
