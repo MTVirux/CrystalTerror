@@ -1,0 +1,11 @@
+{
+	"files.autoSave": "off",
+	"emeraldwalk.runonsave": {
+		"commands": [
+			{
+				"match": "\\.cs$",
+				"cmd": "dotnet build \"${workspaceFolder}\\CrystalTerror.sln\" -c Release"
+			}
+		]
+	}
+}
