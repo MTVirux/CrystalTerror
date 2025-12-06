@@ -62,8 +62,8 @@ namespace CrystalTerror
 
             var sc = new StoredCharacter
             {
-                Name = local.Name.TextValue ?? string.Empty,
-                World = worldStr,
+                Name = (local.Name.TextValue ?? string.Empty).Trim(),
+                World = worldStr.Trim(),
                 ServiceAccount = 1,
                 LastUpdateUtc = DateTime.UtcNow,
                 Retainers = new List<Retainer>(),
@@ -300,8 +300,8 @@ namespace CrystalTerror
 
             foreach (var sc in imported)
             {
-                var existing = target.FirstOrDefault(x => string.Equals(x.Name, sc.Name, StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(x.World, sc.World, StringComparison.OrdinalIgnoreCase));
+                var existing = target.FirstOrDefault(x => string.Equals(x.Name?.Trim(), sc.Name?.Trim(), StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(x.World?.Trim(), sc.World?.Trim(), StringComparison.OrdinalIgnoreCase));
 
                 if (existing == null)
                 {

@@ -599,7 +599,7 @@ public class MainWindow : Window, IDisposable
 		if (this.plugin.Config.ShowTotalsInHeaders && totalParts.Count > 0)
 		{
 			// Render main header text
-			headerOpen = ImGui.CollapsingHeader(header + " —");
+			headerOpen = ImGui.CollapsingHeader(header + " —" + $"##{i}");
 			
 			// Render colored totals on the same line
 			ImGui.SameLine(0, 5);
@@ -624,7 +624,7 @@ public class MainWindow : Window, IDisposable
 		}
 		else
 		{
-			headerOpen = ImGui.CollapsingHeader(header);
+			headerOpen = ImGui.CollapsingHeader(header + $"##{i}");
 		}
 		
 		if (colorsPushed > 0)
