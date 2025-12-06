@@ -81,27 +81,24 @@ namespace CrystalTerror
                         var crystalContainer = invMgr->GetInventoryContainer(FFXIVClientStructs.FFXIV.Client.Game.InventoryType.Crystals);
                         if (crystalContainer != null)
                         {
-                            // Crystal item IDs in FFXIV (ordered by element then type)
-                            // Shards: 2-7, Crystals: 8-13, Clusters: 14-19
-                            var crystalItemIds = new uint[] {
-                                2,  8,  14, // Fire
-                                3,  9,  15, // Ice
-                                4,  10, 16, // Wind
-                                5,  11, 17, // Lightning
-                                6,  12, 18, // Earth
-                                7,  13, 19  // Water
-                            };
+                            // Crystal item IDs in FFXIV
+                            // The game stores crystals by type first, then element:
+                            // Shards: 2-7 (Fire, Ice, Wind, Lightning, Earth, Water)
+                            // Crystals: 8-13 (Fire, Ice, Wind, Lightning, Earth, Water)
+                            // Clusters: 14-19 (Fire, Ice, Wind, Lightning, Earth, Water)
                             var elements = new Element[] { Element.Fire, Element.Ice, Element.Wind, Element.Lightning, Element.Earth, Element.Water };
+                            var crystalTypes = new CrystalType[] { CrystalType.Shard, CrystalType.Crystal, CrystalType.Cluster };
+                            
+                            // Item IDs: Shards start at 2, Crystals at 8, Clusters at 14
+                            var baseItemIds = new uint[] { 2, 8, 14 };
 
-                            for (int ei = 0; ei < elements.Length; ++ei)
+                            for (int ti = 0; ti < crystalTypes.Length; ++ti)
                             {
-                                for (int ti = 0; ti < 3; ++ti)
+                                for (int ei = 0; ei < elements.Length; ++ei)
                                 {
-                                    int idx = ei * 3 + ti;
-                                    uint itemId = crystalItemIds[idx];
+                                    uint itemId = baseItemIds[ti] + (uint)ei;
                                     int count = invMgr->GetItemCountInContainer(itemId, FFXIVClientStructs.FFXIV.Client.Game.InventoryType.Crystals);
-                                    CrystalType ct = ti == 0 ? CrystalType.Shard : (ti == 1 ? CrystalType.Crystal : CrystalType.Cluster);
-                                    try { sc.Inventory.SetCount(elements[ei], ct, count); } catch { }
+                                    try { sc.Inventory.SetCount(elements[ei], crystalTypes[ti], count); } catch { }
                                 }
                             }
                         }
@@ -208,18 +205,20 @@ namespace CrystalTerror
                                         ItemFinderRetainerInventory* inv = (ItemFinderRetainerInventory*)(*invPtr);
                                         if (inv != null)
                                         {
-                                            // Crystal quantities: 6 elements * 3 types = 18 entries
-                                            // InteropGenerator creates a public Span<ushort> CrystalQuantities accessor
+                                            // Crystal quantities: 18 entries stored by type first, then element
+                                            // Order: All shards (Fire-Water), All crystals (Fire-Water), All clusters (Fire-Water)
+                                            // Indices 0-5: Shards, 6-11: Crystals, 12-17: Clusters
                                             var crystals = inv->CrystalQuantities;
                                             var elements = new Element[] { Element.Fire, Element.Ice, Element.Wind, Element.Lightning, Element.Earth, Element.Water };
-                                            for (int ei = 0; ei < elements.Length; ++ei)
+                                            var crystalTypes = new CrystalType[] { CrystalType.Shard, CrystalType.Crystal, CrystalType.Cluster };
+                                            
+                                            for (int ti = 0; ti < crystalTypes.Length; ++ti)
                                             {
-                                                for (int ti = 0; ti < 3; ++ti)
+                                                for (int ei = 0; ei < elements.Length; ++ei)
                                                 {
-                                                    int idx = ei * 3 + ti;
+                                                    int idx = ti * 6 + ei;
                                                     ushort val = crystals[idx];
-                                                    CrystalType ct = ti == 0 ? CrystalType.Shard : (ti == 1 ? CrystalType.Crystal : CrystalType.Cluster);
-                                                    try { ret.Inventory.SetCount(elements[ei], ct, val); } catch { }
+                                                    try { ret.Inventory.SetCount(elements[ei], crystalTypes[ti], val); } catch { }
                                                 }
                                             }
                                         }
