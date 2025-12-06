@@ -106,15 +106,15 @@ namespace CrystalTerror
 
         // Character Total Warning Thresholds
         public bool CharacterTotalThreshold1Enabled { get; set; } = false;
-        public int CharacterTotalThreshold1Value { get; set; } = 5000;
+        public int CharacterTotalThreshold1Value { get; set; } = 432000;
         public System.Numerics.Vector4 CharacterTotalThreshold1Color { get; set; } = new System.Numerics.Vector4(0.0f, 1.0f, 0.0f, 1.0f); // Green
 
         public bool CharacterTotalThreshold2Enabled { get; set; } = false;
-        public int CharacterTotalThreshold2Value { get; set; } = 8000;
+        public int CharacterTotalThreshold2Value { get; set; } = 533466;
         public System.Numerics.Vector4 CharacterTotalThreshold2Color { get; set; } = new System.Numerics.Vector4(1.0f, 1.0f, 0.0f, 1.0f); // Yellow
 
         public bool CharacterTotalThreshold3Enabled { get; set; } = false;
-        public int CharacterTotalThreshold3Value { get; set; } = 9879;
+        public int CharacterTotalThreshold3Value { get; set; } = 539946;
         public System.Numerics.Vector4 CharacterTotalThreshold3Color { get; set; } = new System.Numerics.Vector4(1.0f, 0.0f, 0.0f, 1.0f); // Red
 
         // ===== Automatic Venture Assignment =====
