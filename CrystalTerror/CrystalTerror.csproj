@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="ECommons" Version="3.0.1.9" />
+    <ProjectReference Include="..\ECommons\ECommons\ECommons.csproj" />
   </ItemGroup>
 
   <ItemGroup>
