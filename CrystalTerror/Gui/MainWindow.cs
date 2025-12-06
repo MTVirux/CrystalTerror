@@ -130,7 +130,7 @@ public class MainWindow : Window, IDisposable
 	{
 		var cfg = this.plugin.Config;
 		
-		// Build list of enabled thresholds and sort by value (ascending) to prioritize lower thresholds
+		// Build list of enabled thresholds and sort by value (descending) to prioritize lower thresholds
 		var thresholds = new List<(int value, System.Numerics.Vector4 color)>();
 		
 		if (cfg.WarningThreshold1Enabled)
@@ -143,15 +143,14 @@ public class MainWindow : Window, IDisposable
 			thresholds.Add((cfg.WarningThreshold3Value, cfg.WarningThreshold3Color));
 		
 		// Sort ascending so we check the lowest threshold first
-		// This ensures higher threshold values (e.g., 1000) take priority over lower ones (e.g., 100)
-		// when a value is below multiple thresholds
+		// This ensures higher threshold values take priority when a value is at or above multiple thresholds
 		thresholds.Sort((a, b) => a.value.CompareTo(b.value));
 		
-		// Return color of the last (highest) threshold that the value is at or below
+		// Return color of the last (highest) threshold that the value is at or above
 		System.Numerics.Vector4? result = null;
 		foreach (var threshold in thresholds)
 		{
-			if (value <= threshold.value)
+			if (value >= threshold.value)
 				result = threshold.color;
 		}
 		
@@ -217,7 +216,7 @@ public class MainWindow : Window, IDisposable
 	{
 		var characters = this.plugin.Characters.ToList();
 		
-		return this.plugin.Config.CharacterSortOption switch
+		var sorted = this.plugin.Config.CharacterSortOption switch
 		{
 			CharacterSortOptions.Alphabetical => characters.OrderBy(c => c.Name).ToList(),
 			CharacterSortOptions.ReverseAlphabetical => characters.OrderByDescending(c => c.Name).ToList(),
@@ -227,6 +226,49 @@ public class MainWindow : Window, IDisposable
 			CharacterSortOptions.Custom => characters, // Keep original order (user-defined)
 			_ => characters
 		};
+		
+		// Force current character to top if AutoRetainer sort is selected, or if ShowCurrentCharacterAtTop is enabled
+		if (this.plugin.Config.ShowCurrentCharacterAtTop || this.plugin.Config.CharacterSortOption == CharacterSortOptions.AutoRetainer)
+		{
+			var contentId = Services.PlayerService.State.ContentId;
+			if (contentId != 0)
+			{
+				var local = Services.PlayerService.Objects.LocalPlayer;
+				if (local != null)
+				{
+					var currentName = local.Name.TextValue ?? string.Empty;
+					var currentWorldId = local.HomeWorld.RowId.ToString();
+					
+					// Try to get world name
+					try
+					{
+						var sheet = Services.DataService.Manager.GetExcelSheet<Lumina.Excel.Sheets.World>();
+						if (sheet != null)
+						{
+							var row = sheet.GetRowOrDefault((uint)local.HomeWorld.RowId);
+							if (row.HasValue)
+							{
+								currentWorldId = row.Value.Name.ExtractText();
+							}
+						}
+					}
+					catch { }
+					
+					// Find current character and move to top
+					var currentChar = sorted.FirstOrDefault(c => 
+						string.Equals(c.Name, currentName, StringComparison.OrdinalIgnoreCase) &&
+						string.Equals(c.World, currentWorldId, StringComparison.OrdinalIgnoreCase));
+					
+					if (currentChar != null)
+					{
+						sorted.Remove(currentChar);
+						sorted.Insert(0, currentChar);
+					}
+				}
+			}
+		}
+		
+		return sorted;
 	}
 
 	public override void Draw()
@@ -238,6 +280,15 @@ public class MainWindow : Window, IDisposable
 		}
 
 		var sortedCharacters = this.GetSortedCharacters();
+		
+		// Filter out characters without gathering retainers if enabled
+		if (this.plugin.Config.HideNonGatheringCharacters)
+		{
+			sortedCharacters = sortedCharacters
+				.Where(c => c.Retainers.Any(r => r.Job == 16 || r.Job == 17 || r.Job == 18))
+				.ToList();
+		}
+		
 		for (int i = 0; i < sortedCharacters.Count; ++i)
 		{
 			var c = sortedCharacters[i];
@@ -296,16 +347,172 @@ public class MainWindow : Window, IDisposable
 					ImGui.EndDisabled();
 				}
 				
-				ImGui.SameLine();
+			ImGui.SameLine();
+		}
+		
+		// Calculate totals for visible elements
+		var headerElements = new[] { Element.Fire, Element.Ice, Element.Wind, Element.Lightning, Element.Earth, Element.Water };
+		var headerVisibleElements = headerElements.Where(el => this.IsElementVisible(el)).ToArray();
+		var totalParts = new List<(string text, System.Numerics.Vector4? color)>();
+		long grandTotal = 0;
+		
+		foreach (var el in headerVisibleElements)
+		{
+			long totalShard = c.Inventory?.GetCount(el, CrystalType.Shard) ?? 0;
+			long totalCrystal = c.Inventory?.GetCount(el, CrystalType.Crystal) ?? 0;
+			long totalCluster = c.Inventory?.GetCount(el, CrystalType.Cluster) ?? 0;
+			
+			// Add retainer totals
+			if (c.Retainers != null)
+			{
+				foreach (var r in c.Retainers)
+				{
+					totalShard += r.Inventory?.GetCount(el, CrystalType.Shard) ?? 0;
+					totalCrystal += r.Inventory?.GetCount(el, CrystalType.Crystal) ?? 0;
+					totalCluster += r.Inventory?.GetCount(el, CrystalType.Cluster) ?? 0;
+				}
 			}
 			
-			var header = $"{c.Name} @ {c.World} — Retainers: {c.Retainers?.Count ?? 0}";
-			if (ImGui.CollapsingHeader(header))
+			// Add to grand total based on which types are visible
+			if (this.plugin.Config.ShowShards) grandTotal += totalShard;
+			if (this.plugin.Config.ShowCrystals) grandTotal += totalCrystal;
+			if (this.plugin.Config.ShowClusters) grandTotal += totalCluster;
+			
+			// Calculate element total and determine warning color based on crystal threshold * 6
+			long elementTotal = 0;
+			if (this.plugin.Config.ShowShards) elementTotal += totalShard;
+			if (this.plugin.Config.ShowCrystals) elementTotal += totalCrystal;
+			if (this.plugin.Config.ShowClusters) elementTotal += totalCluster;
+			
+			var warningColor = this.GetWarningColor(elementTotal / 6);
+			var elementTotalStr = this.FormatCrystalCounts(totalShard, totalCrystal, totalCluster);
+			
+			if (this.plugin.Config.ShowElementNamesInTotals)
 			{
-				ImGui.TextUnformatted($"LastUpdateUtc: {c.LastUpdateUtc:u}");
-				ImGui.Separator();
-
-				// Character inventory table
+				var elementName = this.plugin.Config.UseAbbreviatedElementNames ? el.ToString().Substring(0, 2) : el.ToString();
+				totalParts.Add(($"{elementName}: {elementTotalStr}", warningColor));
+			}
+			else
+			{
+				totalParts.Add((elementTotalStr, warningColor));
+			}
+		}
+		
+		// Check if this is the current character
+		bool isCurrentChar = false;
+		if (this.plugin.Config.ColorCurrentCharacter)
+		{
+			var contentId = Services.PlayerService.State.ContentId;
+			if (contentId != 0)
+			{
+				var local = Services.PlayerService.Objects.LocalPlayer;
+				if (local != null)
+				{
+					var currentName = local.Name.TextValue ?? string.Empty;
+					var currentWorldId = local.HomeWorld.RowId.ToString();
+					
+					try
+					{
+						var sheet = Services.DataService.Manager.GetExcelSheet<Lumina.Excel.Sheets.World>();
+						if (sheet != null)
+						{
+							var row = sheet.GetRowOrDefault((uint)local.HomeWorld.RowId);
+							if (row.HasValue)
+							{
+								currentWorldId = row.Value.Name.ExtractText();
+							}
+						}
+					}
+					catch { }
+					
+					isCurrentChar = string.Equals(c.Name, currentName, StringComparison.OrdinalIgnoreCase) &&
+						string.Equals(c.World, currentWorldId, StringComparison.OrdinalIgnoreCase);
+				}
+			}
+		}
+		
+		// Build header text (without totals - we'll render those separately with colors)
+		var header = $"{c.Name} @ {c.World}";
+		
+		// Determine header background color for character total thresholds
+		System.Numerics.Vector4? headerBgColor = null;
+		
+		// Check character total thresholds
+		var charThresholds = new List<(int value, System.Numerics.Vector4 color)>();
+		if (this.plugin.Config.CharacterTotalThreshold1Enabled)
+			charThresholds.Add((this.plugin.Config.CharacterTotalThreshold1Value, this.plugin.Config.CharacterTotalThreshold1Color));
+		if (this.plugin.Config.CharacterTotalThreshold2Enabled)
+			charThresholds.Add((this.plugin.Config.CharacterTotalThreshold2Value, this.plugin.Config.CharacterTotalThreshold2Color));
+		if (this.plugin.Config.CharacterTotalThreshold3Enabled)
+			charThresholds.Add((this.plugin.Config.CharacterTotalThreshold3Value, this.plugin.Config.CharacterTotalThreshold3Color));
+		
+		// Sort ascending and check thresholds - highest threshold wins
+		charThresholds.Sort((a, b) => a.value.CompareTo(b.value));
+		foreach (var threshold in charThresholds)
+		{
+			if (grandTotal >= threshold.value)
+				headerBgColor = threshold.color;
+		}
+		
+		// Render header with colors
+		bool headerOpen;
+		int colorsPushed = 0;
+		
+		// Push header background color if character total threshold matched
+		if (headerBgColor.HasValue)
+		{
+			ImGui.PushStyleColor(ImGuiCol.Header, headerBgColor.Value);
+			ImGui.PushStyleColor(ImGuiCol.HeaderHovered, headerBgColor.Value * new System.Numerics.Vector4(1.2f, 1.2f, 1.2f, 1.0f));
+			ImGui.PushStyleColor(ImGuiCol.HeaderActive, headerBgColor.Value * new System.Numerics.Vector4(1.4f, 1.4f, 1.4f, 1.0f));
+			colorsPushed += 3;
+		}
+		
+		// Push text color if current character
+		if (isCurrentChar)
+		{
+			ImGui.PushStyleColor(ImGuiCol.Text, this.plugin.Config.CurrentCharacterColor);
+			colorsPushed++;
+		}
+		
+		// Render header with totals
+		if (this.plugin.Config.ShowTotalsInHeaders && totalParts.Count > 0)
+		{
+			// Render main header text
+			headerOpen = ImGui.CollapsingHeader(header + " —");
+			
+			// Render colored totals on the same line
+			ImGui.SameLine(0, 5);
+			for (int idx = 0; idx < totalParts.Count; idx++)
+			{
+				if (idx > 0)
+				{
+					ImGui.SameLine(0, 0);
+					ImGui.TextUnformatted(" | ");
+					ImGui.SameLine(0, 0);
+				}
+				
+				var (text, color) = totalParts[idx];
+				if (color.HasValue)
+					ImGui.TextColored(color.Value, text);
+				else
+					ImGui.TextUnformatted(text);
+				
+				if (idx < totalParts.Count - 1)
+					ImGui.SameLine(0, 0);
+			}
+		}
+		else
+		{
+			headerOpen = ImGui.CollapsingHeader(header);
+		}
+		
+		if (colorsPushed > 0)
+			ImGui.PopStyleColor(colorsPushed);
+		
+		if (headerOpen)
+		{
+			ImGui.TextUnformatted($"LastUpdateUtc: {c.LastUpdateUtc:u}");
+			ImGui.Separator();				// Character inventory table
 				if (c.Inventory != null)
 				{
 					ImGui.Text("Character Inventory:");

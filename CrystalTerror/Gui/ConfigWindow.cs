@@ -104,6 +104,107 @@ public class ConfigWindow : Window, IDisposable
             {
                 ImGui.SetTooltip("When enabled, pressing ESC will not close the main window");
             }
+
+            var hideNonGathering = cfg.HideNonGatheringCharacters;
+            if (ImGui.Checkbox("Hide characters without gathering retainers", ref hideNonGathering))
+            {
+                cfg.HideNonGatheringCharacters = hideNonGathering;
+                this.plugin.PluginInterface.SavePluginConfig(cfg);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Hide characters that have no gathering retainers (MIN/BTN/FSH)");
+            }
+
+            // Show current character at top option - force enabled for AutoRetainer sort
+            bool showCurrentAtTop = cfg.ShowCurrentCharacterAtTop || cfg.CharacterSortOption == CharacterSortOptions.AutoRetainer;
+            bool isAutoRetainerSort = cfg.CharacterSortOption == CharacterSortOptions.AutoRetainer;
+            
+            if (isAutoRetainerSort)
+                ImGui.BeginDisabled();
+            
+            if (ImGui.Checkbox($"Show current character at top { (isAutoRetainerSort ? "(Enforced by AutoRetainer sort)" : "") }", ref showCurrentAtTop))
+            {
+                cfg.ShowCurrentCharacterAtTop = showCurrentAtTop;
+                this.plugin.PluginInterface.SavePluginConfig(cfg);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Show the currently logged in character at the top of the list");
+            }
+            
+            if (isAutoRetainerSort)
+                ImGui.EndDisabled();
+
+            var showTotals = cfg.ShowTotalsInHeaders;
+            if (ImGui.Checkbox("Show totals in character headers", ref showTotals))
+            {
+                cfg.ShowTotalsInHeaders = showTotals;
+                this.plugin.PluginInterface.SavePluginConfig(cfg);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Display crystal/shard/cluster totals in character headers");
+            }
+
+            // Sub-option: show element names in totals (indented)
+            if (cfg.ShowTotalsInHeaders)
+            {
+                ImGui.Indent();
+                var showElementNames = cfg.ShowElementNamesInTotals;
+                if (ImGui.Checkbox("Show element names in totals", ref showElementNames))
+                {
+                    cfg.ShowElementNamesInTotals = showElementNames;
+                    this.plugin.PluginInterface.SavePluginConfig(cfg);
+                }
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.SetTooltip("Show element names before totals (e.g., 'Fire: 100/200/300' vs '100/200/300')");
+                }
+
+                // Sub-sub-option: abbreviated element names (indented further)
+                if (cfg.ShowElementNamesInTotals)
+                {
+                    ImGui.Indent();
+                    var useAbbrev = cfg.UseAbbreviatedElementNames;
+                    if (ImGui.Checkbox("Use abbreviated element names", ref useAbbrev))
+                    {
+                        cfg.UseAbbreviatedElementNames = useAbbrev;
+                        this.plugin.PluginInterface.SavePluginConfig(cfg);
+                    }
+                    if (ImGui.IsItemHovered())
+                    {
+                        ImGui.SetTooltip("Use first 2 characters only (e.g., 'Fi' instead of 'Fire')");
+                    }
+                    ImGui.Unindent();
+                }
+
+                ImGui.Unindent();
+            }
+
+            var colorCurrent = cfg.ColorCurrentCharacter;
+            if (ImGui.Checkbox("Color current character header", ref colorCurrent))
+            {
+                cfg.ColorCurrentCharacter = colorCurrent;
+                this.plugin.PluginInterface.SavePluginConfig(cfg);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Apply a custom color to the currently logged in character's header");
+            }
+
+            // Sub-option: color picker (indented)
+            if (cfg.ColorCurrentCharacter)
+            {
+                ImGui.Indent();
+                var currentCharColor = cfg.CurrentCharacterColor;
+                if (ImGui.ColorEdit4("Current character color", ref currentCharColor, ImGuiColorEditFlags.NoInputs))
+                {
+                    cfg.CurrentCharacterColor = currentCharColor;
+                    this.plugin.PluginInterface.SavePluginConfig(cfg);
+                }
+                ImGui.Unindent();
+            }
         }
 
         // Display Filters
@@ -256,10 +357,15 @@ public class ConfigWindow : Window, IDisposable
         // Warning Thresholds
         if (ImGui.CollapsingHeader("Warning Thresholds"))
         {
-            ImGui.TextWrapped("Configure up to 3 color-coded warning thresholds for crystal counts in the main window.");
-            ImGui.Spacing();
+            ImGui.Indent();
+            
+            // Retainer Crystal Warning Thresholds
+            if (ImGui.CollapsingHeader("Retainer Crystal Warning Thresholds"))
+            {
+                ImGui.TextWrapped("Configure up to 3 color-coded warning thresholds for crystal counts in the main window.");
+                ImGui.Spacing();
 
-            // Warning Threshold 1
+                // Warning Threshold 1
             var threshold1Enabled = cfg.WarningThreshold1Enabled;
             if (ImGui.Checkbox("Enable Warning Threshold 1", ref threshold1Enabled))
             {
@@ -282,7 +388,7 @@ public class ConfigWindow : Window, IDisposable
                 }
                 if (ImGui.IsItemHovered())
                 {
-                    ImGui.SetTooltip("Values at or below this threshold will be colored (1-9999)");
+                    ImGui.SetTooltip("Values at or above this threshold will be colored (1-9999)");
                 }
 
                 ImGui.Text("Warning Color:");
@@ -322,7 +428,7 @@ public class ConfigWindow : Window, IDisposable
                 }
                 if (ImGui.IsItemHovered())
                 {
-                    ImGui.SetTooltip("Values at or below this threshold will be colored (1-9999)");
+                    ImGui.SetTooltip("Values at or above this threshold will be colored (1-9999)");
                 }
 
                 ImGui.Text("Warning Color:");
@@ -362,7 +468,7 @@ public class ConfigWindow : Window, IDisposable
                 }
                 if (ImGui.IsItemHovered())
                 {
-                    ImGui.SetTooltip("Values at or below this threshold will be colored (1-9999)");
+                    ImGui.SetTooltip("Values at or above this threshold will be colored (1-9999)");
                 }
 
                 ImGui.Text("Warning Color:");
@@ -376,6 +482,136 @@ public class ConfigWindow : Window, IDisposable
 
                 ImGui.Unindent();
             }
+            }
+
+            ImGui.Spacing();
+
+            // Character Total Warning Thresholds
+            if (ImGui.CollapsingHeader("Character Total Warning Thresholds"))
+            {
+                ImGui.TextWrapped("Configure up to 3 color-coded warning thresholds for character total crystal counts (character + all retainers).");
+                ImGui.Spacing();
+
+                // Character Total Threshold 1
+                var charThreshold1Enabled = cfg.CharacterTotalThreshold1Enabled;
+                if (ImGui.Checkbox("Enable Character Total Threshold 1", ref charThreshold1Enabled))
+                {
+                    cfg.CharacterTotalThreshold1Enabled = charThreshold1Enabled;
+                    this.plugin.PluginInterface.SavePluginConfig(cfg);
+                }
+
+                if (cfg.CharacterTotalThreshold1Enabled)
+                {
+                    ImGui.Indent();
+
+                    ImGui.Text("Threshold Value:");
+                    ImGui.SameLine();
+                    var charThreshold1Value = cfg.CharacterTotalThreshold1Value;
+                    ImGui.SetNextItemWidth(250);
+                    if (ImGui.SliderInt("##charThreshold1value", ref charThreshold1Value, 1, 99990))
+                    {
+                        cfg.CharacterTotalThreshold1Value = charThreshold1Value;
+                        this.plugin.PluginInterface.SavePluginConfig(cfg);
+                    }
+                    if (ImGui.IsItemHovered())
+                    {
+                        ImGui.SetTooltip("Character totals at or above this threshold will be colored (1-99990)");
+                    }
+
+                    ImGui.Text("Warning Color:");
+                    ImGui.SameLine();
+                    var charThreshold1Color = cfg.CharacterTotalThreshold1Color;
+                    if (ImGui.ColorEdit4("##charThreshold1color", ref charThreshold1Color, ImGuiColorEditFlags.NoInputs))
+                    {
+                        cfg.CharacterTotalThreshold1Color = charThreshold1Color;
+                        this.plugin.PluginInterface.SavePluginConfig(cfg);
+                    }
+
+                    ImGui.Unindent();
+                }
+
+                ImGui.Spacing();
+
+                // Character Total Threshold 2
+                var charThreshold2Enabled = cfg.CharacterTotalThreshold2Enabled;
+                if (ImGui.Checkbox("Enable Character Total Threshold 2", ref charThreshold2Enabled))
+                {
+                    cfg.CharacterTotalThreshold2Enabled = charThreshold2Enabled;
+                    this.plugin.PluginInterface.SavePluginConfig(cfg);
+                }
+
+                if (cfg.CharacterTotalThreshold2Enabled)
+                {
+                    ImGui.Indent();
+
+                    ImGui.Text("Threshold Value:");
+                    ImGui.SameLine();
+                    var charThreshold2Value = cfg.CharacterTotalThreshold2Value;
+                    ImGui.SetNextItemWidth(250);
+                    if (ImGui.SliderInt("##charThreshold2value", ref charThreshold2Value, 1, 99990))
+                    {
+                        cfg.CharacterTotalThreshold2Value = charThreshold2Value;
+                        this.plugin.PluginInterface.SavePluginConfig(cfg);
+                    }
+                    if (ImGui.IsItemHovered())
+                    {
+                        ImGui.SetTooltip("Character totals at or above this threshold will be colored (1-99990)");
+                    }
+
+                    ImGui.Text("Warning Color:");
+                    ImGui.SameLine();
+                    var charThreshold2Color = cfg.CharacterTotalThreshold2Color;
+                    if (ImGui.ColorEdit4("##charThreshold2color", ref charThreshold2Color, ImGuiColorEditFlags.NoInputs))
+                    {
+                        cfg.CharacterTotalThreshold2Color = charThreshold2Color;
+                        this.plugin.PluginInterface.SavePluginConfig(cfg);
+                    }
+
+                    ImGui.Unindent();
+                }
+
+                ImGui.Spacing();
+
+                // Character Total Threshold 3
+                var charThreshold3Enabled = cfg.CharacterTotalThreshold3Enabled;
+                if (ImGui.Checkbox("Enable Character Total Threshold 3", ref charThreshold3Enabled))
+                {
+                    cfg.CharacterTotalThreshold3Enabled = charThreshold3Enabled;
+                    this.plugin.PluginInterface.SavePluginConfig(cfg);
+                }
+
+                if (cfg.CharacterTotalThreshold3Enabled)
+                {
+                    ImGui.Indent();
+
+                    ImGui.Text("Threshold Value:");
+                    ImGui.SameLine();
+                    var charThreshold3Value = cfg.CharacterTotalThreshold3Value;
+                    ImGui.SetNextItemWidth(250);
+                    if (ImGui.SliderInt("##charThreshold3value", ref charThreshold3Value, 1, 99990))
+                    {
+                        cfg.CharacterTotalThreshold3Value = charThreshold3Value;
+                        this.plugin.PluginInterface.SavePluginConfig(cfg);
+                    }
+                    if (ImGui.IsItemHovered())
+                    {
+                        ImGui.SetTooltip("Character totals at or above this threshold will be colored (1-99990)");
+                    }
+
+                    ImGui.Text("Warning Color:");
+                    ImGui.SameLine();
+                    var charThreshold3Color = cfg.CharacterTotalThreshold3Color;
+                    if (ImGui.ColorEdit4("##charThreshold3color", ref charThreshold3Color, ImGuiColorEditFlags.NoInputs))
+                    {
+                        cfg.CharacterTotalThreshold3Color = charThreshold3Color;
+                        this.plugin.PluginInterface.SavePluginConfig(cfg);
+                    }
+
+                    ImGui.Unindent();
+                }
+            }
+            
+            ImGui.Unindent();
         }
 
         // Automatic Venture Assignment
