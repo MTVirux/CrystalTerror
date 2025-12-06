@@ -10,8 +10,8 @@ namespace CrystalTerror
         Fire,
         Ice,
         Wind,
-        Lightning,
         Earth,
+        Lightning,
         Water,
     }
 
