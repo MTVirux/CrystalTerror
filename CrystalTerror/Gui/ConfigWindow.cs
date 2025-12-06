@@ -318,6 +318,9 @@ public class ConfigWindow : Window, IDisposable
                     cfg.IsEditMode = false;
                 }
                 
+                // Invalidate cache since sort option changed
+                this.plugin.InvalidateSortCache();
+                
                 this.plugin.PluginInterface.SavePluginConfig(cfg);
             }
 
@@ -695,6 +698,7 @@ public class ConfigWindow : Window, IDisposable
                     CharacterHelper.MergeInto(this.plugin.Characters, new[] { sc }, CharacterHelper.MergePolicy.Skip);
                     this.plugin.Config.Characters = this.plugin.Characters;
                     this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
+                    this.plugin.InvalidateSortCache();
                 }
             }
             ImGui.SameLine();
@@ -704,6 +708,7 @@ public class ConfigWindow : Window, IDisposable
                 CharacterHelper.MergeInto(this.plugin.Characters, list, CharacterHelper.MergePolicy.Overwrite);
                 this.plugin.Config.Characters = this.plugin.Characters;
                 this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
+                this.plugin.InvalidateSortCache();
             }
             ImGui.SameLine();
             if (ImGui.Button("Purge Characters"))
@@ -721,6 +726,7 @@ public class ConfigWindow : Window, IDisposable
                     this.plugin.Config.Characters.Clear();
                     // Save cleared config
                     this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
+                    this.plugin.InvalidateSortCache();
                     // Try to import the currently-logged-in character immediately after purging
                     try
                     {
@@ -730,6 +736,7 @@ public class ConfigWindow : Window, IDisposable
                             CharacterHelper.MergeInto(this.plugin.Characters, new[] { sc }, CharacterHelper.MergePolicy.Skip);
                             this.plugin.Config.Characters = this.plugin.Characters;
                             this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
+                            this.plugin.InvalidateSortCache();
                         }
                     }
                     catch

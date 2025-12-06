@@ -15,6 +15,11 @@ public class MainWindow : Window, IDisposable
 	private readonly CrystalTerrorPlugin plugin;
 	private TitleBarButton lockButton;
 	private readonly ITextureProvider textureProvider;
+	
+	// Cache for sorted characters to avoid re-sorting every frame
+	private List<StoredCharacter>? cachedSortedCharacters = null;
+	private CharacterSortOptions? cachedSortOption = null;
+	private int cachedCharacterCount = 0;
 
 	public MainWindow(CrystalTerrorPlugin plugin, ITextureProvider textureProvider)
 		: base("CrystalTerrorMainWindow")
@@ -215,14 +220,24 @@ public class MainWindow : Window, IDisposable
 	private List<StoredCharacter> GetSortedCharacters()
 	{
 		var characters = this.plugin.Characters.ToList();
+		var currentSortOption = this.plugin.Config.CharacterSortOption;
 		
-		var sorted = this.plugin.Config.CharacterSortOption switch
+		// Check if cache is valid
+		if (cachedSortedCharacters != null && 
+		    cachedSortOption == currentSortOption && 
+		    cachedCharacterCount == characters.Count)
+		{
+			return cachedSortedCharacters;
+		}
+		
+		// Cache is invalid, re-sort
+		var sorted = currentSortOption switch
 		{
 			CharacterSortOptions.Alphabetical => characters.OrderBy(c => c.Name).ToList(),
 			CharacterSortOptions.ReverseAlphabetical => characters.OrderByDescending(c => c.Name).ToList(),
 			CharacterSortOptions.World => characters.OrderBy(c => c.World).ThenBy(c => c.Name).ToList(),
 			CharacterSortOptions.ReverseWorld => characters.OrderByDescending(c => c.World).ThenByDescending(c => c.Name).ToList(),
-			CharacterSortOptions.AutoRetainer => characters, // Keep original order (assumed to be AutoRetainer order)
+			CharacterSortOptions.AutoRetainer => GetAutoRetainerOrderedCharacters(characters),
 			CharacterSortOptions.Custom => characters, // Keep original order (user-defined)
 			_ => characters
 		};
@@ -268,7 +283,91 @@ public class MainWindow : Window, IDisposable
 			}
 		}
 		
+		// Update cache
+		Services.LogService.Log.Debug($"[MainWindow] Updating character sort cache (SortOption={currentSortOption}, Count={characters.Count})");
+		cachedSortedCharacters = sorted;
+		cachedSortOption = currentSortOption;
+		cachedCharacterCount = characters.Count;
+		
 		return sorted;
+	}
+	
+	/// <summary>
+	/// Invalidate the sorted characters cache. Call this when character data changes.
+	/// </summary>
+	public void InvalidateSortCache()
+	{
+		Services.LogService.Log.Debug("[MainWindow] Character sort cache invalidated");
+		cachedSortedCharacters = null;
+	}
+
+	private List<StoredCharacter> GetAutoRetainerOrderedCharacters(List<StoredCharacter> characters)
+	{
+		try
+		{
+			// Query AutoRetainer IPC for the ordered list of character CIDs
+			var getRegisteredCIDs = Services.PluginInterfaceService.Interface.GetIpcSubscriber<List<ulong>>("AutoRetainer.GetRegisteredCIDs");
+			var orderedCIDs = getRegisteredCIDs?.InvokeFunc();
+			
+			if (orderedCIDs == null || orderedCIDs.Count == 0)
+			{
+				// AutoRetainer not available or no characters registered, fall back to original order
+				return characters;
+			}
+			
+			// Get offline character data for each CID to retrieve Name and World
+			var getOfflineData = Services.PluginInterfaceService.Interface.GetIpcSubscriber<ulong, object>("AutoRetainer.GetOfflineCharacterData");
+			if (getOfflineData == null)
+			{
+				return characters;
+			}
+			
+			// Build a list of (Name, World) tuples in the order from AutoRetainer
+			var autoRetainerOrder = new List<(string Name, string World)>();
+			foreach (var cid in orderedCIDs)
+			{
+				try
+				{
+					var charData = getOfflineData.InvokeFunc(cid);
+					if (charData != null)
+					{
+						dynamic dyn = charData;
+						string name = dyn.Name ?? string.Empty;
+						string world = dyn.World ?? string.Empty;
+						if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(world))
+						{
+							autoRetainerOrder.Add((name, world));
+						}
+					}
+				}
+				catch { /* Skip characters that fail to load */ }
+			}
+			
+			// Create a dictionary for quick lookup of characters by (Name, World)
+			var charactersByNameWorld = characters
+				.ToDictionary(c => (c.Name, c.World), c => c);
+			
+			// Build ordered list based on AutoRetainer's order
+			var ordered = new List<StoredCharacter>();
+			foreach (var (name, world) in autoRetainerOrder)
+			{
+				if (charactersByNameWorld.TryGetValue((name, world), out var character))
+				{
+					ordered.Add(character);
+					charactersByNameWorld.Remove((name, world)); // Remove so we don't duplicate
+				}
+			}
+			
+			// Append any characters that weren't in AutoRetainer's list at the end
+			ordered.AddRange(charactersByNameWorld.Values);
+			
+			return ordered;
+		}
+		catch
+		{
+			// If AutoRetainer IPC fails, fall back to original order
+			return characters;
+		}
 	}
 
 	public override void Draw()

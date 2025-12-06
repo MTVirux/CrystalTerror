@@ -176,6 +176,9 @@ namespace CrystalTerror
 
         public void OpenConfigUi()
             => this.configWindow.IsOpen = true;
+        
+        public void InvalidateSortCache()
+            => this.mainWindow.InvalidateSortCache();
 
         public void Dispose()
         {
@@ -246,6 +249,7 @@ namespace CrystalTerror
                         {
                             this.Config.Characters = this.Characters;
                             this.PluginInterface.SavePluginConfig(this.Config);
+                            this.mainWindow.InvalidateSortCache();
                         }
                         catch
                         {
@@ -255,11 +259,13 @@ namespace CrystalTerror
                     this.lastLocalContentId = contentId;
                     this.lastPlayerKey = currentKey;
                 }
-                else if (contentId == 0)
+                else if (contentId == 0 && this.lastLocalContentId != 0)
                 {
-                    // logged out, reset tracking id
+                    // logged out, reset tracking id (only once when transitioning from logged in to logged out)
                     this.lastLocalContentId = 0;
                     this.lastPlayerKey = string.Empty;
+                    // Invalidate cache since current character changed (logged out)
+                    this.mainWindow.InvalidateSortCache();
                 }
 
                 // Update retainer stats when at summoning bell
