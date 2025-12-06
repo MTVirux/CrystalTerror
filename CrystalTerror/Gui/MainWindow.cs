@@ -256,12 +256,20 @@ public class MainWindow : Window, IDisposable
 								ImGui.TableHeader(headerText);
 							}
 
-						// Character inventory row (format: shard/crystal/cluster per element)
-						ImGui.TableNextRow();
-						ImGui.TableSetColumnIndex(0);
-						ImGui.TextUnformatted(c.Name);
-						ImGui.TableSetColumnIndex(1);
-						ImGui.TextUnformatted(c.World);
+					// Character inventory row (format: shard/crystal/cluster per element)
+					ImGui.TableNextRow();
+					ImGui.TableSetColumnIndex(0);
+					ImGui.TextUnformatted(c.Name);
+					ImGui.TableSetColumnIndex(1);
+					{
+						var worldText = c.World;
+						var textSize = ImGui.CalcTextSize(worldText);
+						var cellWidth = ImGui.GetContentRegionAvail().X;
+						var offset = (cellWidth - textSize.X) * 0.5f;
+						if (offset > 0)
+							ImGui.SetCursorPosX(ImGui.GetCursorPosX() + offset);
+						ImGui.TextUnformatted(worldText);
+					}
 						for (int col = 0; col < elements.Length; ++col)
 						{
 							ImGui.TableSetColumnIndex(2 + col);
@@ -401,38 +409,6 @@ public class MainWindow : Window, IDisposable
 								}
 							}
 
-							ImGui.EndTable();
-						}
-						
-						// Dummy table for sizing reference
-						ImGui.Spacing();
-						var dummyTableId = $"dummy_table_{i}";
-						if (ImGui.BeginTable(dummyTableId, colCount, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg))
-						{
-							ImGui.TableSetupColumn("Retainer", ImGuiTableColumnFlags.WidthFixed, ConfigStatic.RetainerNameColumnWidth);
-							ImGui.TableSetupColumn("Job", ImGuiTableColumnFlags.WidthFixed, ConfigStatic.JobLevelColumnWidth);
-							foreach (var el in elements)
-							{
-								ImGui.TableSetupColumn(el.ToString(), ImGuiTableColumnFlags.WidthStretch);
-							}
-							
-							ImGui.TableHeadersRow();
-							
-							ImGui.TableNextRow();
-							ImGui.TableSetColumnIndex(0);
-							
-							// Display checkbox before retainer name if auto venture is enabled
-							if (this.plugin.Config.AutoVentureEnabled)
-							{
-								bool dummyCheckbox = false;
-								ImGui.Checkbox("##dummy_venture", ref dummyCheckbox);
-								ImGui.SameLine();
-							}
-							
-							ImGui.TextUnformatted("aaaaaaaaaaaaaaa");
-							ImGui.TableSetColumnIndex(1);
-							ImGui.TextUnformatted("Dummy");
-							
 							ImGui.EndTable();
 						}
 					}
