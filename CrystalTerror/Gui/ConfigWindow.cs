@@ -93,6 +93,17 @@ public class ConfigWindow : Window, IDisposable
                 cfg.ShowOnStart = show;
                 this.plugin.PluginInterface.SavePluginConfig(cfg);
             }
+
+            var ignoreEsc = cfg.IgnoreEscapeOnMainWindow;
+            if (ImGui.Checkbox("Main window ignores ESC key", ref ignoreEsc))
+            {
+                cfg.IgnoreEscapeOnMainWindow = ignoreEsc;
+                this.plugin.PluginInterface.SavePluginConfig(cfg);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("When enabled, pressing ESC will not close the main window");
+            }
         }
 
         // Display Filters

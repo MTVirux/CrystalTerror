@@ -82,6 +82,9 @@ public class MainWindow : Window, IDisposable
 		{
 			Flags &= ~ImGuiWindowFlags.NoMove;
 		}
+
+		// Handle ESC key ignore setting
+		RespectCloseHotkey = !this.plugin.Config.IgnoreEscapeOnMainWindow;
 	}
 
 	public override void PostDraw()

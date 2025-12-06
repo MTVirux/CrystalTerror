@@ -14,6 +14,11 @@ namespace CrystalTerror
         public bool ShowOnStart { get; set; } = true;
 
         /// <summary>
+        /// If true, the main window will not close when pressing ESC.
+        /// </summary>
+        public bool IgnoreEscapeOnMainWindow { get; set; } = false;
+
+        /// <summary>
         /// Stored characters persisted by Dalamud's plugin config system.
         /// </summary>
         public List<StoredCharacter> Characters { get; set; } = new List<StoredCharacter>();
