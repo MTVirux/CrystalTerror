@@ -4,7 +4,7 @@
 		"commands": [
 			{
 				"match": "\\.cs$",
-				"cmd": "dotnet build \"${workspaceFolder}\\CrystalTerror.sln\" -c Release"
+				"cmd": "dotnet build \"${workspaceFolder}\\CrystalTerror.sln\" -c Debug"
 			}
 		]
 	}
