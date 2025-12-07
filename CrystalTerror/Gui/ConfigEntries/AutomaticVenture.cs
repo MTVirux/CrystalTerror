@@ -26,7 +26,7 @@ public class AutomaticVenture : ConfigEntry
                 }
                 if (ImGui.IsItemHovered())
                 {
-                    ImGui.SetTooltip("Automatically assign ventures to retainers based on their lowest crystal/shard counts when opening the retainer list.");
+                    ImGui.SetTooltip("Automatically assign ventures to retainers based on their lowest crystal/shard counts.");
                 }
             })
 
@@ -73,7 +73,7 @@ public class AutomaticVenture : ConfigEntry
             {
                 var val = (int)Plugin.Config.AutoVentureThreshold;
                 ImGui.SetNextItemWidth(200);
-                if (ImGui.InputInt("Minimum Threshold", ref val))
+                if (ImGui.InputInt("Maximum Amount", ref val))
                 {
                     if (val < 0) val = 0;
                     Plugin.Config.AutoVentureThreshold = val;

@@ -46,6 +46,16 @@ namespace CrystalTerror
             // defaults are zero; explicit constructor kept for clarity
         }
 
+        public void Reset()
+        {
+            Fire_Shard = Fire_Crystal = Fire_Cluster = 0;
+            Ice_Shard = Ice_Crystal = Ice_Cluster = 0;
+            Wind_Shard = Wind_Crystal = Wind_Cluster = 0;
+            Lightning_Shard = Lightning_Crystal = Lightning_Cluster = 0;
+            Earth_Shard = Earth_Crystal = Earth_Cluster = 0;
+            Water_Shard = Water_Crystal = Water_Cluster = 0;
+        }
+
         public long GetCount(Element element, CrystalType type)
         {
             return type switch

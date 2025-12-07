@@ -393,6 +393,17 @@ public class MainWindow : Window, IDisposable
 		}
 
 		var sortedCharacters = this.GetSortedCharacters();
+
+		// If CTRL is held, show ignored characters/retainers as well
+		bool showIgnored = ImGui.GetIO().KeyCtrl;
+
+		// Filter out characters that are explicitly ignored, unless CTRL is held
+		if (!showIgnored)
+		{
+			sortedCharacters = sortedCharacters
+				.Where(c => !c.IsIgnored)
+				.ToList();
+		}
 		
 		// Filter out characters without gathering retainers if enabled
 		if (this.plugin.Config.HideNonGatheringCharacters)
@@ -474,7 +485,8 @@ public class MainWindow : Window, IDisposable
 			// Add retainer totals
 			if (c.Retainers != null)
 			{
-				foreach (var r in c.Retainers)
+				var headerRetainers = showIgnored ? c.Retainers : c.Retainers.Where(r => !r.IsIgnored);
+				foreach (var r in headerRetainers)
 				{
 					totalShard += r.Inventory?.GetCount(el, CrystalType.Shard) ?? 0;
 					totalCrystal += r.Inventory?.GetCount(el, CrystalType.Crystal) ?? 0;
@@ -596,7 +608,42 @@ public class MainWindow : Window, IDisposable
 		if (this.plugin.Config.ShowTotalsInHeaders && totalParts.Count > 0)
 		{
 			// Render main header text
-			headerOpen = ImGui.CollapsingHeader(header + " —" + $"##{i}");
+			var headerId = header + " —" + $"##{i}";
+			headerOpen = ImGui.CollapsingHeader(headerId);
+			
+			// Attach context menu to the header item
+			if (ImGui.BeginPopupContextItem($"char_ctx_{i}"))
+			{
+				if (ImGui.MenuItem("Reset character inventory"))
+				{
+					c.Inventory?.Reset();
+					if (c.Retainers != null)
+					{
+						foreach (var r in c.Retainers)
+							r.Inventory?.Reset();
+					}
+					ConfigHelper.SaveAndSync(this.plugin.Config, this.plugin.Characters);
+				}
+				if (!c.IsIgnored)
+				{
+					if (ImGui.MenuItem("Ignore character"))
+					{
+						c.IsIgnored = true;
+						ConfigHelper.SaveAndSync(this.plugin.Config, this.plugin.Characters);
+						this.plugin.InvalidateSortCache();
+					}
+				}
+				else
+				{
+					if (ImGui.MenuItem("Unignore character"))
+					{
+						c.IsIgnored = false;
+						ConfigHelper.SaveAndSync(this.plugin.Config, this.plugin.Characters);
+						this.plugin.InvalidateSortCache();
+					}
+				}
+				ImGui.EndPopup();
+			}
 			
 			// Render colored totals on the same line
 			ImGui.SameLine(0, 5);
@@ -621,7 +668,42 @@ public class MainWindow : Window, IDisposable
 		}
 		else
 		{
-			headerOpen = ImGui.CollapsingHeader(header + $"##{i}");
+			var headerId = header + $"##{i}";
+			headerOpen = ImGui.CollapsingHeader(headerId);
+			
+			// Attach context menu to the header item
+			if (ImGui.BeginPopupContextItem($"char_ctx_{i}"))
+			{
+				if (ImGui.MenuItem("Reset character inventory"))
+				{
+					c.Inventory?.Reset();
+					if (c.Retainers != null)
+					{
+						foreach (var r in c.Retainers)
+							r.Inventory?.Reset();
+					}
+					ConfigHelper.SaveAndSync(this.plugin.Config, this.plugin.Characters);
+				}
+				if (!c.IsIgnored)
+				{
+					if (ImGui.MenuItem("Ignore character"))
+					{
+						c.IsIgnored = true;
+						ConfigHelper.SaveAndSync(this.plugin.Config, this.plugin.Characters);
+						this.plugin.InvalidateSortCache();
+					}
+				}
+				else
+				{
+					if (ImGui.MenuItem("Unignore character"))
+					{
+						c.IsIgnored = false;
+						ConfigHelper.SaveAndSync(this.plugin.Config, this.plugin.Characters);
+						this.plugin.InvalidateSortCache();
+					}
+				}
+				ImGui.EndPopup();
+			}
 		}
 		
 		if (colorsPushed > 0)
@@ -755,9 +837,10 @@ public class MainWindow : Window, IDisposable
 							ImGui.TableHeader(headerText);
 						}
 
-						for (int j = 0; j < c.Retainers.Count; ++j)
+						var visibleRetainers = showIgnored ? c.Retainers.ToList() : c.Retainers.Where(r => !r.IsIgnored).ToList();
+						for (int j = 0; j < visibleRetainers.Count; ++j)
 						{
-						var r = c.Retainers[j];
+						var r = visibleRetainers[j];
 
 						ImGui.TableNextRow();
 						ImGui.TableSetColumnIndex(0);
@@ -791,6 +874,33 @@ public class MainWindow : Window, IDisposable
 						
 						// Display retainer name
 						ImGui.TextUnformatted($"{r.Name}");
+						if (ImGui.BeginPopupContextItem($"ret_ctx_{i}_{j}"))
+						{
+							if (ImGui.MenuItem("Reset retainer inventory"))
+							{
+								r.Inventory?.Reset();
+								ConfigHelper.SaveAndSync(this.plugin.Config, this.plugin.Characters);
+							}
+							if (!r.IsIgnored)
+							{
+								if (ImGui.MenuItem("Ignore retainer"))
+								{
+									r.IsIgnored = true;
+									// IsIgnored setter ensures EnableAutoVenture is disabled
+									ConfigHelper.SaveAndSync(this.plugin.Config, this.plugin.Characters);
+								}
+							}
+							else
+							{
+								if (ImGui.MenuItem("Unignore retainer"))
+								{
+									r.IsIgnored = false;
+									// Caller may re-enable AutoVenture manually from UI if desired
+									ConfigHelper.SaveAndSync(this.plugin.Config, this.plugin.Characters);
+								}
+							}
+							ImGui.EndPopup();
+						}
 						
 						ImGui.TableSetColumnIndex(1);
 						

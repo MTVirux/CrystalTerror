@@ -21,5 +21,8 @@ namespace CrystalTerror
         public required List<Retainer> Retainers { get; set; }
         /// <summary>Inventory for this character.</summary>
         public required Inventory Inventory { get; set; }
+
+        /// <summary>If true, this character is hidden from the main window UI.</summary>
+        public bool IsIgnored { get; set; } = false;
     }
 }

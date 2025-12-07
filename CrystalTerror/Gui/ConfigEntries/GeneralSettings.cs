@@ -147,6 +147,17 @@ public class GeneralSettings : ConfigEntry
                 {
                     ImGui.SetTooltip("Display numbers in table cells as 22k, 1.5M, etc. instead of full numbers");
                 }
+            })
+
+            .Section("Visibility")
+            .Widget("Hide characters with no gathering retainers", (x) =>
+            {
+                var val = Plugin.Config.HideNonGatheringCharacters;
+                if (ImGui.Checkbox(x, ref val))
+                {
+                    Plugin.Config.HideNonGatheringCharacters = val;
+                    ConfigHelper.Save(Plugin.Config);
+                }
             });
     }
 }

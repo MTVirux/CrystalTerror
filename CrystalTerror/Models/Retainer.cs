@@ -32,6 +32,23 @@ namespace CrystalTerror
         /// <summary>If true, this retainer will be included in automatic venture handling. Defaults to true.</summary>
         public bool EnableAutoVenture { get; set; } = true;
 
+        /// <summary>If true, this retainer is hidden from the main window UI.</summary>
+        private bool isIgnored = false;
+
+        /// <summary>If true, this retainer is hidden from the main window UI and excluded from automatic ventures.</summary>
+        public bool IsIgnored
+        {
+            get => isIgnored;
+            set
+            {
+                isIgnored = value;
+                if (isIgnored)
+                {
+                    EnableAutoVenture = false;
+                }
+            }
+        }
+
         /// <summary>Item counts for the retainer's inventory.</summary>
         public Inventory Inventory { get; set; } = new Inventory();
 
