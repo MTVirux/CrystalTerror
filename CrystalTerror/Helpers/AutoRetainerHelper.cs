@@ -23,8 +23,20 @@ namespace CrystalTerror
         {
             var outList = new List<RetainerInfo>();
 
+            try
+            {
+                Services.LogService.Log.Debug("[CrystalTerror] Starting AutoRetainer import via IPC");
+            }
+            catch { }
+
             var getRegistered = Services.PluginInterfaceService.Interface.GetIpcSubscriber<List<ulong>>("AutoRetainer.GetRegisteredCIDs");
             var cids = getRegistered?.InvokeFunc() ?? new List<ulong>();
+
+            try
+            {
+                Services.LogService.Log.Debug($"[CrystalTerror] AutoRetainer reported {cids.Count} registered content IDs");
+            }
+            catch { }
 
             var getOffline = Services.PluginInterfaceService.Interface.GetIpcSubscriber<ulong, object>("AutoRetainer.GetOfflineCharacterData");
             if (getOffline == null)
@@ -76,6 +88,11 @@ namespace CrystalTerror
                                 catch { /* AdditionalRetainerData not available */ }
 
                                 outList.Add(new RetainerInfo(name, atid, job, level, ilvl, gathering, perception, ownerName, ownerWorld));
+                                try
+                                {
+                                    Services.LogService.Log.Debug($"[CrystalTerror] AutoRetainer found retainer: {name} (Atid={atid}) Owner={ownerName}:{ownerWorld} Level={level} Ilvl={ilvl} Gathering={gathering} Perception={perception}");
+                                }
+                                catch { }
                             }
                             catch { /* tolerate malformed entries */ }
                         }
@@ -155,6 +172,11 @@ namespace CrystalTerror
 
                 if (currentChar == null)
                 {
+                    try
+                    {
+                        Services.LogService.Log.Debug($"[CrystalTerror] No matching character found for current player '{playerName}' (ContentId={contentId}); cannot apply inventory/venture decisions.");
+                    }
+                    catch { }
                     return;
                 }
 
@@ -162,6 +184,11 @@ namespace CrystalTerror
                 var retainer = currentChar.Retainers.FirstOrDefault(r => r.Name == retainerName);
                 if (retainer == null)
                 {
+                    try
+                    {
+                        Services.LogService.Log.Debug($"[CrystalTerror] Retainer named '{retainerName}' not found for character '{currentChar.Name}': cannot apply venture logic.");
+                    }
+                    catch { }
                     return;
                 }
 

@@ -70,6 +70,11 @@ namespace CrystalTerror
                 Inventory = new Inventory()
             };
 
+            try
+            {
+                Services.LogService.Log.Debug($"[CrystalTerror] Importing character inventory for {sc.Name}:{sc.World} (ContentId={Services.PlayerService.State.ContentId})");
+            }
+            catch { }
             // Try to populate character crystal inventory from InventoryManager
             try
             {
@@ -101,6 +106,14 @@ namespace CrystalTerror
                                     try { sc.Inventory.SetCount(elements[ei], crystalTypes[ti], count); } catch { }
                                 }
                             }
+                            try
+                            {
+                                // Log the imported character crystal totals at debug level
+                                var dict = sc.Inventory.ToDictionary();
+                                var parts = dict.Select(kv => $"{kv.Key}={kv.Value}");
+                                Services.LogService.Log.Debug("[CrystalTerror] Character crystals: " + string.Join(", ", parts));
+                            }
+                            catch { }
                         }
                     }
                 }
