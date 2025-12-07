@@ -61,7 +61,7 @@ namespace CrystalTerror.Helpers
                 // Log all characters (pre-dedupe):
                 foreach (var character in characters)
                 {
-                    LogService.Log.Information($"[ConfigHelper] Character: {character.Name}:{character.World} with {character.Retainers.Count} retainers.");
+                    LogService.Log.Debug($"[ConfigHelper] Character: {character.Name}:{character.World} with {character.Retainers.Count} retainers.");
                 }
 
                 // Deduplicate characters before persisting and keep the in-memory list in sync.

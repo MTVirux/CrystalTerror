@@ -110,8 +110,8 @@ namespace CrystalTerror
                 if (allAboveThreshold)
                 {
                     // All crystal/shard types are above threshold, return null to skip venture assignment
-                    log?.Information($"[VentureHelper] All crystal/shard types for {retainer.Name} are above threshold ({config.AutoVentureThreshold}). Lowest count: {candidates.Min(c => c.count)}");
-                    log?.Information($"  Counts: {string.Join(", ", candidates.OrderBy(c => c.element).ThenBy(c => c.type).Select(c => $"{c.element} {c.type}={c.count}"))}");
+                    log?.Debug($"[VentureHelper] All crystal/shard types for {retainer.Name} are above threshold ({config.AutoVentureThreshold}). Lowest count: {candidates.Min(c => c.count)}");
+                    log?.Debug($"  Counts: {string.Join(", ", candidates.OrderBy(c => c.element).ThenBy(c => c.type).Select(c => $"{c.element} {c.type}={c.count}"))}");
                     return null;
                 }
             }

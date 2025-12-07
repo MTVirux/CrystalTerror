@@ -164,7 +164,7 @@ namespace CrystalTerror
                 catch (Exception ex)
                 {
                     // AutoRetainer not available
-                    this.pluginLog.Warning($"AutoRetainer IPC not available: {ex.Message}");
+                    this.pluginLog.Debug($"AutoRetainer IPC not available: {ex.Message}");
                 }
             }
             catch

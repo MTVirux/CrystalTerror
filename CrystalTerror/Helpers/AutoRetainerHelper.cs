@@ -115,7 +115,7 @@ namespace CrystalTerror
             {
                 try
                 {
-                    Services.LogService.Log.Information($"Retainer addon opened (ContentId={Services.PlayerService.State.ContentId}). Triggering import.");
+                    Services.LogService.Log.Debug("Retainer list opened. Triggering import.");
                 }
                 catch { }
 
@@ -154,7 +154,7 @@ namespace CrystalTerror
                 // Check if we're already processing a venture to prevent multiple triggers
                 if (isProcessingVenture)
                 {
-                    log.Information($"[CrystalTerror] Venture processing already in progress, ignoring duplicate trigger for {retainerName}");
+                    log.Debug($"[CrystalTerror] Venture processing already in progress, ignoring duplicate trigger for {retainerName}");
                     return;
                 }
 
@@ -163,7 +163,7 @@ namespace CrystalTerror
                     return;
 
                 isProcessingVenture = true;
-                log.Information($"[CrystalTerror] AutoRetainer venture hook triggered for retainer: {retainerName}");
+                log.Debug($"[CrystalTerror] AutoRetainer venture hook triggered for retainer: {retainerName}");
 
                 // Find the current character
                 var contentId = Services.PlayerService.State.ContentId;
@@ -193,12 +193,12 @@ namespace CrystalTerror
                 }
 
                 // Log retainer stats for Informationging
-                log.Information($"[CrystalTerror] {retainer.Name}: Level={retainer.Level}, Gathering={retainer.Gathering}, Job={ClassJobExtensions.GetAbreviation(retainer.Job)}");
+                log.Debug($"[CrystalTerror] {retainer.Name}: Level={retainer.Level}, Gathering={retainer.Gathering}, Job={ClassJobExtensions.GetAbreviation(retainer.Job)}");
 
                 // Check if auto venture is enabled for this retainer
                 if (!retainer.EnableAutoVenture)
                 {
-                    log.Information($"[CrystalTerror] ✗ Skipping {retainer.Name} - Auto venture disabled for this retainer");
+                    log.Debug($"[CrystalTerror] ✗ Skipping {retainer.Name} - Auto venture disabled for this retainer");
                     return;
                 }
 
@@ -206,7 +206,7 @@ namespace CrystalTerror
                 if (retainer.Job == null || !VentureHelper.IsRetainerEligibleForVenture(retainer, CrystalType.Shard))
                 {
                     var jobName = retainer.Job.HasValue ? ClassJobExtensions.GetAbreviation(retainer.Job) : "Unknown";
-                    log.Information($"[CrystalTerror] ✗ Skipping {retainer.Name} - Job: {jobName} (not MIN/BTN/FSH)");
+                    log.Debug($"[CrystalTerror] ✗ Skipping {retainer.Name} - Job: {jobName} (not MIN/BTN/FSH)");
                     return;
                 }
 
@@ -219,11 +219,8 @@ namespace CrystalTerror
                 }
                 else
                 {
-                    // No suitable venture found
-                    {
-                        log.Information($"[CrystalTerror] ✗ No suitable venture for {retainer.Name} - Level: {retainer.Level}, Gathering: {retainer.Gathering}");
-                        log.Information($"  (Crystals require Level > 26 AND Gathering > 90)");
-                    }
+                    log.Debug($"[CrystalTerror] ✗ No suitable venture for {retainer.Name} - Level: {retainer.Level}, Gathering: {retainer.Gathering}");
+                    log.Debug($"  (Crystals require Level > 26 AND Gathering > 90)");
                 }
             }
             catch (Exception ex)
