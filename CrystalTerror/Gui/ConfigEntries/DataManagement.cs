@@ -34,6 +34,22 @@ public class DataManagement : ConfigEntry
                     CharacterHelper.MergeInto(Plugin.Characters, list, CharacterHelper.MergePolicy.Overwrite);
                     ConfigHelper.SaveAndSync(Plugin.Config, Plugin.Characters);
                     Plugin.InvalidateSortCache();
+                    // After importing from AutoRetainer, also import the currently-logged-in character
+                    try
+                    {
+                        var sc = CharacterHelper.ImportCurrentCharacter();
+                        if (sc != null)
+                        {
+                            // Overwrite the current character entry with live data
+                            CharacterHelper.MergeInto(Plugin.Characters, new[] { sc }, CharacterHelper.MergePolicy.Overwrite);
+                            ConfigHelper.SaveAndSync(Plugin.Config, Plugin.Characters);
+                            Plugin.InvalidateSortCache();
+                        }
+                    }
+                    catch
+                    {
+                        // ignore any errors while attempting to import current character
+                    }
                 }
                 ImGui.SameLine();
                 if (ImGui.Button("Purge Characters"))
