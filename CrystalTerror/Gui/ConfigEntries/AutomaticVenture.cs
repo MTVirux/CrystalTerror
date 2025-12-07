@@ -1,5 +1,6 @@
 namespace CrystalTerror.Gui.ConfigEntries;
 
+using CrystalTerror.Helpers;
 using NightmareUI.PrimaryUI;
 using System.Numerics;
 using ImGui = Dalamud.Bindings.ImGui.ImGui;
@@ -21,7 +22,7 @@ public class AutomaticVenture : ConfigEntry
                 if (ImGui.Checkbox(x, ref val))
                 {
                     Plugin.Config.AutoVentureEnabled = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
                 if (ImGui.IsItemHovered())
                 {
@@ -37,7 +38,7 @@ public class AutomaticVenture : ConfigEntry
                 if (ImGui.Checkbox(x, ref val))
                 {
                     Plugin.Config.AutoVentureShardsEnabled = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
                 if (ImGui.IsItemHovered())
                 {
@@ -50,7 +51,7 @@ public class AutomaticVenture : ConfigEntry
                 if (ImGui.Checkbox(x, ref val))
                 {
                     Plugin.Config.AutoVentureCrystalsEnabled = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
                 if (ImGui.IsItemHovered())
                 {
@@ -76,7 +77,7 @@ public class AutomaticVenture : ConfigEntry
                 {
                     if (val < 0) val = 0;
                     Plugin.Config.AutoVentureThreshold = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
                 if (ImGui.IsItemHovered())
                 {

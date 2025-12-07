@@ -4,6 +4,7 @@ namespace CrystalTerror
     using System.Collections;
     using System.Collections.Generic;
     using System.Linq;
+    using CrystalTerror.Helpers;
     using Dalamud.Interface.Windowing;
     using Dalamud.Plugin;
     using Dalamud.Game.Command;
@@ -55,7 +56,7 @@ namespace CrystalTerror
             // Initialize global services
             Services.ServiceManager.Initialize(pluginInterface, playerState, objects, dataManager, pluginLog, condition);
 
-            this.Config = this.PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
+            this.Config = ConfigHelper.Load();
 
             this.commandManager = commandManager;
             this.playerState = playerState;
@@ -122,14 +123,7 @@ namespace CrystalTerror
                         if (sc != null)
                         {
                             CharacterHelper.MergeInto(this.Characters, new[] { sc }, CharacterHelper.MergePolicy.Skip);
-                            try
-                            {
-                                this.Config.Characters = this.Characters;
-                                this.PluginInterface.SavePluginConfig(this.Config);
-                            }
-                            catch
-                            {
-                            }
+                            ConfigHelper.Save(this.Config, this.Characters);
                         }
 
                         this.lastLocalContentId = current;
@@ -200,7 +194,7 @@ namespace CrystalTerror
 
             if (disposing)
             {
-                this.PluginInterface.SavePluginConfig(this.Config);
+                ConfigHelper.Save(this.Config, this.Characters);
 
                 this.windowSystem.RemoveAllWindows();
                 this.mainWindow.Dispose();
@@ -255,15 +249,8 @@ namespace CrystalTerror
                     if (sc != null)
                     {
                         CharacterHelper.MergeInto(this.Characters, new[] { sc }, CharacterHelper.MergePolicy.Skip);
-                        try
-                        {
-                            this.Config.Characters = this.Characters;
-                            this.PluginInterface.SavePluginConfig(this.Config);
-                            this.mainWindow.InvalidateSortCache();
-                        }
-                        catch
-                        {
-                        }
+                        ConfigHelper.Save(this.Config, this.Characters);
+                        this.mainWindow.InvalidateSortCache();
                     }
 
                     this.lastLocalContentId = contentId;

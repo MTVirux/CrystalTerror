@@ -1,5 +1,6 @@
 namespace CrystalTerror.Gui.ConfigEntries;
 
+using CrystalTerror.Helpers;
 using NightmareUI.PrimaryUI;
 using ImGui = Dalamud.Bindings.ImGui.ImGui;
 using Dalamud.Bindings.ImGui;
@@ -41,7 +42,7 @@ public class CharacterSorting : ConfigEntry
                     
                     // Invalidate cache since sort option changed
                     Plugin.InvalidateSortCache();
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
                 if (ImGui.IsItemHovered())
                 {
@@ -56,7 +57,7 @@ public class CharacterSorting : ConfigEntry
                 if (ImGui.Button(editButtonText))
                 {
                     Plugin.Config.IsEditMode = !Plugin.Config.IsEditMode;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
 
                     // Open main window when entering edit mode
                     if (Plugin.Config.IsEditMode)
@@ -90,7 +91,7 @@ public class CharacterSorting : ConfigEntry
                 if (ImGui.Checkbox(label, ref showCurrentAtTop))
                 {
                     Plugin.Config.ShowCurrentCharacterAtTop = showCurrentAtTop;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
                 if (ImGui.IsItemHovered())
                 {

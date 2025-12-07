@@ -1,5 +1,6 @@
 namespace CrystalTerror.Gui.ConfigEntries;
 
+using CrystalTerror.Helpers;
 using NightmareUI.PrimaryUI;
 using System.Numerics;
 using ImGui = Dalamud.Bindings.ImGui.ImGui;
@@ -24,7 +25,7 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.Checkbox(x, ref val))
                 {
                     Plugin.Config.RetainerCrystalThreshold1Enabled = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
             })
             .If(() => Plugin.Config.RetainerCrystalThreshold1Enabled)
@@ -38,7 +39,7 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.SliderInt("##threshold1value", ref val, 1, 9999))
                 {
                     Plugin.Config.RetainerCrystalThreshold1Value = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
                 if (ImGui.IsItemHovered())
                 {
@@ -53,7 +54,7 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.ColorEdit4("##retainerThreshold1Color", ref color, ImGuiColorEditFlags.NoInputs))
                 {
                     Plugin.Config.RetainerCrystalThreshold1Color = color;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
             })
             .Unindent()
@@ -66,7 +67,7 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.Checkbox(x, ref val))
                 {
                     Plugin.Config.RetainerCrystalThreshold2Enabled = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
             })
             .If(() => Plugin.Config.RetainerCrystalThreshold2Enabled)
@@ -80,7 +81,7 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.SliderInt("##threshold2value", ref val, 1, 9999))
                 {
                     Plugin.Config.RetainerCrystalThreshold2Value = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
                 if (ImGui.IsItemHovered())
                 {
@@ -95,7 +96,7 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.ColorEdit4("##retainerThreshold2Color", ref color, ImGuiColorEditFlags.NoInputs))
                 {
                     Plugin.Config.RetainerCrystalThreshold2Color = color;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
             })
             .Unindent()
@@ -108,7 +109,7 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.Checkbox(x, ref val))
                 {
                     Plugin.Config.RetainerCrystalThreshold3Enabled = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
             })
             .If(() => Plugin.Config.RetainerCrystalThreshold3Enabled)
@@ -122,7 +123,7 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.SliderInt("##threshold3value", ref val, 1, 9999))
                 {
                     Plugin.Config.RetainerCrystalThreshold3Value = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
                 if (ImGui.IsItemHovered())
                 {
@@ -137,7 +138,7 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.ColorEdit4("##retainerThreshold3Color", ref color, ImGuiColorEditFlags.NoInputs))
                 {
                     Plugin.Config.RetainerCrystalThreshold3Color = color;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
             })
             .Unindent()
@@ -153,7 +154,7 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.Checkbox(x, ref val))
                 {
                     Plugin.Config.CharacterTotalThreshold1Enabled = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
             })
             .If(() => Plugin.Config.CharacterTotalThreshold1Enabled)
@@ -167,7 +168,7 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.SliderInt("##charThreshold1value", ref val, 1, 599940))
                 {
                     Plugin.Config.CharacterTotalThreshold1Value = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
                 if (ImGui.IsItemHovered())
                 {
@@ -182,7 +183,7 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.ColorEdit4("##charTotalThreshold1Color", ref color, ImGuiColorEditFlags.NoInputs))
                 {
                     Plugin.Config.CharacterTotalThreshold1Color = color;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
             })
             .Unindent()
@@ -195,7 +196,7 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.Checkbox(x, ref val))
                 {
                     Plugin.Config.CharacterTotalThreshold2Enabled = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
             })
             .If(() => Plugin.Config.CharacterTotalThreshold2Enabled)
@@ -209,7 +210,7 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.SliderInt("##charThreshold2value", ref val, 1, 599940))
                 {
                     Plugin.Config.CharacterTotalThreshold2Value = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
                 if (ImGui.IsItemHovered())
                 {
@@ -224,7 +225,7 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.ColorEdit4("##charTotalThreshold2Color", ref color, ImGuiColorEditFlags.NoInputs))
                 {
                     Plugin.Config.CharacterTotalThreshold2Color = color;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
             })
             .Unindent()
@@ -237,7 +238,7 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.Checkbox(x, ref val))
                 {
                     Plugin.Config.CharacterTotalThreshold3Enabled = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
             })
             .If(() => Plugin.Config.CharacterTotalThreshold3Enabled)
@@ -251,7 +252,7 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.SliderInt("##charThreshold3value", ref val, 1, 599940))
                 {
                     Plugin.Config.CharacterTotalThreshold3Value = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
                 if (ImGui.IsItemHovered())
                 {
@@ -266,7 +267,7 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.ColorEdit4("##charTotalThreshold3Color", ref color, ImGuiColorEditFlags.NoInputs))
                 {
                     Plugin.Config.CharacterTotalThreshold3Color = color;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
             })
             .Unindent()

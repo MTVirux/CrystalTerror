@@ -1,6 +1,7 @@
 namespace CrystalTerror.Gui;
 
 using System;
+using CrystalTerror.Helpers;
 using Dalamud.Interface.Windowing;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
@@ -21,7 +22,9 @@ public class ConfigWindow : Window, IDisposable
         new CharacterSorting(),
         new WarningThresholds(),
         new AutomaticVenture(),
+#if DEBUG
         new DataManagement(),
+#endif
     ];
 
     public ConfigWindow(CrystalTerrorPlugin plugin)
@@ -68,7 +71,7 @@ public class ConfigWindow : Window, IDisposable
                 this.plugin.Config.ConfigWindowSize = ImGui.GetWindowSize();
             }
 
-            this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
+            ConfigHelper.Save(this.plugin.Config);
         }
     }
 
@@ -100,6 +103,6 @@ public class ConfigWindow : Window, IDisposable
 
     public override void OnClose()
     {
-        this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
+        ConfigHelper.Save(this.plugin.Config);
     }
 }

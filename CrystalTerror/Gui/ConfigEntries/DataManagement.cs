@@ -1,5 +1,6 @@
 namespace CrystalTerror.Gui.ConfigEntries;
 
+using CrystalTerror.Helpers;
 using NightmareUI.PrimaryUI;
 using ImGui = Dalamud.Bindings.ImGui.ImGui;
 using Dalamud.Bindings.ImGui;
@@ -22,8 +23,7 @@ public class DataManagement : ConfigEntry
                     if (sc != null)
                     {
                         CharacterHelper.MergeInto(Plugin.Characters, new[] { sc }, CharacterHelper.MergePolicy.Skip);
-                        Plugin.Config.Characters = Plugin.Characters;
-                        Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                        ConfigHelper.Save(Plugin.Config, Plugin.Characters);
                         Plugin.InvalidateSortCache();
                     }
                 }
@@ -32,8 +32,7 @@ public class DataManagement : ConfigEntry
                 {
                     var list = CharacterHelper.ImportFromAutoRetainer();
                     CharacterHelper.MergeInto(Plugin.Characters, list, CharacterHelper.MergePolicy.Overwrite);
-                    Plugin.Config.Characters = Plugin.Characters;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config, Plugin.Characters);
                     Plugin.InvalidateSortCache();
                 }
                 ImGui.SameLine();
@@ -51,7 +50,7 @@ public class DataManagement : ConfigEntry
                         Plugin.Characters.Clear();
                         Plugin.Config.Characters.Clear();
                         // Save cleared config
-                        Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                        ConfigHelper.Save(Plugin.Config, Plugin.Characters);
                         Plugin.InvalidateSortCache();
                         // Try to import the currently-logged-in character immediately after purging
                         try
@@ -60,8 +59,7 @@ public class DataManagement : ConfigEntry
                             if (sc != null)
                             {
                                 CharacterHelper.MergeInto(Plugin.Characters, new[] { sc }, CharacterHelper.MergePolicy.Skip);
-                                Plugin.Config.Characters = Plugin.Characters;
-                                Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                                ConfigHelper.Save(Plugin.Config, Plugin.Characters);
                                 Plugin.InvalidateSortCache();
                             }
                         }

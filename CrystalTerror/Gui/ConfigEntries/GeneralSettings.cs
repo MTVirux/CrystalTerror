@@ -1,5 +1,6 @@
 namespace CrystalTerror.Gui.ConfigEntries;
 
+using CrystalTerror.Helpers;
 using NightmareUI.PrimaryUI;
 using ImGui = Dalamud.Bindings.ImGui.ImGui;
 using Dalamud.Bindings.ImGui;
@@ -20,7 +21,7 @@ public class GeneralSettings : ConfigEntry
                 if (ImGui.Checkbox(x, ref val))
                 {
                     Plugin.Config.ShowOnStart = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
             })
             .Widget("Main window ignores ESC key", (x) =>
@@ -29,7 +30,7 @@ public class GeneralSettings : ConfigEntry
                 if (ImGui.Checkbox(x, ref val))
                 {
                     Plugin.Config.IgnoreEscapeOnMainWindow = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
                 if (ImGui.IsItemHovered())
                 {
@@ -44,7 +45,7 @@ public class GeneralSettings : ConfigEntry
                 if (ImGui.Checkbox(x, ref val))
                 {
                     Plugin.Config.ShowTotalsInHeaders = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
                 if (ImGui.IsItemHovered())
                 {
@@ -60,7 +61,7 @@ public class GeneralSettings : ConfigEntry
                 if (ImGui.Checkbox(x, ref val))
                 {
                     Plugin.Config.ShowElementNamesInTotals = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
                 if (ImGui.IsItemHovered())
                 {
@@ -76,7 +77,7 @@ public class GeneralSettings : ConfigEntry
                 if (ImGui.Checkbox(x, ref val))
                 {
                     Plugin.Config.UseAbbreviatedElementNames = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
                 if (ImGui.IsItemHovered())
                 {
@@ -92,7 +93,7 @@ public class GeneralSettings : ConfigEntry
                 if (ImGui.Checkbox(x, ref val))
                 {
                     Plugin.Config.UseReducedNotationInHeaders = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
                 if (ImGui.IsItemHovered())
                 {
@@ -108,7 +109,7 @@ public class GeneralSettings : ConfigEntry
                 if (ImGui.Checkbox(x, ref val))
                 {
                     Plugin.Config.ColorCurrentCharacter = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
                 if (ImGui.IsItemHovered())
                 {
@@ -124,7 +125,7 @@ public class GeneralSettings : ConfigEntry
                 if (ImGui.ColorEdit4(x, ref color, ImGuiColorEditFlags.NoInputs))
                 {
                     Plugin.Config.CurrentCharacterColor = color;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
             })
             .Unindent()
@@ -137,7 +138,7 @@ public class GeneralSettings : ConfigEntry
                 if (ImGui.Checkbox(x, ref val))
                 {
                     Plugin.Config.UseReducedNotationInTables = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
                 if (ImGui.IsItemHovered())
                 {

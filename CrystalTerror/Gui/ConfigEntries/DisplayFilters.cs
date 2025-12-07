@@ -1,5 +1,6 @@
 namespace CrystalTerror.Gui.ConfigEntries;
 
+using CrystalTerror.Helpers;
 using NightmareUI.PrimaryUI;
 using ImGui = Dalamud.Bindings.ImGui.ImGui;
 using Dalamud.Bindings.ImGui;
@@ -20,7 +21,7 @@ public class DisplayFilters : ConfigEntry
                 if (ImGui.Checkbox(x, ref val))
                 {
                     Plugin.Config.HideNonGatheringCharacters = val;
-                    Plugin.PluginInterface.SavePluginConfig(Plugin.Config);
+                    ConfigHelper.Save(Plugin.Config);
                 }
                 if (ImGui.IsItemHovered())
                 {

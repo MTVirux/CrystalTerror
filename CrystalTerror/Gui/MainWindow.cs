@@ -3,6 +3,7 @@ namespace CrystalTerror.Gui;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using CrystalTerror.Helpers;
 using Dalamud.Interface.Windowing;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
@@ -70,7 +71,7 @@ public class MainWindow : Window, IDisposable
 				this.plugin.Config.MainWindowSize = ImGui.GetWindowSize();
 			}
 
-			this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
+			ConfigHelper.Save(this.plugin.Config);
 		}
 	}
 
@@ -424,9 +425,8 @@ public class MainWindow : Window, IDisposable
 						this.plugin.Characters.RemoveAt(idx);
 						this.plugin.Characters.Insert(idx - 1, c);
 						
-						// Save updated order
-						this.plugin.Config.Characters = this.plugin.Characters;
-						this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
+					// Save updated order
+					ConfigHelper.Save(this.plugin.Config, this.plugin.Characters);
 					}
 				}
 				if (!canMoveUp)
@@ -440,26 +440,23 @@ public class MainWindow : Window, IDisposable
 				{
 					ImGui.BeginDisabled();
 				}
-				if (ImGui.ArrowButton($"down_{i}", ImGuiDir.Down))
+			if (ImGui.ArrowButton($"down_{i}", ImGuiDir.Down))
+			{
+				// Move character down
+				var idx = this.plugin.Characters.IndexOf(c);
+				if (idx >= 0 && idx < this.plugin.Characters.Count - 1)
 				{
-					// Move character down
-					var idx = this.plugin.Characters.IndexOf(c);
-					if (idx >= 0 && idx < this.plugin.Characters.Count - 1)
-					{
-						this.plugin.Characters.RemoveAt(idx);
-						this.plugin.Characters.Insert(idx + 1, c);
-						
-						// Save updated order
-						this.plugin.Config.Characters = this.plugin.Characters;
-						this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
-					}
+					this.plugin.Characters.RemoveAt(idx);
+					this.plugin.Characters.Insert(idx + 1, c);
+					
+					// Save updated order
+					ConfigHelper.Save(this.plugin.Config, this.plugin.Characters);
 				}
-				if (!canMoveDown)
-				{
-					ImGui.EndDisabled();
-				}
-				
-				ImGui.SameLine();
+			}
+			if (!canMoveDown)
+			{
+				ImGui.EndDisabled();
+			}				ImGui.SameLine();
 			}
 
 		// Calculate totals for visible elements
@@ -773,12 +770,12 @@ public class MainWindow : Window, IDisposable
 							
 							if (isGatheringRetainer)
 							{
-								bool enableAutoVenture = r.EnableAutoVenture;
-								if (ImGui.Checkbox($"##auto_venture_{r.atid}", ref enableAutoVenture))
-								{
-									r.EnableAutoVenture = enableAutoVenture;
-									this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
-								}
+							bool enableAutoVenture = r.EnableAutoVenture;
+							if (ImGui.Checkbox($"##auto_venture_{r.atid}", ref enableAutoVenture))
+							{
+								r.EnableAutoVenture = enableAutoVenture;
+								ConfigHelper.Save(this.plugin.Config);
+							}
 								if (ImGui.IsItemHovered())
 								{
 									ImGui.SetTooltip(enableAutoVenture ? "Auto crystal venture enabled for this retainer" : "Auto crystal venture disabled for this retainer");
