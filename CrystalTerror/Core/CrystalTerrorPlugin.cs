@@ -33,6 +33,8 @@ namespace CrystalTerror
         private readonly ICondition condition;
         private ulong lastLocalContentId;
         private string lastPlayerKey = string.Empty;
+        // Ensure framework events don't run before plugin finished loading config/characters
+        private bool isInitialized = false;
         private readonly IDataManager dataManager;
 
         private bool disposed;
@@ -67,9 +69,10 @@ namespace CrystalTerror
             this.condition = condition;
             this.pluginLog = pluginLog;
 
-            // Initialize local content id tracking and subscribe to framework updates to detect character changes
+            // Initialize local content id tracking. Subscription to framework updates
+            // is deferred until after config/characters are loaded to avoid a race
+            // where the framework fires before `Characters` is populated.
             this.lastLocalContentId = 0;
-            this.framework.Update += this.OnFrameworkUpdate;
 
             this.mainWindow = new Gui.MainWindow(this, textureProvider);
             this.configWindow = new Gui.ConfigWindow(this);
@@ -168,6 +171,21 @@ namespace CrystalTerror
             {
                 // ignore startup import errors
             }
+
+            // Now that config and characters have been loaded and handlers registered,
+            // subscribe to the framework update event. This prevents running the import
+            // logic against an empty `Characters` list if the framework fired earlier
+            // during construction.
+            try
+            {
+                this.framework.Update += this.OnFrameworkUpdate;
+            }
+            catch
+            {
+                // ignore subscription errors
+            }
+
+            this.isInitialized = true;
         }
 
         public static string Name => "Crystal Terror";
@@ -236,6 +254,8 @@ namespace CrystalTerror
 
         private void OnFrameworkUpdate(IFramework _)
         {
+            if (!this.isInitialized)
+                return;
             try
             {
                 var contentId = this.playerState.ContentId;
