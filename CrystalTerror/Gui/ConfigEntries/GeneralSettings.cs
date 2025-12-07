@@ -55,6 +55,21 @@ public class GeneralSettings : ConfigEntry
 
             .If(() => Plugin.Config.ShowTotalsInHeaders)
             .Indent()
+            
+            .Widget("Use reduced notation in headers", (x) =>
+            {
+                var val = Plugin.Config.UseReducedNotationInHeaders;
+                if (ImGui.Checkbox(x, ref val))
+                {
+                    Plugin.Config.UseReducedNotationInHeaders = val;
+                    ConfigHelper.Save(Plugin.Config);
+                }
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.SetTooltip("Display numbers in headers as 22k, 1.5M, etc. instead of full numbers");
+                }
+            })
+
             .Widget("Show element names in totals", (x) =>
             {
                 var val = Plugin.Config.ShowElementNamesInTotals;
@@ -87,19 +102,7 @@ public class GeneralSettings : ConfigEntry
             .Unindent()
             .EndIf()
 
-            .Widget("Use reduced notation in headers", (x) =>
-            {
-                var val = Plugin.Config.UseReducedNotationInHeaders;
-                if (ImGui.Checkbox(x, ref val))
-                {
-                    Plugin.Config.UseReducedNotationInHeaders = val;
-                    ConfigHelper.Save(Plugin.Config);
-                }
-                if (ImGui.IsItemHovered())
-                {
-                    ImGui.SetTooltip("Display numbers in headers as 22k, 1.5M, etc. instead of full numbers");
-                }
-            })
+            
             .Unindent()
             .EndIf()
 
