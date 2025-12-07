@@ -23,7 +23,7 @@ public class DataManagement : ConfigEntry
                     if (sc != null)
                     {
                         CharacterHelper.MergeInto(Plugin.Characters, new[] { sc }, CharacterHelper.MergePolicy.Skip);
-                        ConfigHelper.Save(Plugin.Config, Plugin.Characters);
+                        ConfigHelper.SaveAndSync(Plugin.Config, Plugin.Characters);
                         Plugin.InvalidateSortCache();
                     }
                 }
@@ -32,7 +32,7 @@ public class DataManagement : ConfigEntry
                 {
                     var list = CharacterHelper.ImportFromAutoRetainer();
                     CharacterHelper.MergeInto(Plugin.Characters, list, CharacterHelper.MergePolicy.Overwrite);
-                    ConfigHelper.Save(Plugin.Config, Plugin.Characters);
+                    ConfigHelper.SaveAndSync(Plugin.Config, Plugin.Characters);
                     Plugin.InvalidateSortCache();
                 }
                 ImGui.SameLine();
@@ -50,7 +50,7 @@ public class DataManagement : ConfigEntry
                         Plugin.Characters.Clear();
                         Plugin.Config.Characters.Clear();
                         // Save cleared config
-                        ConfigHelper.Save(Plugin.Config, Plugin.Characters);
+                        ConfigHelper.SaveAndSync(Plugin.Config, Plugin.Characters);
                         Plugin.InvalidateSortCache();
                         // Try to import the currently-logged-in character immediately after purging
                         try
@@ -59,7 +59,7 @@ public class DataManagement : ConfigEntry
                             if (sc != null)
                             {
                                 CharacterHelper.MergeInto(Plugin.Characters, new[] { sc }, CharacterHelper.MergePolicy.Skip);
-                                ConfigHelper.Save(Plugin.Config, Plugin.Characters);
+                                ConfigHelper.SaveAndSync(Plugin.Config, Plugin.Characters);
                                 Plugin.InvalidateSortCache();
                             }
                         }

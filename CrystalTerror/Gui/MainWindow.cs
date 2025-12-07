@@ -426,7 +426,7 @@ public class MainWindow : Window, IDisposable
 						this.plugin.Characters.Insert(idx - 1, c);
 						
 					// Save updated order
-					ConfigHelper.Save(this.plugin.Config, this.plugin.Characters);
+					ConfigHelper.SaveAndSync(this.plugin.Config, this.plugin.Characters);
 					}
 				}
 				if (!canMoveUp)
@@ -450,7 +450,7 @@ public class MainWindow : Window, IDisposable
 					this.plugin.Characters.Insert(idx + 1, c);
 					
 					// Save updated order
-					ConfigHelper.Save(this.plugin.Config, this.plugin.Characters);
+					ConfigHelper.SaveAndSync(this.plugin.Config, this.plugin.Characters);
 				}
 			}
 			if (!canMoveDown)

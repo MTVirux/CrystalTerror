@@ -18,6 +18,7 @@ namespace CrystalTerror.Helpers
         {
             try
             {
+               
                 return PluginInterfaceService.Interface.GetPluginConfig() as Configuration ?? new Configuration();
             }
             catch (Exception ex)
@@ -28,17 +29,23 @@ namespace CrystalTerror.Helpers
         }
 
         /// <summary>
-        /// Saves the plugin configuration to Dalamud's config system.
+        /// Saves the plugin configuration to Dalamud's config system and syncs characters.
         /// Syncs the in-memory character list to the config before saving.
         /// </summary>
         /// <param name="config">The configuration to save.</param>
         /// <param name="characters">The in-memory character list to sync to the config.</param>
         /// <returns>True if save was successful, false otherwise.</returns>
-        public static bool Save(Configuration config, List<StoredCharacter> characters)
+        public static bool SaveAndSync(Configuration config, List<StoredCharacter> characters)
         {
             try
             {
                 // Sync in-memory characters to config before saving
+                LogService.Log.Information("[ConfigHelper] Syncing characters to config before save.");
+                //Log all characters:
+                foreach (var character in characters)
+                {
+                    LogService.Log.Information($"[ConfigHelper] Character: {character.Name}:{character.World} with {character.Retainers.Count} retainers.");
+                }
                 config.Characters = characters;
                 PluginInterfaceService.Interface.SavePluginConfig(config);
                 return true;

@@ -123,7 +123,7 @@ namespace CrystalTerror
                         if (sc != null)
                         {
                             CharacterHelper.MergeInto(this.Characters, new[] { sc }, CharacterHelper.MergePolicy.Skip);
-                            ConfigHelper.Save(this.Config, this.Characters);
+                            ConfigHelper.SaveAndSync(this.Config, this.Characters);
                         }
 
                         this.lastLocalContentId = current;
@@ -194,7 +194,7 @@ namespace CrystalTerror
 
             if (disposing)
             {
-                ConfigHelper.Save(this.Config, this.Characters);
+                ConfigHelper.SaveAndSync(this.Config, this.Characters);
 
                 this.windowSystem.RemoveAllWindows();
                 this.mainWindow.Dispose();
@@ -249,7 +249,7 @@ namespace CrystalTerror
                     if (sc != null)
                     {
                         CharacterHelper.MergeInto(this.Characters, new[] { sc }, CharacterHelper.MergePolicy.Skip);
-                        ConfigHelper.Save(this.Config, this.Characters);
+                        ConfigHelper.SaveAndSync(this.Config, this.Characters);
                         this.mainWindow.InvalidateSortCache();
                     }
 
