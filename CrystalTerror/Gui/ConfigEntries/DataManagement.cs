@@ -22,7 +22,7 @@ public class DataManagement : ConfigEntry
                     var sc = CharacterHelper.ImportCurrentCharacter();
                     if (sc != null)
                     {
-                        CharacterHelper.MergeInto(Plugin.Characters, new[] { sc }, CharacterHelper.MergePolicy.Skip);
+                        CharacterHelper.MergeInto(Plugin.Characters, new[] { sc }, CharacterHelper.MergePolicy.Merge);
                         ConfigHelper.SaveAndSync(Plugin.Config, Plugin.Characters);
                         Plugin.InvalidateSortCache();
                     }
@@ -74,7 +74,7 @@ public class DataManagement : ConfigEntry
                             var sc = CharacterHelper.ImportCurrentCharacter();
                             if (sc != null)
                             {
-                                CharacterHelper.MergeInto(Plugin.Characters, new[] { sc }, CharacterHelper.MergePolicy.Skip);
+                                CharacterHelper.MergeInto(Plugin.Characters, new[] { sc }, CharacterHelper.MergePolicy.Merge);
                                 ConfigHelper.SaveAndSync(Plugin.Config, Plugin.Characters);
                                 Plugin.InvalidateSortCache();
                             }

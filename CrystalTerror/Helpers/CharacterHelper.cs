@@ -293,7 +293,7 @@ namespace CrystalTerror
         /// - Overwrite: replace existing entries with imported ones.
         /// - Merge: merge retainers/inventory when possible.
         /// </summary>
-        public static void MergeInto(List<StoredCharacter> target, IEnumerable<StoredCharacter> imported, MergePolicy policy = MergePolicy.Skip)
+        public static void MergeInto(List<StoredCharacter> target, IEnumerable<StoredCharacter> imported, MergePolicy policy = MergePolicy.Merge)
         {
             if (target == null) throw new ArgumentNullException(nameof(target));
             if (imported == null) return;
