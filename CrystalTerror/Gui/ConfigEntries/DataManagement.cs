@@ -17,7 +17,7 @@ public class DataManagement : ConfigEntry
             .Section("Data Management")
             .Widget(() =>
             {
-                if (ImGui.Button("Import Current Character"))
+                if (ImGui.Button("Force Import Current Character"))
                 {
                     var sc = CharacterHelper.ImportCurrentCharacter();
                     if (sc != null)
@@ -27,11 +27,11 @@ public class DataManagement : ConfigEntry
                         Plugin.InvalidateSortCache();
                     }
                 }
-                ImGui.SameLine();
+
                 if (ImGui.Button("Import From AutoRetainer"))
                 {
                     var list = CharacterHelper.ImportFromAutoRetainer();
-                    CharacterHelper.MergeInto(Plugin.Characters, list, CharacterHelper.MergePolicy.Overwrite);
+                    CharacterHelper.MergeInto(Plugin.Characters, list, CharacterHelper.MergePolicy.Skip);
                     ConfigHelper.SaveAndSync(Plugin.Config, Plugin.Characters);
                     Plugin.InvalidateSortCache();
                     // After importing from AutoRetainer, also import the currently-logged-in character
