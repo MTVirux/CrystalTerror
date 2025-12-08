@@ -149,6 +149,25 @@ public class GeneralSettings : ConfigEntry
                 }
             })
 
+            // Only show the hover-toggle when reduced notation is enabled
+            .If(() => Plugin.Config.UseReducedNotationInTables)
+            .Indent()
+            .Widget("Show full numbers on hover", (x) =>
+            {
+                var val = Plugin.Config.ShowFullNumbersOnHoverInTables;
+                if (ImGui.Checkbox(x, ref val))
+                {
+                    Plugin.Config.ShowFullNumbersOnHoverInTables = val;
+                    ConfigHelper.Save(Plugin.Config);
+                }
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.SetTooltip("When enabled, hovering an abbreviated cell shows the full non-abbreviated numbers");
+                }
+            })
+            .Unindent()
+            .EndIf()
+
             .Section("Visibility")
             .Widget("Hide characters with no gathering retainers", (x) =>
             {

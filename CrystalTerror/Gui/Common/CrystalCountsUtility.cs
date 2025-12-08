@@ -107,22 +107,27 @@ public class CrystalCountsUtility
 			ImGui.TextUnformatted("-");
 			return;
 		}
-		
+
+		// Prepare display strings (abbreviated vs full)
+		var displayAbbrev = string.Join("/", parts.Select(p => FormatNumber(p.value, cfg.UseReducedNotationInTables)));
+		var displayFull = string.Join("/", parts.Select(p => p.value.ToString()));
+
 		// Check if all parts have the same color
 		var firstColor = parts[0].color;
 		bool allSameColor = parts.All(p => p.color == firstColor);
-		
+
+		// Group the rendered output so we can detect hovering over the whole cell
+		ImGui.BeginGroup();
+
 		if (allSameColor && firstColor.HasValue)
 		{
 			// Render entire text in one color
-			var displayText = string.Join("/", parts.Select(p => FormatNumber(p.value, cfg.UseReducedNotationInTables)));
-			ImGui.TextColored(firstColor.Value, displayText);
+			ImGui.TextColored(firstColor.Value, displayAbbrev);
 		}
 		else if (allSameColor)
 		{
 			// No color, render as plain text
-			var displayText = string.Join("/", parts.Select(p => FormatNumber(p.value, cfg.UseReducedNotationInTables)));
-			ImGui.TextUnformatted(displayText);
+			ImGui.TextUnformatted(displayAbbrev);
 		}
 		else
 		{
@@ -135,13 +140,21 @@ public class CrystalCountsUtility
 					ImGui.TextUnformatted("/");
 					ImGui.SameLine(0, 0);
 				}
-				
+
 				var colorValue = parts[i].color;
 				if (colorValue.HasValue)
 					ImGui.TextColored(colorValue.Value, FormatNumber(parts[i].value, cfg.UseReducedNotationInTables));
 				else
 					ImGui.TextUnformatted(FormatNumber(parts[i].value, cfg.UseReducedNotationInTables));
 			}
+		}
+
+		ImGui.EndGroup();
+
+		// If reduced notation is enabled and the displayed string is abbreviated, show full numbers on hover
+		if (cfg.UseReducedNotationInTables && cfg.ShowFullNumbersOnHoverInTables && displayAbbrev != displayFull && ImGui.IsItemHovered())
+		{
+			ImGui.SetTooltip(displayFull);
 		}
 	}
 

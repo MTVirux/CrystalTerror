@@ -63,6 +63,11 @@ namespace CrystalTerror
         public bool UseReducedNotationInTables { get; set; } = false;
 
         /// <summary>
+        /// If true, show the full non-abbreviated numbers in a tooltip when hovering abbreviated table cells.
+        /// </summary>
+        public bool ShowFullNumbersOnHoverInTables { get; set; } = true;
+
+        /// <summary>
         /// If true, color the currently logged in character's header.
         /// </summary>
         public bool ColorCurrentCharacter { get; set; } = false;
