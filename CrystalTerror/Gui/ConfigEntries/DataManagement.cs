@@ -51,7 +51,8 @@ public class DataManagement : ConfigEntry
                         // ignore any errors while attempting to import current character
                     }
                 }
-                ImGui.SameLine();
+
+
                 if (ImGui.Button("Purge Characters"))
                 {
                     ImGui.OpenPopup("PurgeConfirm");
@@ -83,6 +84,36 @@ public class DataManagement : ConfigEntry
                         {
                             // ignore errors during import
                         }
+                        ImGui.CloseCurrentPopup();
+                    }
+                    ImGui.SameLine();
+                    if (ImGui.Button("Cancel"))
+                    {
+                        ImGui.CloseCurrentPopup();
+                    }
+                    ImGui.EndPopup();
+                }
+
+                if (ImGui.Button("Clear Inventories"))
+                {
+                    ImGui.OpenPopup("ClearInventoriesConfirm");
+                }
+
+                if (ImGui.BeginPopupModal("ClearInventoriesConfirm", ImGuiWindowFlags.AlwaysAutoResize))
+                {
+                    ImGui.TextWrapped("Are you sure you want to clear all crystal inventories? This will reset all crystal counts to zero for all characters and retainers. This cannot be undone.");
+                    ImGui.Spacing();
+                    if (ImGui.Button("Yes, Clear All Inventories"))
+                    {
+                        foreach (var character in Plugin.Characters)
+                        {
+                            character.Inventory.Reset();
+                            foreach (var retainer in character.Retainers)
+                            {
+                                retainer.Inventory.Reset();
+                            }
+                        }
+                        ConfigHelper.SaveAndSync(Plugin.Config, Plugin.Characters);
                         ImGui.CloseCurrentPopup();
                     }
                     ImGui.SameLine();
