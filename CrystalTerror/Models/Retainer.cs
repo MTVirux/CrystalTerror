@@ -30,7 +30,22 @@ namespace CrystalTerror
         public int Perception { get; set; } = 0;
 
         /// <summary>If true, this retainer will be included in automatic venture handling. Defaults to true.</summary>
-        public bool EnableAutoVenture { get; set; } = true;
+        private bool enableAutoVenture = true;
+
+        /// <summary>If true, this retainer will be included in automatic venture handling. Enabling this will also clear any ignore flag.</summary>
+        public bool EnableAutoVenture
+        {
+            get => enableAutoVenture;
+            set
+            {
+                enableAutoVenture = value;
+                if (enableAutoVenture)
+                {
+                    // Enabling auto ventures should automatically unignore the retainer
+                    isIgnored = false;
+                }
+            }
+        }
 
         /// <summary>If true, this retainer is hidden from the main window UI.</summary>
         private bool isIgnored = false;
@@ -44,7 +59,7 @@ namespace CrystalTerror
                 isIgnored = value;
                 if (isIgnored)
                 {
-                    EnableAutoVenture = false;
+                    enableAutoVenture = false;
                 }
             }
         }
