@@ -54,10 +54,10 @@ public class CrystalCountsUtility
 	}
 
 	/// <summary>
-	/// Gets the warning color for a given value based on configured thresholds.
+	/// Gets the crystal warning color for a given value based on configured thresholds.
 	/// Returns null if no threshold is met.
 	/// </summary>
-	public System.Numerics.Vector4? GetWarningColor(long value)
+	public System.Numerics.Vector4? GetCrystalWarningColor(long value)
 	{
 		var cfg = this.plugin.Config;
 		
@@ -96,11 +96,11 @@ public class CrystalCountsUtility
 		var parts = new List<(long value, System.Numerics.Vector4? color)>();
 		
 		if (cfg.ShowShards)
-			parts.Add((shard, GetWarningColor(shard)));
+			parts.Add((shard, GetCrystalWarningColor(shard)));
 		if (cfg.ShowCrystals)
-			parts.Add((crystal, GetWarningColor(crystal)));
+			parts.Add((crystal, GetCrystalWarningColor(crystal)));
 		if (cfg.ShowClusters)
-			parts.Add((cluster, GetWarningColor(cluster)));
+			parts.Add((cluster, GetCrystalWarningColor(cluster)));
 		
 		if (parts.Count == 0)
 		{

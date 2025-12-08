@@ -68,7 +68,7 @@ public class CharacterHeaderComponent : IUIComponent
 			if (this.plugin.Config.ShowCrystals) elementTotal += totalCrystal;
 			if (this.plugin.Config.ShowClusters) elementTotal += totalCluster;
 			
-			var warningColor = this.countsUtility.GetWarningColor(elementTotal / 6);
+			var warningColor = this.countsUtility.GetCrystalWarningColor(elementTotal / 6);
 			
 			// Format crystal counts for header - use reduced notation if enabled
 			var headerParts = new List<string>();
