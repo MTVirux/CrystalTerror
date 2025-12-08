@@ -62,13 +62,18 @@ public class CharacterHeaderComponent : IUIComponent
 			if (this.plugin.Config.ShowCrystals) grandTotal += totalCrystal;
 			if (this.plugin.Config.ShowClusters) grandTotal += totalCluster;
 			
-			// Calculate element total and determine warning color based on crystal threshold * 6
+			// Calculate element total and determine warning color based on crystal threshold
 			long elementTotal = 0;
 			if (this.plugin.Config.ShowShards) elementTotal += totalShard;
 			if (this.plugin.Config.ShowCrystals) elementTotal += totalCrystal;
 			if (this.plugin.Config.ShowClusters) elementTotal += totalCluster;
 			
-			var warningColor = this.countsUtility.GetCrystalWarningColor(elementTotal / 6);
+			int numberOfInventoriesOnCharacter = 0;
+			if (character.Retainers != null)
+				numberOfInventoriesOnCharacter = character.Retainers.Count(r => !r.IsIgnored) + 1;
+
+			//The total amount of crustals divided by the number of non-ignored retainers +1 (the character)
+			var warningColor = this.countsUtility.GetCrystalWarningColor(elementTotal / (numberOfInventoriesOnCharacter));
 			
 			// Format crystal counts for header - use reduced notation if enabled
 			var headerParts = new List<string>();
