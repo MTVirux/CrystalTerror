@@ -268,7 +268,7 @@ namespace CrystalTerror
                     var sc = CharacterHelper.ImportCurrentCharacter();
                     if (sc != null)
                     {
-                        CharacterHelper.MergeInto(this.Characters, new[] { sc }, CharacterHelper.MergePolicy.Merge);
+                        CharacterHelper.MergeInto(this.Characters, new[] { sc }, CharacterHelper.MergePolicy.Overwrite);
                         ConfigHelper.SaveAndSync(this.Config, this.Characters);
                         this.mainWindow.InvalidateSortCache();
                     }
