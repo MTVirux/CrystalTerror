@@ -155,8 +155,8 @@ public class CrystalCountsUtility
 			Element.Fire => this.plugin.Config.ShowFireElement,
 			Element.Ice => this.plugin.Config.ShowIceElement,
 			Element.Wind => this.plugin.Config.ShowWindElement,
-			Element.Lightning => this.plugin.Config.ShowLightningElement,
 			Element.Earth => this.plugin.Config.ShowEarthElement,
+			Element.Lightning => this.plugin.Config.ShowLightningElement,
 			Element.Water => this.plugin.Config.ShowWaterElement,
 			_ => true
 		};

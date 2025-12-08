@@ -139,10 +139,10 @@ namespace CrystalTerror
                 (Element.Ice, CrystalType.Crystal) => VentureId.Ice_Crystal,
                 (Element.Wind, CrystalType.Shard) => VentureId.Wind_Shard,
                 (Element.Wind, CrystalType.Crystal) => VentureId.Wind_Crystal,
-                (Element.Lightning, CrystalType.Shard) => VentureId.Lightning_Shard,
-                (Element.Lightning, CrystalType.Crystal) => VentureId.Lightning_Crystal,
                 (Element.Earth, CrystalType.Shard) => VentureId.Earth_Shard,
                 (Element.Earth, CrystalType.Crystal) => VentureId.Earth_Crystal,
+                (Element.Lightning, CrystalType.Shard) => VentureId.Lightning_Shard,
+                (Element.Lightning, CrystalType.Crystal) => VentureId.Lightning_Crystal,
                 (Element.Water, CrystalType.Shard) => VentureId.Water_Shard,
                 (Element.Water, CrystalType.Crystal) => VentureId.Water_Crystal,
                 _ => null
