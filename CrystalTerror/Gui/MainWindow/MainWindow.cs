@@ -52,14 +52,23 @@ public class MainWindow : Window, IDisposable
 			ShowTooltip = () => ImGui.SetTooltip("Open settings"),
 		});
 
-		// Create lock button with component's click handler
-		lockButton = new TitleBarButton
+		// Create lock button with component's click handler.
+		// Use a local TitleBarButton so we can update its Icon immediately after clicks.
+		var lockTb = new TitleBarButton
 		{
-			Click = this.lockButtonComponent.OnLockButtonClick,
 			Icon = this.lockButtonComponent.CurrentIcon,
 			IconOffset = new System.Numerics.Vector2(3, 2),
 			ShowTooltip = () => ImGui.SetTooltip("Lock window position and size"),
 		};
+
+		lockTb.Click = (m) =>
+		{
+			this.lockButtonComponent.OnLockButtonClick(m);
+			// Immediately refresh the icon to reflect the new state
+			lockTb.Icon = this.lockButtonComponent.CurrentIcon;
+		};
+
+		lockButton = lockTb;
 		TitleBarButtons.Add(lockButton);
 	}
 
@@ -83,6 +92,12 @@ public class MainWindow : Window, IDisposable
 
 		// Handle ESC key ignore setting
 		RespectCloseHotkey = !this.plugin.Config.IgnoreEscapeOnMainWindow;
+
+		// Ensure titlebar button icon reflects current configuration every frame
+		if (this.lockButtonComponent != null && this.lockButton != null)
+		{
+			this.lockButton.Icon = this.lockButtonComponent.CurrentIcon;
+		}
 	}
 
 	public override void PostDraw()
