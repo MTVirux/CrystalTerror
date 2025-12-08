@@ -32,7 +32,7 @@ public class MainWindowContainerComponent : IUIComponent
 	{
 		if (this.plugin.Characters.Count == 0)
 		{
-			ImGui.TextWrapped("No characters imported yet. Open settings to import characters.");
+			ImGui.TextWrapped("No characters imported yet. Please Log In to a character to import them.");
 			return;
 		}
 
