@@ -86,6 +86,11 @@ public class MainWindowContainerComponent : IUIComponent
 
 			// Render character header component
 			var headerComponent = new CharacterHeaderComponent(this.plugin, this.countsUtility, c, i);
+
+			if(c.IsIgnored){
+				ImGui.SetNextItemOpen(false, ImGuiCond.None);
+			}
+
 			headerComponent.Render();
 
 			if (headerComponent.HeaderOpen)
