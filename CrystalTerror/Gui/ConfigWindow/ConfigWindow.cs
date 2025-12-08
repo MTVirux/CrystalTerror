@@ -42,14 +42,14 @@ public class ConfigWindow : Window, IDisposable
         this.lockButtonComponent = new WindowLockButtonComponent(plugin, isConfigWindow: true);
 
         // Create and add lock button to title bar
-        lockButton = new TitleBarButton
-        {
-            Click = this.lockButtonComponent.OnLockButtonClick,
-            Icon = this.lockButtonComponent.CurrentIcon,
-            IconOffset = new System.Numerics.Vector2(3, 2),
-            ShowTooltip = () => ImGui.SetTooltip("Lock window position and size"),
-        };
-        TitleBarButtons.Add(lockButton);
+        //lockButton = new TitleBarButton
+        //{
+        //    Click = this.lockButtonComponent.OnLockButtonClick,
+        //    Icon = this.lockButtonComponent.CurrentIcon,
+        //    IconOffset = new System.Numerics.Vector2(3, 2),
+        //    ShowTooltip = () => ImGui.SetTooltip("Lock window position and size"),
+        //};
+        //TitleBarButtons.Add(lockButton);
 
         // Initialize config file system
         FileSystem = new(() => ConfigTabs);
