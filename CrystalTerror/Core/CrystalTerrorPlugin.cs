@@ -7,6 +7,9 @@ namespace CrystalTerror
     using CrystalTerror.Helpers;
     using Dalamud.Interface.Windowing;
     using Dalamud.Plugin;
+    using Dalamud.IoC;
+    using Dalamud.Game.Inventory;
+    using Dalamud.Game.Inventory.InventoryEventArgTypes;
     using Dalamud.Game.Command;
     using Dalamud.Plugin.Services;
     using Dalamud.Data;
@@ -39,6 +42,9 @@ namespace CrystalTerror
 
         private bool disposed;
         private readonly IPluginLog pluginLog;
+
+        [PluginService]
+        public static IGameInventory GameInventory { get; private set; } = null!;
 
         // AutoRetainer IPC for setting ventures
         private Dalamud.Plugin.Ipc.ICallGateSubscriber<uint, object>? autoRetainerSetVenture;
@@ -166,6 +172,15 @@ namespace CrystalTerror
                     // AutoRetainer not available
                     this.pluginLog.Debug($"AutoRetainer IPC not available: {ex.Message}");
                 }
+                // Initialize InventoryHelper to handle GameInventory events
+                try
+                {
+                    InventoryHelper.Initialize(this);
+                }
+                catch (Exception ex)
+                {
+                    this.pluginLog.Debug($"InventoryHelper initialization failed: {ex.Message}");
+                }
             }
             catch
             {
@@ -235,6 +250,15 @@ namespace CrystalTerror
                 try
                 {
                     this.addonLifecycle.UnregisterListener(AddonEvent.PreSetup, "RetainerList", this.OnRetainerListSetup);
+                }
+                catch
+                {
+                }
+
+                // Dispose inventory helper (unsubscribe handlers)
+                try
+                {
+                    InventoryHelper.Dispose();
                 }
                 catch
                 {
@@ -312,6 +336,8 @@ namespace CrystalTerror
                 this.autoRetainerSetVenture,
                 this.Characters,
                 this.pluginLog);
+
+        
 
         private void OnOpenCommand(string command, string arguments)
         {
