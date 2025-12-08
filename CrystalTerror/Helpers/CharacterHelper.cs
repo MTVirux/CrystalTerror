@@ -88,10 +88,10 @@ namespace CrystalTerror
                         {
                             // Crystal item IDs in FFXIV
                             // The game stores crystals by type first, then element:
-                            // Shards: 2-7 (Fire, Ice, Wind, Lightning, Earth, Water)
-                            // Crystals: 8-13 (Fire, Ice, Wind, Lightning, Earth, Water)
-                            // Clusters: 14-19 (Fire, Ice, Wind, Lightning, Earth, Water)
-                            var elements = new Element[] { Element.Fire, Element.Ice, Element.Wind, Element.Lightning, Element.Earth, Element.Water };
+                            // Shards: 2-7 (Fire, Ice, Wind, Earth, Lightning, Water)
+                            // Crystals: 8-13 (Fire, Ice, Wind, Earth, Lightning, Water)
+                            // Clusters: 14-19 (Fire, Ice, Wind, Earth, Lightning, Water)
+                            var elements = new Element[] { Element.Fire, Element.Ice, Element.Wind, Element.Earth, Element.Lightning, Element.Water };
                             var crystalTypes = new CrystalType[] { CrystalType.Shard, CrystalType.Crystal, CrystalType.Cluster };
                             
                             // Item IDs: Shards start at 2, Crystals at 8, Clusters at 14
@@ -222,7 +222,7 @@ namespace CrystalTerror
                                             // Order: All shards (Fire-Water), All crystals (Fire-Water), All clusters (Fire-Water)
                                             // Indices 0-5: Shards, 6-11: Crystals, 12-17: Clusters
                                             var crystals = inv->CrystalQuantities;
-                                            var elements = new Element[] { Element.Fire, Element.Ice, Element.Wind, Element.Lightning, Element.Earth, Element.Water };
+                                            var elements = new Element[] { Element.Fire, Element.Ice, Element.Wind, Element.Earth, Element.Lightning, Element.Water };
                                             var crystalTypes = new CrystalType[] { CrystalType.Shard, CrystalType.Crystal, CrystalType.Cluster };
                                             
                                             for (int ti = 0; ti < crystalTypes.Length; ++ti)

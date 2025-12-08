@@ -33,7 +33,7 @@ public class CharacterHeaderComponent : IUIComponent
 	public void Render()
 	{
 		// Calculate totals for visible elements
-		var headerElements = new[] { Element.Fire, Element.Ice, Element.Wind, Element.Lightning, Element.Earth, Element.Water };
+		var headerElements = new[] { Element.Fire, Element.Ice, Element.Wind, Element.Earth, Element.Lightning, Element.Water };
 		var headerVisibleElements = headerElements.Where(el => this.countsUtility.IsElementVisible(el)).ToArray();
 		var totalParts = new List<(string text, System.Numerics.Vector4? color)>();
 		long grandTotal = 0;

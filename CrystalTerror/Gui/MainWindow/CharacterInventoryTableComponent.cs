@@ -30,7 +30,7 @@ public class CharacterInventoryTableComponent : IUIComponent
 			return;
 
 		ImGui.Text("Character Inventory:");
-		var allElements = new[] { Element.Fire, Element.Ice, Element.Wind, Element.Lightning, Element.Earth, Element.Water };
+		var allElements = new[] { Element.Fire, Element.Ice, Element.Wind, Element.Earth, Element.Lightning, Element.Water };
 		var elements = allElements.Where(el => this.countsUtility.IsElementVisible(el)).ToArray();
 		
 		if (elements.Length == 0)

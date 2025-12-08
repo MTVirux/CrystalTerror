@@ -68,7 +68,7 @@ namespace CrystalTerror
             // Build list of candidates based on config
             var candidates = new List<(Element element, CrystalType type, long count, VentureId ventureId)>();
 
-            var elements = new[] { Element.Fire, Element.Ice, Element.Wind, Element.Lightning, Element.Earth, Element.Water };
+            var elements = new[] { Element.Fire, Element.Ice, Element.Wind, Element.Earth, Element.Lightning, Element.Water };
 
             foreach (var element in elements)
             {
