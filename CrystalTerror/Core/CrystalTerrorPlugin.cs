@@ -23,8 +23,8 @@ namespace CrystalTerror
         public Configuration Config { get; private set; } = new Configuration();
 
         private readonly WindowSystem windowSystem = new(typeof(CrystalTerrorPlugin).AssemblyQualifiedName);
-        private readonly Gui.MainWindow mainWindow;
-        private readonly Gui.ConfigWindow configWindow;
+        private readonly Gui.MainWindow.MainWindow mainWindow;
+        private readonly Gui.ConfigWindow.ConfigWindow configWindow;
         private readonly ICommandManager commandManager;
         private readonly Dalamud.Plugin.Services.IPlayerState playerState;
         private readonly Dalamud.Plugin.Services.IObjectTable objects;
@@ -74,8 +74,8 @@ namespace CrystalTerror
             // where the framework fires before `Characters` is populated.
             this.lastLocalContentId = 0;
 
-            this.mainWindow = new Gui.MainWindow(this, textureProvider);
-            this.configWindow = new Gui.ConfigWindow(this);
+            this.mainWindow = new Gui.MainWindow.MainWindow(this, textureProvider);
+            this.configWindow = new Gui.ConfigWindow.ConfigWindow(this);
 
             this.windowSystem.AddWindow(this.mainWindow);
             this.windowSystem.AddWindow(this.configWindow);
