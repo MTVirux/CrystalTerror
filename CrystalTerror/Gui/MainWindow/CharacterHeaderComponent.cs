@@ -149,21 +149,40 @@ public class CharacterHeaderComponent : IUIComponent
 		
 		// Render header with colors
 		int colorsPushed = 0;
-		
-		// Push header background color if character total threshold matched
-		if (headerBgColor.HasValue)
+
+		// Dim header and text for ignored characters
+		if (character.IsIgnored)
 		{
-			ImGui.PushStyleColor(ImGuiCol.Header, headerBgColor.Value);
-			ImGui.PushStyleColor(ImGuiCol.HeaderHovered, headerBgColor.Value * new System.Numerics.Vector4(1.2f, 1.2f, 1.2f, 1.0f));
-			ImGui.PushStyleColor(ImGuiCol.HeaderActive, headerBgColor.Value * new System.Numerics.Vector4(1.4f, 1.4f, 1.4f, 1.0f));
-			colorsPushed += 3;
+			// Pop any previously pushed style colors (if any)
+			if (colorsPushed > 0)
+			{
+				ImGui.PopStyleColor(colorsPushed);
+				colorsPushed = 0;
+			}
+			// Dim the header background for ignored characters
+			ImGui.PushStyleColor(ImGuiCol.Header, new System.Numerics.Vector4(0.3f, 0.3f, 0.3f, 1.0f));
+			ImGui.PushStyleColor(ImGuiCol.HeaderHovered, new System.Numerics.Vector4(0.35f, 0.35f, 0.35f, 1.0f));
+			ImGui.PushStyleColor(ImGuiCol.HeaderActive, new System.Numerics.Vector4(0.4f, 0.4f, 0.4f, 1.0f));
+			ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(0.5f, 0.5f, 0.5f, 1.0f));
+			colorsPushed += 4;
 		}
-		
-		// Push text color if current character
-		if (isCurrentChar)
+		else
 		{
-			ImGui.PushStyleColor(ImGuiCol.Text, this.plugin.Config.CurrentCharacterColor);
-			colorsPushed++;
+			// Push header background color if character total threshold matched
+			if (headerBgColor.HasValue)
+			{
+				ImGui.PushStyleColor(ImGuiCol.Header, headerBgColor.Value);
+				ImGui.PushStyleColor(ImGuiCol.HeaderHovered, headerBgColor.Value * new System.Numerics.Vector4(1.2f, 1.2f, 1.2f, 1.0f));
+				ImGui.PushStyleColor(ImGuiCol.HeaderActive, headerBgColor.Value * new System.Numerics.Vector4(1.4f, 1.4f, 1.4f, 1.0f));
+				colorsPushed += 3;
+			}
+
+			// Push text color if current character
+			if (isCurrentChar)
+			{
+				ImGui.PushStyleColor(ImGuiCol.Text, this.plugin.Config.CurrentCharacterColor);
+				colorsPushed++;
+			}
 		}
 		
 		// Render header with totals
