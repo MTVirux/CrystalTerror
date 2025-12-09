@@ -25,7 +25,7 @@ public class MainWindow : Window, IDisposable
 	private MainWindowContainerComponent? containerComponent;
 
 	public MainWindow(CrystalTerrorPlugin plugin, ITextureProvider textureProvider)
-		: base("CrystalTerrorMainWindow")
+		: base("Crystal Terror")
 	{
 		this.plugin = plugin;
 		this.textureProvider = textureProvider;
