@@ -3,7 +3,7 @@
     <AssemblyName>CrystalTerror</AssemblyName>
     <Authors>MTVirux</Authors>
     <Description>Crystal inventory tracker for shards/crystals/clusters.</Description>
-    <Version>1.3.1.3</Version>
+    <Version>1.3.1.4</Version>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <TargetFramework>net9.0-windows</TargetFramework>
