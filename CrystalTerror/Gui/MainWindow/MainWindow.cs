@@ -14,6 +14,27 @@ using ImGui = Dalamud.Bindings.ImGui.ImGui;
 
 public class MainWindow : Window, IDisposable
 {
+	private static string GetTitleWithVersion()
+	{
+		try
+		{
+			var ver = typeof(CrystalTerrorPlugin).Assembly.GetName().Version?.ToString() ?? string.Empty;
+
+			string title;
+
+			#if DEBUG
+				title = string.IsNullOrEmpty(ver) ? "Crystal Terror - v??????? [TESTING]" : $"Crystal Terror testing-v{ver} [TESTING]";
+			#else
+				title = string.IsNullOrEmpty(ver) ? "Crystal Terror - v???????" : $"Crystal Terror v{ver}";
+			#endif
+
+			return title;
+		}
+		catch
+		{
+			return "Crystal Terror";
+		}
+	}
 	private readonly CrystalTerrorPlugin plugin;
 	private WindowLockButtonComponent? lockButtonComponent;
 	private TitleBarButton? lockButton;
@@ -25,7 +46,7 @@ public class MainWindow : Window, IDisposable
 	private MainWindowContainerComponent? containerComponent;
 
 	public MainWindow(CrystalTerrorPlugin plugin, ITextureProvider textureProvider)
-		: base("Crystal Terror")
+		: base(GetTitleWithVersion())
 	{
 		this.plugin = plugin;
 		this.textureProvider = textureProvider;
