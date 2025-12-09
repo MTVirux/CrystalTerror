@@ -187,25 +187,59 @@ public class CharacterHeaderComponent : IUIComponent
 		// Render header with totals
 		if (this.plugin.Config.ShowTotalsInHeaders && totalParts.Count > 0)
 		{
-			// Render main header text
-			var headerId = $"##{characterIndex}";
-			headerOpen = ImGui.CollapsingHeader(headerId);
-
-			// Render the label (character name@world) with color if current character
-			ImGui.SameLine(0, 5);
-			ImGui.TextUnformatted(" ");
-			ImGui.SameLine(0, 5);
+			// Render main header text. Use the visible header text as the collapsing header label
+			// so the header widget's clickable area matches the displayed text and
+			// context menus attached to the item will work as expected.
+			var headerId = header + $"##{characterIndex}";
+			
+			// Color the header text if this is the current character
 			if (isCurrentChar)
 			{
-				ImGui.TextColored(this.plugin.Config.CurrentCharacterColor, header);
-				ImGui.SameLine(0, 5);
+				ImGui.PushStyleColor(ImGuiCol.Text, this.plugin.Config.CurrentCharacterColor);
 			}
-			else
+			headerOpen = ImGui.CollapsingHeader(headerId);
+			if (isCurrentChar)
 			{
-				ImGui.TextUnformatted(header);
+				ImGui.PopStyleColor();
 			}
 
-			// Render colored totals on the same line
+			// Attach context menu to the header item with forced white text
+			if (ImGui.BeginPopupContextItem($"char_ctx_{characterIndex}"))
+			{
+				ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(1f, 1f, 1f, 1f));
+				if (ImGui.MenuItem("Reset character inventory"))
+				{
+					character.Inventory?.Reset();
+					if (character.Retainers != null)
+					{
+						foreach (var r in character.Retainers)
+							r.Inventory?.Reset();
+					}
+					ConfigHelper.SaveAndSync(this.plugin.Config, this.plugin.Characters);
+				}
+				if (!character.IsIgnored)
+				{
+					if (ImGui.MenuItem("Ignore character"))
+					{
+						character.IsIgnored = true;
+						ConfigHelper.SaveAndSync(this.plugin.Config, this.plugin.Characters);
+						this.plugin.InvalidateSortCache();
+					}
+				}
+				else
+				{
+					if (ImGui.MenuItem("Unignore character"))
+					{
+						character.IsIgnored = false;
+						ConfigHelper.SaveAndSync(this.plugin.Config, this.plugin.Characters);
+						this.plugin.InvalidateSortCache();
+					}
+				}
+				ImGui.PopStyleColor();
+				ImGui.EndPopup();
+			}
+
+			// Render colored totals on the same line as the header label
 			ImGui.SameLine(0, 10);
 			for (int idx = 0; idx < totalParts.Count; idx++)
 			{
@@ -223,42 +257,6 @@ public class CharacterHeaderComponent : IUIComponent
 				if (idx < totalParts.Count - 1)
 					ImGui.SameLine(0, 0);
 			}
-
-			// Attach context menu to the header item with forced white text
-			if (ImGui.BeginPopupContextItem($"char_ctx_{characterIndex}"))
-			{
-				ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(1f, 1f, 1f, 1f));
-				if (ImGui.MenuItem("Reset character inventory"))
-				{
-					character.Inventory?.Reset();
-					if (character.Retainers != null)
-					{
-						foreach (var r in character.Retainers)
-							r.Inventory?.Reset();
-					}
-					ConfigHelper.SaveAndSync(this.plugin.Config, this.plugin.Characters);
-				}
-				if (!character.IsIgnored)
-				{
-					if (ImGui.MenuItem("Ignore character"))
-					{
-						character.IsIgnored = true;
-						ConfigHelper.SaveAndSync(this.plugin.Config, this.plugin.Characters);
-						this.plugin.InvalidateSortCache();
-					}
-				}
-				else
-				{
-					if (ImGui.MenuItem("Unignore character"))
-					{
-						character.IsIgnored = false;
-						ConfigHelper.SaveAndSync(this.plugin.Config, this.plugin.Characters);
-						this.plugin.InvalidateSortCache();
-					}
-				}
-				ImGui.PopStyleColor();
-				ImGui.EndPopup();
-			}
 		}
 		else
 		{
@@ -271,42 +269,6 @@ public class CharacterHeaderComponent : IUIComponent
 				ImGui.TextColored(this.plugin.Config.CurrentCharacterColor, header);
 			else
 				ImGui.TextUnformatted(header);
-
-			// Attach context menu to the header item with forced white text
-			if (ImGui.BeginPopupContextItem($"char_ctx_{characterIndex}"))
-			{
-				ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(1f, 1f, 1f, 1f));
-				if (ImGui.MenuItem("Reset character inventory"))
-				{
-					character.Inventory?.Reset();
-					if (character.Retainers != null)
-					{
-						foreach (var r in character.Retainers)
-							r.Inventory?.Reset();
-					}
-					ConfigHelper.SaveAndSync(this.plugin.Config, this.plugin.Characters);
-				}
-				if (!character.IsIgnored)
-				{
-					if (ImGui.MenuItem("Ignore character"))
-					{
-						character.IsIgnored = true;
-						ConfigHelper.SaveAndSync(this.plugin.Config, this.plugin.Characters);
-						this.plugin.InvalidateSortCache();
-					}
-				}
-				else
-				{
-					if (ImGui.MenuItem("Unignore character"))
-					{
-						character.IsIgnored = false;
-						ConfigHelper.SaveAndSync(this.plugin.Config, this.plugin.Characters);
-						this.plugin.InvalidateSortCache();
-					}
-				}
-				ImGui.PopStyleColor();
-				ImGui.EndPopup();
-			}
 		}
 
 		// Only pop style colors for header/ignored state, not for current character label
