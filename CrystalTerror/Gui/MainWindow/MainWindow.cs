@@ -23,9 +23,9 @@ public class MainWindow : Window, IDisposable
 			string title;
 
 			#if DEBUG
-				title = string.IsNullOrEmpty(ver) ? "Crystal Terror - v??????? [TESTING]" : $"Crystal Terror testing-v{ver} [TESTING]";
+				title = string.IsNullOrEmpty(ver) ? "Crystal Terror - v??????? [TESTING]" : $"Crystal Terror  -  v{ver} [TESTING]";
 			#else
-				title = string.IsNullOrEmpty(ver) ? "Crystal Terror - v???????" : $"Crystal Terror v{ver}";
+				title = string.IsNullOrEmpty(ver) ? "Crystal Terror - v???????" : $"Crystal Terror  -  v{ver}";
 			#endif
 
 			return title;
