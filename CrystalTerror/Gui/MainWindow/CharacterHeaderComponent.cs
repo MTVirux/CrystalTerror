@@ -199,7 +199,6 @@ public class CharacterHeaderComponent : IUIComponent
 			{
 				ImGui.TextColored(this.plugin.Config.CurrentCharacterColor, header);
 				ImGui.SameLine(0, 5);
-				ImGui.TextUnformatted(" —");
 			}
 			else
 			{
