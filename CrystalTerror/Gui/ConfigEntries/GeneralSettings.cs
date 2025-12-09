@@ -166,17 +166,6 @@ public class GeneralSettings : ConfigEntry
                 }
             })
             .Unindent()
-            .EndIf()
-
-            .Section("Visibility")
-            .Widget("Hide characters with no gathering retainers", (x) =>
-            {
-                var val = Plugin.Config.HideNonGatheringCharacters;
-                if (ImGui.Checkbox(x, ref val))
-                {
-                    Plugin.Config.HideNonGatheringCharacters = val;
-                    ConfigHelper.Save(Plugin.Config);
-                }
-            });
+            .EndIf();
     }
 }
