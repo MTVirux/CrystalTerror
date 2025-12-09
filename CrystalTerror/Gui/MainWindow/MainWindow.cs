@@ -23,7 +23,26 @@ public class MainWindow : Window, IDisposable
 			string title;
 
 			#if DEBUG
-				title = string.IsNullOrEmpty(ver) ? "Crystal Terror - v??????? [TESTING]" : $"Crystal Terror  -  v{ver} [TESTING]";
+				if (string.IsNullOrEmpty(ver))
+				{
+					title = "Crystal Terror - v??????? [TESTING]";
+				}
+				else
+				{
+					// Increment the last numeric component of the version for Debug builds
+					var parts = ver.Split('.');
+					if (parts.Length > 0)
+					{
+						var last = parts[parts.Length - 1];
+						if (int.TryParse(last, out var n))
+						{
+							parts[parts.Length - 1] = (n + 1).ToString();
+						}
+					}
+
+					var verDbg = string.Join('.', parts);
+					title = $"Crystal Terror  -  v{verDbg} [TESTING]";
+				}
 			#else
 				title = string.IsNullOrEmpty(ver) ? "Crystal Terror - v???????" : $"Crystal Terror  -  v{ver}";
 			#endif
