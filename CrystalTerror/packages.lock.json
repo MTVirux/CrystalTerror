@@ -35,9 +35,6 @@
       "ecommons": {
         "type": "Project"
       },
-      "fontawesomeicons": {
-        "type": "Project"
-      },
       "nightmareui": {
         "type": "Project",
         "dependencies": {
