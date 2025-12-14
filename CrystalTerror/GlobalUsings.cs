@@ -10,3 +10,7 @@ global using CrystalTerror;
 global using CrystalTerror.Core;
 global using CrystalTerror.Helpers;
 global using CrystalTerror.Services;
+
+// ECommons for reliable player/game state access
+global using ECommons.DalamudServices;
+global using ECommons.GameHelpers;

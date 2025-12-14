@@ -1,9 +1,8 @@
-using CrystalTerror.Services;
-
 namespace CrystalTerror.Helpers;
 
 /// <summary>
 /// Centralized helper for loading and saving plugin configuration.
+/// Uses ECommons Svc for service access.
 /// </summary>
 internal static class ConfigHelper
 {
@@ -11,126 +10,145 @@ internal static class ConfigHelper
     /// Loads the plugin configuration from Dalamud's config system.
     /// Returns a new Configuration instance if none exists or if loading fails.
     /// </summary>
-    /// <returns>The loaded Configuration or a new instance.</returns>
     public static Configuration Load()
     {
         try
         {
-           
-            var cfg = PluginInterfaceService.Interface.GetPluginConfig() as Configuration ?? new Configuration();
+            var cfg = Svc.PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
-            // If there are persisted characters, deduplicate and repair owner references
+            // Deduplicate and repair owner references for persisted characters
             try
             {
-                if (cfg.Characters != null && cfg.Characters.Count > 1)
+                if (cfg.Characters != null && cfg.Characters.Count > 0)
                 {
                     cfg.Characters = DeduplicateCharacters(cfg.Characters);
                     RetainerHelper.RepairOwnerReferences(cfg.Characters);
+                    
+                    // Migrate characters without ContentId if they match current player
+                    MigrateCharacterContentIds(cfg.Characters);
                 }
             }
             catch (Exception ex)
             {
-                LogService.Log.Warning($"[ConfigHelper] Failed to dedupe/repair characters on load: {ex.Message}");
+                Svc.Log.Warning($"[ConfigHelper] Failed to process characters on load: {ex.Message}");
             }
 
             return cfg;
         }
         catch (Exception ex)
         {
-            LogService.Log.Warning($"[ConfigHelper] Failed to load configuration: {ex.Message}");
+            Svc.Log.Warning($"[ConfigHelper] Failed to load configuration: {ex.Message}");
             return new Configuration();
         }
     }
 
     /// <summary>
-    /// Saves the plugin configuration to Dalamud's config system and syncs characters.
-    /// Syncs the in-memory character list to the config before saving.
+    /// Migrates characters that don't have ContentId by matching them with the current player.
     /// </summary>
-    /// <param name="config">The configuration to save.</param>
-    /// <param name="characters">The in-memory character list to sync to the config.</param>
-    /// <returns>True if save was successful, false otherwise.</returns>
+    private static void MigrateCharacterContentIds(List<StoredCharacter> characters)
+    {
+        if (!Player.Available || Player.CID == 0)
+            return;
+
+        foreach (var c in characters)
+        {
+            if (c.ContentId == 0 &&
+                string.Equals(c.Name?.Trim(), Player.Name, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(c.World?.Trim(), Player.HomeWorldName, StringComparison.OrdinalIgnoreCase))
+            {
+                c.ContentId = Player.CID;
+                c.HomeWorldId = Player.HomeWorld.RowId;
+                Svc.Log.Debug($"[ConfigHelper] Migrated CID for {c.Name}@{c.World} to {c.ContentId:X16}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Saves the plugin configuration and syncs the character list.
+    /// </summary>
     public static bool SaveAndSync(Configuration config, List<StoredCharacter> characters)
     {
         try
         {
-            // Sync in-memory characters to config before saving
-            LogService.Log.Information("[ConfigHelper] Syncing characters to config before save.");
-            // Log all characters (pre-dedupe):
-            foreach (var character in characters)
-            {
-                LogService.Log.Debug($"[ConfigHelper] Character: {character.Name}:{character.World} with {character.Retainers.Count} retainers.");
-            }
+            Svc.Log.Debug($"[ConfigHelper] Saving config with {characters.Count} characters");
 
-            // Deduplicate characters before persisting and keep the in-memory list in sync.
+            // Deduplicate characters before persisting
             var deduped = DeduplicateCharacters(characters);
             characters.Clear();
             characters.AddRange(deduped);
             config.Characters = deduped;
-            PluginInterfaceService.Interface.SavePluginConfig(config);
+            
+            Svc.PluginInterface.SavePluginConfig(config);
             return true;
         }
         catch (Exception ex)
         {
-            LogService.Log.Error($"[ConfigHelper] Failed to save configuration: {ex.Message}");
+            Svc.Log.Error($"[ConfigHelper] Failed to save configuration: {ex.Message}");
             return false;
         }
     }
 
     /// <summary>
-    /// Removes duplicate characters (case-insensitive Name+World) from the provided list.
-    /// If duplicates are found the most recently-updated entry is kept.
+    /// Removes duplicate characters. Now uses ContentId as primary dedup key when available.
     /// </summary>
     private static List<StoredCharacter> DeduplicateCharacters(IEnumerable<StoredCharacter> characters)
     {
         if (characters == null)
             return new List<StoredCharacter>();
 
-        var grouped = characters
-            .Where(c => c != null)
-            .GroupBy(c => (c.Name ?? string.Empty).Trim().ToLowerInvariant() + ":" + (c.World ?? string.Empty).Trim().ToLowerInvariant());
-
         var result = new List<StoredCharacter>();
-        foreach (var g in grouped)
+        var seenCIDs = new HashSet<ulong>();
+        var seenNameWorlds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Sort by LastUpdateUtc descending so we keep the most recent
+        var sorted = characters
+            .Where(c => c != null)
+            .OrderByDescending(c => c.LastUpdateUtc)
+            .ThenByDescending(c => c.Retainers?.Count ?? 0);
+
+        foreach (var c in sorted)
         {
-            var keep = g
-                .OrderByDescending(c => c.LastUpdateUtc)
-                .ThenByDescending(c => c.Retainers?.Count ?? 0)
-                .First();
-            result.Add(keep);
+            // Check ContentId first (most reliable)
+            if (c.ContentId != 0)
+            {
+                if (seenCIDs.Contains(c.ContentId))
+                    continue;
+                seenCIDs.Add(c.ContentId);
+            }
+            else
+            {
+                // Fall back to Name+World
+                var key = $"{c.Name?.Trim() ?? ""}@{c.World?.Trim() ?? ""}";
+                if (seenNameWorlds.Contains(key))
+                    continue;
+                seenNameWorlds.Add(key);
+            }
+
+            result.Add(c);
         }
 
         if (result.Count != characters.Count())
-            LogService.Log.Information($"[ConfigHelper] Deduplicated characters: original={characters.Count()}, deduped={result.Count}");
-
-        // Repair owner references on the deduped list before returning so callers get fully repaired objects
-        try
         {
-            RetainerHelper.RepairOwnerReferences(result);
-        }
-        catch (Exception ex)
-        {
-            LogService.Log.Warning($"[ConfigHelper] Failed to repair owner references after dedupe: {ex.Message}");
+            Svc.Log.Debug($"[ConfigHelper] Deduplicated: {characters.Count()} -> {result.Count}");
         }
 
+        RetainerHelper.RepairOwnerReferences(result);
         return result;
     }
 
     /// <summary>
-    /// Saves the plugin configuration to Dalamud's config system without syncing characters.
-    /// Use this when only non-character settings have changed.
+    /// Saves the configuration without syncing the character list.
     /// </summary>
-    /// <param name="config">The configuration to save.</param>
-    /// <returns>True if save was successful, false otherwise.</returns>
     public static bool Save(Configuration config)
     {
         try
         {
-            PluginInterfaceService.Interface.SavePluginConfig(config);
+            Svc.PluginInterface.SavePluginConfig(config);
             return true;
         }
         catch (Exception ex)
         {
-            LogService.Log.Error($"[ConfigHelper] Failed to save configuration: {ex.Message}");
+            Svc.Log.Error($"[ConfigHelper] Failed to save configuration: {ex.Message}");
             return false;
         }
     }

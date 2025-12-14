@@ -1,6 +1,7 @@
 using Lumina.Excel.Sheets;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Dalamud.Plugin.Services;
+using ECommons.GameHelpers;
 
 namespace CrystalTerror.Helpers;
 
@@ -32,7 +33,7 @@ public static class RetainerStatsHelper
         var container = InventoryManager.Instance()->GetInventoryContainer(InventoryType.RetainerEquippedItems);
         if (container == null) return (null, 0, 0);
 
-        var sheet = Services.DataService.Manager.GetExcelSheet<Item>();
+        var sheet = Svc.Data.GetExcelSheet<Item>();
         if (sheet == null) return (null, 0, 0);
 
         uint sum = 0;
@@ -126,7 +127,7 @@ public static class RetainerStatsHelper
             try
             {
                 // Only update if we're at a summoning bell
-                if (!Services.GameStateService.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.OccupiedSummoningBell])
+                if (!Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.OccupiedSummoningBell])
                     return;
 
                 // Throttle updates
@@ -150,8 +151,10 @@ public static class RetainerStatsHelper
                     return;
 
                 // Find this retainer in our stored characters
-                var contentId = Services.PlayerService.State.ContentId;
-                var currentChar = characters.FirstOrDefault(c => c.Name == Services.PlayerService.Objects.LocalPlayer?.Name.TextValue && contentId != 0);
+                if (!Player.Available || Player.CID == 0)
+                    return;
+                    
+                var currentChar = characters.FirstOrDefault(c => c.MatchesCID(Player.CID));
                 if (currentChar == null)
                     return;
 
@@ -164,11 +167,11 @@ public static class RetainerStatsHelper
                 retainer.Gathering = gathering;
                 retainer.Perception = perception;
 
-                Services.LogService.Log.Debug($"Updated stats for retainer {retainer.Name}: Ilvl={itemLevel}, Gathering={gathering}, Perception={perception}");
+                Svc.Log.Debug($"Updated stats for retainer {retainer.Name}: Ilvl={itemLevel}, Gathering={gathering}, Perception={perception}");
             }
             catch (Exception ex)
             {
-                Services.LogService.Log.Warning($"Error updating retainer stats: {ex.Message}");
+                Svc.Log.Warning($"Error updating retainer stats: {ex.Message}");
             }
         }
 

@@ -1,6 +1,5 @@
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
-using Dalamud.Data;
 using Lumina.Excel.Sheets;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
@@ -13,380 +12,455 @@ namespace CrystalTerror.Helpers;
 /// <summary>
 /// Helper utilities for character-related import functions.
 /// Provides import from the currently logged-in character and mass import from AutoRetainer IPC.
+/// Uses ECommons Player helper for reliable player data access.
 /// </summary>
 public static class CharacterHelper
 {
     /// <summary>
     /// Create a <see cref="StoredCharacter"/> representing the currently logged-in player.
     /// Returns null if the client is not logged in or LocalPlayer is unavailable.
+    /// Uses ECommons.GameHelpers.Player for reliable data access.
     /// </summary>
     public static StoredCharacter? ImportCurrentCharacter()
     {
-        // Use ContentId to determine login state and IObjectTable to access the local player.
-        if (Services.PlayerService.State.ContentId == 0) return null;
+        // Use ECommons Player.Available and Player.CID for reliable login state detection
+        if (!Player.Available || Player.CID == 0) 
+            return null;
 
-        var local = Services.PlayerService.Objects.LocalPlayer;
-        if (local == null) return null;
+        var playerObject = Player.Object;
+        if (playerObject == null) 
+            return null;
 
-        // Default to the numeric home world id
-        var worldStr = string.Empty;
+        // Get player name using ECommons - more reliable than direct access
+        var playerName = Player.Name;
+        if (string.IsNullOrWhiteSpace(playerName))
+        {
+            // Fallback to object name
+            playerName = playerObject.Name.TextValue ?? string.Empty;
+        }
+
+        // Get world name using ECommons - already handles the sheet lookup
+        var worldName = Player.HomeWorldName;
+        var homeWorldId = Player.HomeWorld.RowId;
+
+        // Create the character with ContentId as primary identifier
+        var sc = new StoredCharacter
+        {
+            ContentId = Player.CID,
+            Name = playerName.Trim(),
+            World = worldName.Trim(),
+            HomeWorldId = homeWorldId,
+            ServiceAccount = 1,
+            LastUpdateUtc = DateTime.UtcNow,
+            Retainers = new List<Retainer>(),
+            Inventory = new Inventory()
+        };
+
         try
         {
-            worldStr = local.HomeWorld.RowId.ToString();
+            Svc.Log.Debug($"[CrystalTerror] Importing character: {sc.Name}@{sc.World} (CID={sc.ContentId:X16})");
+        }
+        catch { }
+
+        // Populate character crystal inventory from InventoryManager
+        PopulateCharacterCrystals(sc);
+
+        // Populate retainers from in-memory client structs
+        PopulateRetainers(sc);
+
+        return sc;
+    }
+
+    /// <summary>
+    /// Populates the character's crystal inventory from the game's InventoryManager.
+    /// </summary>
+    private static void PopulateCharacterCrystals(StoredCharacter sc)
+    {
+        try
+        {
+            unsafe
+            {
+                var invMgr = InventoryManager.Instance();
+                if (invMgr == null) return;
+
+                var crystalContainer = invMgr->GetInventoryContainer(InventoryType.Crystals);
+                if (crystalContainer == null) return;
+
+                // Crystal item IDs in FFXIV - organized by type first, then element:
+                // Shards: 2-7 (Fire, Ice, Wind, Earth, Lightning, Water)
+                // Crystals: 8-13 (Fire, Ice, Wind, Earth, Lightning, Water)
+                // Clusters: 14-19 (Fire, Ice, Wind, Earth, Lightning, Water)
+                var elements = new Element[] { Element.Fire, Element.Ice, Element.Wind, Element.Earth, Element.Lightning, Element.Water };
+                var crystalTypes = new CrystalType[] { CrystalType.Shard, CrystalType.Crystal, CrystalType.Cluster };
+                var baseItemIds = new uint[] { 2, 8, 14 };
+
+                for (int ti = 0; ti < crystalTypes.Length; ++ti)
+                {
+                    for (int ei = 0; ei < elements.Length; ++ei)
+                    {
+                        uint itemId = baseItemIds[ti] + (uint)ei;
+                        int count = invMgr->GetItemCountInContainer(itemId, InventoryType.Crystals);
+                        sc.Inventory.SetCount(elements[ei], crystalTypes[ti], count);
+                    }
+                }
+
+                try
+                {
+                    var dict = sc.Inventory.ToDictionary();
+                    var parts = dict.Select(kv => $"{kv.Key}={kv.Value}");
+                    Svc.Log.Debug("[CrystalTerror] Character crystals: " + string.Join(", ", parts));
+                }
+                catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            Svc.Log.Debug($"[CrystalTerror] Failed to read character crystals: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Populates retainer data from client structs and ItemFinderModule.
+    /// </summary>
+    private static void PopulateRetainers(StoredCharacter sc)
+    {
+        try
+        {
+            unsafe
+            {
+                var mgr = RetainerManager.Instance();
+                if (mgr == null) return;
+
+                for (int i = 0; i < 10; ++i)
+                {
+                    var rptr = mgr->GetRetainerBySortedIndex((uint)i);
+                    if (rptr == null) continue;
+                    if (rptr->RetainerId == 0) continue;
+
+                    // Read retainer name from the struct
+                    string rname = ReadRetainerName(rptr);
+
+                    // Get retainer stats (iLvl, Gathering, Perception)
+                    var (ilvl, gathering, perception) = GetRetainerStats(rname);
+
+                    var ret = RetainerHelper.Create(
+                        sc, 
+                        rname, 
+                        rptr->RetainerId, 
+                        (int)rptr->ClassJob, 
+                        rptr->Level, 
+                        ilvl, 
+                        gathering, 
+                        perception
+                    );
+
+                    // Populate retainer crystal inventory from ItemFinderModule cache
+                    PopulateRetainerCrystals(ret, rptr->RetainerId);
+
+                    sc.Retainers.Add(ret);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Svc.Log.Debug($"[CrystalTerror] Failed to read retainers: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Reads the retainer name from the RetainerManager struct.
+    /// </summary>
+    private static unsafe string ReadRetainerName(FFXIVClientStructs.FFXIV.Client.Game.RetainerManager.Retainer* rptr)
+    {
+        try
+        {
+            byte* namePtr = (byte*)rptr + 0x08;
+            int len = 0;
+            while (len < 32 && namePtr[len] != 0) ++len;
+            return len > 0 ? Encoding.UTF8.GetString(namePtr, len) : string.Empty;
         }
         catch
         {
-            worldStr = string.Empty;
+            return string.Empty;
         }
+    }
 
-        // Try to resolve the human-readable world name from game data
+    /// <summary>
+    /// Gets retainer stats from direct calculation or AutoRetainer IPC.
+    /// </summary>
+    private static (int ilvl, int gathering, int perception) GetRetainerStats(string retainerName)
+    {
+        int ilvl = 0, gathering = 0, perception = 0;
+
+        // Try to calculate from equipped gear first
         try
         {
-            var sheet = Services.DataService.Manager.GetExcelSheet<Lumina.Excel.Sheets.World>();
-            if (sheet != null)
+            var (calculatedIlvl, calculatedGathering, calculatedPerception) = RetainerStatsHelper.CalculateRetainerStats();
+            if (calculatedIlvl.HasValue)
             {
-                    var row = sheet.GetRowOrDefault((uint)local.HomeWorld.RowId);
-                    if (row.HasValue)
-                    {
-                        worldStr = row.Value.Name.ExtractText();
-                    }
+                return (calculatedIlvl.Value, calculatedGathering, calculatedPerception);
+            }
+        }
+        catch { }
+
+        // Fall back to AutoRetainer IPC
+        try
+        {
+            var getAdditional = Svc.PluginInterface.GetIpcSubscriber<ulong, string, object>("AutoRetainer.GetAdditionalRetainerData");
+            if (getAdditional != null)
+            {
+                var additionalData = getAdditional.InvokeFunc(Player.CID, retainerName);
+                if (additionalData != null)
+                {
+                    dynamic adata = additionalData;
+                    try { ilvl = (int?)(adata.Ilvl ?? 0) ?? 0; } catch { }
+                    try { gathering = (int?)(adata.Gathering ?? 0) ?? 0; } catch { }
+                    try { perception = (int?)(adata.Perception ?? 0) ?? 0; } catch { }
                 }
             }
-            catch
-            {
-                // ignore and keep numeric id
-            }
+        }
+        catch { }
 
+        return (ilvl, gathering, perception);
+    }
+
+    /// <summary>
+    /// Populates retainer crystal inventory from ItemFinderModule cache.
+    /// </summary>
+    private static unsafe void PopulateRetainerCrystals(Retainer ret, ulong retainerId)
+    {
+        try
+        {
+            var ifm = ItemFinderModule.Instance();
+            if (ifm == null) return;
+
+            if (!ifm->RetainerInventories.TryGetValuePointer(retainerId, out var invPtr) || invPtr == null)
+                return;
+
+            ItemFinderRetainerInventory* inv = (ItemFinderRetainerInventory*)(*invPtr);
+            if (inv == null) return;
+
+            // Crystal quantities: 18 entries stored by type first, then element
+            // Indices 0-5: Shards, 6-11: Crystals, 12-17: Clusters
+            var crystals = inv->CrystalQuantities;
+            var elements = new Element[] { Element.Fire, Element.Ice, Element.Wind, Element.Earth, Element.Lightning, Element.Water };
+            var crystalTypes = new CrystalType[] { CrystalType.Shard, CrystalType.Crystal, CrystalType.Cluster };
+
+            for (int ti = 0; ti < crystalTypes.Length; ++ti)
+            {
+                for (int ei = 0; ei < elements.Length; ++ei)
+                {
+                    int idx = ti * 6 + ei;
+                    ushort val = crystals[idx];
+                    ret.Inventory.SetCount(elements[ei], crystalTypes[ti], val);
+                }
+            }
+        }
+        catch { }
+    }
+
+    /// <summary>
+    /// Mass-import stored characters using AutoRetainer IPC. Groups retainers by owner name+world
+    /// and constructs a <see cref="StoredCharacter"/> for each owner.
+    /// </summary>
+    public static List<StoredCharacter> ImportFromAutoRetainer()
+    {
+        var outChars = new List<StoredCharacter>();
+
+        var retInfos = AutoRetainerHelper.GetAllRetainersViaAutoRetainer();
+        if (retInfos == null || retInfos.Count == 0) return outChars;
+
+        var grouped = retInfos.GroupBy(r => new { 
+            OwnerName = r.OwnerName ?? string.Empty, 
+            OwnerWorld = r.OwnerWorld ?? string.Empty,
+            OwnerCID = r.OwnerCID
+        });
+
+        foreach (var g in grouped)
+        {
             var sc = new StoredCharacter
             {
-                Name = (local.Name.TextValue ?? string.Empty).Trim(),
-                World = worldStr.Trim(),
+                ContentId = g.Key.OwnerCID,
+                Name = g.Key.OwnerName,
+                World = g.Key.OwnerWorld,
+                HomeWorldId = 0, // Will be populated when character logs in
                 ServiceAccount = 1,
                 LastUpdateUtc = DateTime.UtcNow,
                 Retainers = new List<Retainer>(),
                 Inventory = new Inventory()
             };
 
-            try
+            foreach (var ri in g)
             {
-                Services.LogService.Log.Debug($"[CrystalTerror] Importing character inventory for {sc.Name}:{sc.World} (ContentId={Services.PlayerService.State.ContentId})");
-            }
-            catch { }
-            // Try to populate character crystal inventory from InventoryManager
-            try
-            {
-                unsafe
-                {
-                    var invMgr = FFXIVClientStructs.FFXIV.Client.Game.InventoryManager.Instance();
-                    if (invMgr != null)
-                    {
-                        var crystalContainer = invMgr->GetInventoryContainer(FFXIVClientStructs.FFXIV.Client.Game.InventoryType.Crystals);
-                        if (crystalContainer != null)
-                        {
-                            // Crystal item IDs in FFXIV
-                            // The game stores crystals by type first, then element:
-                            // Shards: 2-7 (Fire, Ice, Wind, Earth, Lightning, Water)
-                            // Crystals: 8-13 (Fire, Ice, Wind, Earth, Lightning, Water)
-                            // Clusters: 14-19 (Fire, Ice, Wind, Earth, Lightning, Water)
-                            var elements = new Element[] { Element.Fire, Element.Ice, Element.Wind, Element.Earth, Element.Lightning, Element.Water };
-                            var crystalTypes = new CrystalType[] { CrystalType.Shard, CrystalType.Crystal, CrystalType.Cluster };
-                            
-                            // Item IDs: Shards start at 2, Crystals at 8, Clusters at 14
-                            var baseItemIds = new uint[] { 2, 8, 14 };
-
-                            for (int ti = 0; ti < crystalTypes.Length; ++ti)
-                            {
-                                for (int ei = 0; ei < elements.Length; ++ei)
-                                {
-                                    uint itemId = baseItemIds[ti] + (uint)ei;
-                                    int count = invMgr->GetItemCountInContainer(itemId, FFXIVClientStructs.FFXIV.Client.Game.InventoryType.Crystals);
-                                    try { sc.Inventory.SetCount(elements[ei], crystalTypes[ti], count); } catch { }
-                                }
-                            }
-                            try
-                            {
-                                // Log the imported character crystal totals at debug level
-                                var dict = sc.Inventory.ToDictionary();
-                                var parts = dict.Select(kv => $"{kv.Key}={kv.Value}");
-                                Services.LogService.Log.Debug("[CrystalTerror] Character crystals: " + string.Join(", ", parts));
-                            }
-                            catch { }
-                        }
-                    }
-                }
-            }
-            catch
-            {
-                // ignore if InventoryManager not available or access fails
+                var r = RetainerHelper.CreateFromAutoRetainer(sc, ri.Name, ri.Atid, ri.Job, ri.Level, ri.Ilvl, ri.Gathering, ri.Perception);
+                sc.Retainers.Add(r);
             }
 
-            // Try to populate retainers from in-memory client structs (when available).
-            try
-            {
-                unsafe
-                {
-                    var mgr = RetainerManager.Instance();
-                    if (mgr != null)
-                    {
-                        for (int i = 0; i < 10; ++i)
-                        {
-                            var rptr = mgr->GetRetainerBySortedIndex((uint)i);
-                            if (rptr == null) continue;
-
-                            // If no valid retainer id, skip
-                            if (rptr->RetainerId == 0) continue;
-
-                            // read fixed-size name at offset 0x08, up to 32 bytes
-                            string rname = string.Empty;
-                            try
-                            {
-                                byte* namePtr = (byte*)rptr + 0x08;
-                                int len = 0;
-                                while (len < 32 && namePtr[len] != 0) ++len;
-                                if (len > 0)
-                                    rname = Encoding.UTF8.GetString(namePtr, len);
-                            }
-                            catch
-                            {
-                                rname = string.Empty;
-                            }
-
-                            // Try to calculate retainer stats from equipped gear if accessible
-                            int ilvl = 0;
-                            int gathering = 0;
-                            int perception = 0;
-                            bool statsObtained = false;
-                            
-                            try
-                            {
-                                var (calculatedIlvl, calculatedGathering, calculatedPerception) = RetainerStatsHelper.CalculateRetainerStats();
-                                if (calculatedIlvl.HasValue)
-                                {
-                                    // Gear is accessible, use calculated values
-                                    ilvl = calculatedIlvl.Value;
-                                    gathering = calculatedGathering;
-                                    perception = calculatedPerception;
-                                    statsObtained = true;
-                                }
-                            }
-                            catch
-                            {
-                                // Calculation failed, gear not accessible
-                            }
-                            
-                            // If gear not accessible, try to get stats from AutoRetainer
-                            if (!statsObtained)
-                            {
-                                try
-                                {
-                                    var getAdditional = Services.PluginInterfaceService.Interface.GetIpcSubscriber<ulong, string, object>("AutoRetainer.GetAdditionalRetainerData");
-                                    if (getAdditional != null)
-                                    {
-                                        var additionalData = getAdditional.InvokeFunc(Services.PlayerService.State.ContentId, rname);
-                                        if (additionalData != null)
-                                        {
-                                            dynamic adata = additionalData;
-                                            try { ilvl = (int?)(adata.Ilvl ?? 0) ?? 0; } catch { }
-                                            try { gathering = (int?)(adata.Gathering ?? 0) ?? 0; } catch { }
-                                            try { perception = (int?)(adata.Perception ?? 0) ?? 0; } catch { }
-                                            statsObtained = true;
-                                        }
-                                    }
-                                }
-                                catch
-                                {
-                                    // AutoRetainer not available or data not found
-                                }
-                            }
-
-                            var ret = RetainerHelper.Create(sc, string.IsNullOrEmpty(rname) ? string.Empty : rname, rptr->RetainerId, (int)rptr->ClassJob, rptr->Level, ilvl, gathering, perception);
-
-                            // Try to populate crystal/shard/cluster counts from the client's ItemFinder cache
-                            try
-                            {
-                                var ifm = ItemFinderModule.Instance();
-                                if (ifm != null)
-                                {
-                                    // The map stores pointers to ItemFinderRetainerInventory; try to get by retainer id
-                                    if (ifm->RetainerInventories.TryGetValuePointer(rptr->RetainerId, out var invPtr) && invPtr != null)
-                                    {
-                                        // invPtr is a pointer to a Pointer<ItemFinderRetainerInventory> (i.e. Pointer<ItemFinderRetainerInventory>*).
-                                        // Dereference to obtain the underlying ItemFinderRetainerInventory* via the Pointer<T> implicit conversion.
-                                        ItemFinderRetainerInventory* inv = (ItemFinderRetainerInventory*)(*invPtr);
-                                        if (inv != null)
-                                        {
-                                            // Crystal quantities: 18 entries stored by type first, then element
-                                            // Order: All shards (Fire-Water), All crystals (Fire-Water), All clusters (Fire-Water)
-                                            // Indices 0-5: Shards, 6-11: Crystals, 12-17: Clusters
-                                            var crystals = inv->CrystalQuantities;
-                                            var elements = new Element[] { Element.Fire, Element.Ice, Element.Wind, Element.Earth, Element.Lightning, Element.Water };
-                                            var crystalTypes = new CrystalType[] { CrystalType.Shard, CrystalType.Crystal, CrystalType.Cluster };
-                                            
-                                            for (int ti = 0; ti < crystalTypes.Length; ++ti)
-                                            {
-                                                for (int ei = 0; ei < elements.Length; ++ei)
-                                                {
-                                                    int idx = ti * 6 + ei;
-                                                    ushort val = crystals[idx];
-                                                    try { ret.Inventory.SetCount(elements[ei], crystalTypes[ti], val); } catch { }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            catch
-                            {
-                                // ignore any errors reading ItemFinderModule
-                            }
-
-                            sc.Retainers.Add(ret);
-                        }
-                    }
-                }
-            }
-            catch
-            {
-                // ignore if FFXIVClientStructs not available or access fails
-            }
-            return sc;
+            outChars.Add(sc);
         }
 
-        /// <summary>
-        /// Mass-import stored characters using AutoRetainer IPC. Groups retainers by owner name+world
-        /// and constructs a <see cref="StoredCharacter"/> for each owner. Returns an empty list
-        /// if AutoRetainer IPC is unavailable or no retainers found.
-        /// </summary>
-        public static List<StoredCharacter> ImportFromAutoRetainer()
+        return outChars;
+    }
+
+    public enum MergePolicy
+    {
+        Skip,
+        Overwrite,
+        Merge
+    }
+
+    /// <summary>
+    /// Merge imported characters into an existing target list using the given policy.
+    /// Now uses ContentId as the primary identifier when available.
+    /// </summary>
+    public static void MergeInto(List<StoredCharacter> target, IEnumerable<StoredCharacter> imported, MergePolicy policy = MergePolicy.Merge)
+    {
+        if (target == null) throw new ArgumentNullException(nameof(target));
+        if (imported == null) return;
+
+        foreach (var sc in imported)
         {
-            var outChars = new List<StoredCharacter>();
+            // Find existing character by ContentId first, then by Name+World
+            var existing = FindExistingCharacter(target, sc);
 
-            var retInfos = AutoRetainerHelper.GetAllRetainersViaAutoRetainer();
-            if (retInfos == null || retInfos.Count == 0) return outChars;
-
-            var grouped = retInfos.GroupBy(r => new { OwnerName = r.OwnerName ?? string.Empty, OwnerWorld = r.OwnerWorld ?? string.Empty });
-
-            foreach (var g in grouped)
+            if (existing == null)
             {
-                var sc = new StoredCharacter
-                {
-                    Name = g.Key.OwnerName,
-                    World = g.Key.OwnerWorld,
-                    ServiceAccount = 1,
-                    LastUpdateUtc = DateTime.UtcNow,
-                    Retainers = new List<Retainer>(),
-                    Inventory = new Inventory()
-                };
-
-                foreach (var ri in g)
-                {
-                    var r = RetainerHelper.CreateFromAutoRetainer(sc, ri.Name, ri.Atid, ri.Job, ri.Level, ri.Ilvl, ri.Gathering, ri.Perception);
-                    sc.Retainers.Add(r);
-                }
-
-                outChars.Add(sc);
+                RetainerHelper.SetOwnerForRetainers(sc);
+                target.Add(sc);
+                Svc.Log.Debug($"[CrystalTerror] Added new character: {sc.Name}@{sc.World} (CID={sc.ContentId:X16})");
+                continue;
             }
 
-            return outChars;
-        }
-
-        public enum MergePolicy
-        {
-            Skip,
-            Overwrite,
-            Merge
-        }
-
-        /// <summary>
-        /// Merge imported characters into an existing target list using the given policy.
-        /// - Skip: do not change existing entries.
-        /// - Overwrite: replace existing entries with imported ones.
-        /// - Merge: merge retainers/inventory when possible.
-        /// </summary>
-        public static void MergeInto(List<StoredCharacter> target, IEnumerable<StoredCharacter> imported, MergePolicy policy = MergePolicy.Merge)
-        {
-            if (target == null) throw new ArgumentNullException(nameof(target));
-            if (imported == null) return;
-
-            foreach (var sc in imported)
+            // Update existing character's ContentId if it was missing
+            if (existing.ContentId == 0 && sc.ContentId != 0)
             {
-                var existing = target.FirstOrDefault(x => string.Equals(x.Name?.Trim(), sc.Name?.Trim(), StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(x.World?.Trim(), sc.World?.Trim(), StringComparison.OrdinalIgnoreCase));
+                existing.ContentId = sc.ContentId;
+                Svc.Log.Debug($"[CrystalTerror] Updated CID for {existing.Name}@{existing.World} to {sc.ContentId:X16}");
+            }
 
-                if (existing == null)
-                {
-                    // Ensure owner pointers for retainers are set and add
-                    RetainerHelper.SetOwnerForRetainers(sc);
-                    target.Add(sc);
-                    continue;
-                }
+            // Update HomeWorldId if missing
+            if (existing.HomeWorldId == 0 && sc.HomeWorldId != 0)
+            {
+                existing.HomeWorldId = sc.HomeWorldId;
+            }
 
-                switch (policy)
-                {
-                    case MergePolicy.Skip:
-                        break;
-                    case MergePolicy.Overwrite:
-                        // Preserve existing retainer stats when gear wasn't accessible during import (new values are 0)
-                        foreach (var newRetainer in sc.Retainers)
-                        {
-                            var existingRetainer = existing.Retainers.FirstOrDefault(er => 
-                                (er.Atid != 0 && er.Atid == newRetainer.Atid) || 
-                                string.Equals(er.Name, newRetainer.Name, StringComparison.OrdinalIgnoreCase));
-                            
-                            if (existingRetainer != null)
-                            {
-                                // If new stats are 0 but existing stats are non-zero, preserve them
-                                // This happens when gear isn't accessible (retainer not summoned)
-                                if (newRetainer.Ilvl == 0 && existingRetainer.Ilvl > 0)
-                                    newRetainer.Ilvl = existingRetainer.Ilvl;
-                                if (newRetainer.Gathering == 0 && existingRetainer.Gathering > 0)
-                                    newRetainer.Gathering = existingRetainer.Gathering;
-                                if (newRetainer.Perception == 0 && existingRetainer.Perception > 0)
-                                    newRetainer.Perception = existingRetainer.Perception;
-                            }
-                        }
-                        
-                        existing.Retainers = sc.Retainers;
-                        RetainerHelper.SetOwnerForRetainers(existing);
-                        existing.Inventory = sc.Inventory ?? existing.Inventory;
-                        existing.LastUpdateUtc = sc.LastUpdateUtc;
-                        existing.ServiceAccount = sc.ServiceAccount;
-                        break;
-                    case MergePolicy.Merge:
-                        foreach (var r in sc.Retainers)
-                        {
-                            var match = existing.Retainers.FirstOrDefault(er => (er.Atid != 0 && er.Atid == r.Atid) || string.Equals(er.Name, r.Name, StringComparison.OrdinalIgnoreCase));
-                            if (match == null)
-                            {
-                                // ensure owner is set to existing character
-                                r.OwnerCharacter = existing;
-                                existing.Retainers.Add(r);
-                            }
-                            else
-                            {
-                                // Update match with new data
-                                match.Name = r.Name;
-                                match.Atid = r.Atid;
-                                if (r.Job.HasValue) match.Job = r.Job;
-                                match.Level = r.Level;
-                                match.Ilvl = r.Ilvl;
-                                match.Gathering = r.Gathering;
-                                match.Perception = r.Perception;
-                                if (r.Inventory != null) match.Inventory = r.Inventory;
-                            }
-                        }
+            switch (policy)
+            {
+                case MergePolicy.Skip:
+                    break;
 
-                    if (existing.Inventory == null && sc.Inventory != null)
-                        existing.Inventory = sc.Inventory;
+                case MergePolicy.Overwrite:
+                    MergeOverwrite(existing, sc);
+                    break;
 
-                    if (sc.LastUpdateUtc > existing.LastUpdateUtc)
-                        existing.LastUpdateUtc = sc.LastUpdateUtc;
-
-                    if (sc.ServiceAccount != 0)
-                        existing.ServiceAccount = sc.ServiceAccount;
-
+                case MergePolicy.Merge:
+                    MergeMerge(existing, sc);
                     break;
             }
         }
+    }
+
+    /// <summary>
+    /// Finds an existing character in the list by ContentId or Name+World.
+    /// </summary>
+    private static StoredCharacter? FindExistingCharacter(List<StoredCharacter> target, StoredCharacter sc)
+    {
+        // Try ContentId first (most reliable)
+        if (sc.ContentId != 0)
+        {
+            var byId = target.FirstOrDefault(x => x.ContentId == sc.ContentId);
+            if (byId != null) return byId;
+        }
+
+        // Fall back to Name+World
+        return target.FirstOrDefault(x => 
+            string.Equals(x.Name?.Trim(), sc.Name?.Trim(), StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(x.World?.Trim(), sc.World?.Trim(), StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Overwrites existing character data with imported data.
+    /// </summary>
+    private static void MergeOverwrite(StoredCharacter existing, StoredCharacter sc)
+    {
+        // Preserve retainer stats when new values are 0 (gear not accessible)
+        foreach (var newRetainer in sc.Retainers)
+        {
+            var existingRetainer = existing.Retainers.FirstOrDefault(er =>
+                (er.Atid != 0 && er.Atid == newRetainer.Atid) ||
+                string.Equals(er.Name, newRetainer.Name, StringComparison.OrdinalIgnoreCase));
+
+            if (existingRetainer != null)
+            {
+                PreserveNonZeroStats(existingRetainer, newRetainer);
+            }
+        }
+
+        // Update name/world in case they changed (character transfer, etc.)
+        if (!string.IsNullOrEmpty(sc.Name)) existing.Name = sc.Name;
+        if (!string.IsNullOrEmpty(sc.World)) existing.World = sc.World;
+        if (sc.HomeWorldId != 0) existing.HomeWorldId = sc.HomeWorldId;
+
+        existing.Retainers = sc.Retainers;
+        RetainerHelper.SetOwnerForRetainers(existing);
+        existing.Inventory = sc.Inventory ?? existing.Inventory;
+        existing.LastUpdateUtc = sc.LastUpdateUtc;
+        if (sc.ServiceAccount != 0) existing.ServiceAccount = sc.ServiceAccount;
+    }
+
+    /// <summary>
+    /// Merges imported character data with existing data.
+    /// </summary>
+    private static void MergeMerge(StoredCharacter existing, StoredCharacter sc)
+    {
+        foreach (var r in sc.Retainers)
+        {
+            var match = existing.Retainers.FirstOrDefault(er =>
+                (er.Atid != 0 && er.Atid == r.Atid) ||
+                string.Equals(er.Name, r.Name, StringComparison.OrdinalIgnoreCase));
+
+            if (match == null)
+            {
+                r.OwnerCharacter = existing;
+                existing.Retainers.Add(r);
+            }
+            else
+            {
+                // Update match with new data, preserving non-zero stats
+                match.Name = r.Name;
+                match.Atid = r.Atid;
+                if (r.Job.HasValue) match.Job = r.Job;
+                match.Level = r.Level;
+                PreserveNonZeroStats(match, r);
+                if (r.Inventory != null) match.Inventory = r.Inventory;
+            }
+        }
+
+        // Update name/world if changed
+        if (!string.IsNullOrEmpty(sc.Name)) existing.Name = sc.Name;
+        if (!string.IsNullOrEmpty(sc.World)) existing.World = sc.World;
+        if (sc.HomeWorldId != 0) existing.HomeWorldId = sc.HomeWorldId;
+
+        if (existing.Inventory == null && sc.Inventory != null)
+            existing.Inventory = sc.Inventory;
+
+        if (sc.LastUpdateUtc > existing.LastUpdateUtc)
+            existing.LastUpdateUtc = sc.LastUpdateUtc;
+
+        if (sc.ServiceAccount != 0)
+            existing.ServiceAccount = sc.ServiceAccount;
+    }
+
+    /// <summary>
+    /// Preserves non-zero stats from existing retainer when new stats are zero.
+    /// </summary>
+    private static void PreserveNonZeroStats(Retainer existing, Retainer incoming)
+    {
+        if (incoming.Ilvl == 0 && existing.Ilvl > 0)
+            incoming.Ilvl = existing.Ilvl;
+        if (incoming.Gathering == 0 && existing.Gathering > 0)
+            incoming.Gathering = existing.Gathering;
+        if (incoming.Perception == 0 && existing.Perception > 0)
+            incoming.Perception = existing.Perception;
     }
 }

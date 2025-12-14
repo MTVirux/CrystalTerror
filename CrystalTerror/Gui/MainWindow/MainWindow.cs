@@ -6,11 +6,11 @@ using System.Linq;
 using CrystalTerror.Helpers;
 using CrystalTerror.Gui.Common;
 using Dalamud.Interface.Windowing;
-using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
-using Dalamud.Interface.Textures.TextureWraps;
 using Dalamud.Plugin.Services;
+using Dalamud.Bindings.ImGui;
 using ImGui = Dalamud.Bindings.ImGui.ImGui;
+using ECommons.ImGuiMethods;
 
 public class MainWindow : Window, IDisposable
 {
@@ -29,7 +29,6 @@ public class MainWindow : Window, IDisposable
 				}
 				else
 				{
-					// Increment the last numeric component of the version for Debug builds
 					var parts = ver.Split('.');
 					if (parts.Length > 0)
 					{
@@ -54,15 +53,13 @@ public class MainWindow : Window, IDisposable
 			return "Crystal Terror";
 		}
 	}
+
 	private readonly CrystalTerrorPlugin plugin;
-	private WindowLockButtonComponent? lockButtonComponent;
-	private TitleBarButton? lockButton;
 	private readonly ITextureProvider textureProvider;
 	
-	// UI Components
-	private CharacterFilterComponent? filterComponent;
+	// UI Components - now using the new modular panel
 	private CrystalCountsUtility? countsUtility;
-	private MainWindowContainerComponent? containerComponent;
+	private CharacterListPanel? characterListPanel;
 
 	public MainWindow(CrystalTerrorPlugin plugin, ITextureProvider textureProvider)
 		: base(GetTitleWithVersion())
@@ -71,17 +68,13 @@ public class MainWindow : Window, IDisposable
 		this.textureProvider = textureProvider;
 		this.SizeConstraints = new WindowSizeConstraints()
 		{
-			MinimumSize = new System.Numerics.Vector2(300, 100),
-			MaximumSize = ImGui.GetIO().DisplaySize,
+			MinimumSize = new System.Numerics.Vector2(400, 200),
+			MaximumSize = new System.Numerics.Vector2(2000, 2000),
 		};
 
 		// Initialize UI components
-		this.filterComponent = new CharacterFilterComponent(plugin);
 		this.countsUtility = new CrystalCountsUtility(plugin);
-		this.containerComponent = new MainWindowContainerComponent(plugin, this.countsUtility, this.filterComponent, textureProvider);
-
-		// Initialize lock button component
-		this.lockButtonComponent = new WindowLockButtonComponent(plugin, isConfigWindow: false);
+		this.characterListPanel = new CharacterListPanel(plugin, this.countsUtility, textureProvider);
 
 		// Create and add title bar buttons
 		TitleBarButtons.Add(new TitleBarButton
@@ -92,24 +85,26 @@ public class MainWindow : Window, IDisposable
 			ShowTooltip = () => ImGui.SetTooltip("Open settings"),
 		});
 
-		// Create lock button with component's click handler.
-		// Use a local TitleBarButton so we can update its Icon immediately after clicks.
-		var lockTb = new TitleBarButton
+		// Lock/pin button
+		TitleBarButtons.Add(new TitleBarButton
 		{
-			Icon = this.lockButtonComponent.CurrentIcon,
+			Click = (m) => 
+			{
+				if (m == ImGuiMouseButton.Left)
+				{
+					plugin.Config.PinMainWindow = !plugin.Config.PinMainWindow;
+					if (plugin.Config.PinMainWindow)
+					{
+						plugin.Config.MainWindowPos = ImGui.GetWindowPos();
+						plugin.Config.MainWindowSize = ImGui.GetWindowSize();
+					}
+					ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
+				}
+			},
+			Icon = FontAwesomeIcon.Thumbtack,
 			IconOffset = new System.Numerics.Vector2(3, 2),
-			ShowTooltip = () => ImGui.SetTooltip("Lock window position and size"),
-		};
-
-		lockTb.Click = (m) =>
-		{
-			this.lockButtonComponent.OnLockButtonClick(m);
-			// Immediately refresh the icon to reflect the new state
-			lockTb.Icon = this.lockButtonComponent.CurrentIcon;
-		};
-
-		lockButton = lockTb;
-		TitleBarButtons.Add(lockButton);
+			ShowTooltip = () => ImGui.SetTooltip(plugin.Config.PinMainWindow ? "Unpin window" : "Pin window position"),
+		});
 	}
 
 	public void Dispose()
@@ -121,7 +116,6 @@ public class MainWindow : Window, IDisposable
 		if (this.plugin.Config.PinMainWindow)
 		{
 			Flags |= ImGuiWindowFlags.NoMove;
-			Flags &= ~ImGuiWindowFlags.NoResize;
 			ImGui.SetNextWindowPos(this.plugin.Config.MainWindowPos);
 			ImGui.SetNextWindowSize(this.plugin.Config.MainWindowSize);
 		}
@@ -130,29 +124,22 @@ public class MainWindow : Window, IDisposable
 			Flags &= ~ImGuiWindowFlags.NoMove;
 		}
 
-		// Handle ESC key ignore setting
 		RespectCloseHotkey = !this.plugin.Config.IgnoreEscapeOnMainWindow;
-
-		// Ensure titlebar button icon reflects current configuration every frame
-		if (this.lockButtonComponent != null && this.lockButton != null)
-		{
-			this.lockButton.Icon = this.lockButtonComponent.CurrentIcon;
-		}
 	}
 
 	public override void PostDraw()
 	{
-		// When locked, save the current size back to config so it resets next frame
+		// Save window position/size when pinned
 		if (this.plugin.Config.PinMainWindow)
 		{
-			// This makes the window "snap back" to the locked size every frame
-			// allowing temporary stretching during the current frame only
+			var pos = ImGui.GetWindowPos();
+			var size = ImGui.GetWindowSize();
+			if (pos != plugin.Config.MainWindowPos || size != plugin.Config.MainWindowSize)
+			{
+				plugin.Config.MainWindowPos = pos;
+				plugin.Config.MainWindowSize = size;
+			}
 		}
-	}
-
-	private bool IsElementVisible(Element element)
-	{
-		return this.countsUtility?.IsElementVisible(element) ?? true;
 	}
 
 	/// <summary>
@@ -160,15 +147,11 @@ public class MainWindow : Window, IDisposable
 	/// </summary>
 	public void InvalidateSortCache()
 	{
-		Services.LogService.Log.Debug("[MainWindow] Character sort cache invalidated");
-		// Cache invalidation is now handled by the container component
+		Svc.Log.Debug("[MainWindow] Character sort cache invalidated");
 	}
 
 	public override void Draw()
 	{
-		if (this.containerComponent != null)
-		{
-			this.containerComponent.Render();
-		}
+		this.characterListPanel?.Render();
 	}
 }

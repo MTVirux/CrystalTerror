@@ -279,13 +279,14 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
                 return;
             try
             {
-                var contentId = this.playerState.ContentId;
-                var localObjId = this.objects.LocalPlayer?.GameObjectId ?? 0u;
+                // Use ECommons Player for reliable player state detection
+                var contentId = Player.Available ? Player.CID : 0;
+                var localObjId = Player.Object?.GameObjectId ?? 0u;
                 var currentKey = $"{contentId}:{localObjId}";
 
                 if (contentId != 0 && currentKey != this.lastPlayerKey)
                 {
-                    // character changed (or first login) — import current character automatically
+                    // Character changed (or first login) — import current character automatically
                     var sc = CharacterHelper.ImportCurrentCharacter();
                     if (sc != null)
                     {
@@ -299,10 +300,9 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
                 }
                 else if (contentId == 0 && this.lastLocalContentId != 0)
                 {
-                    // logged out, reset tracking id (only once when transitioning from logged in to logged out)
+                    // Logged out, reset tracking id
                     this.lastLocalContentId = 0;
                     this.lastPlayerKey = string.Empty;
-                    // Invalidate cache since current character changed (logged out)
                     this.mainWindow.InvalidateSortCache();
                 }
 
@@ -314,7 +314,7 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
             }
             catch
             {
-                // swallow to avoid throwing in framework update
+                // Swallow to avoid throwing in framework update
             }
         }
 
