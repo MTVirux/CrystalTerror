@@ -148,6 +148,12 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
                 try
                 {
                     this.addonLifecycle.RegisterListener(AddonEvent.PreSetup, "RetainerList", this.OnRetainerListSetup);
+                    // Listen for retainer inventory/bank close events to capture crystal changes
+                    this.addonLifecycle.RegisterListener(AddonEvent.PreFinalize, "Bank", this.OnRetainerInventoryClose);
+                    this.addonLifecycle.RegisterListener(AddonEvent.PreFinalize, "InventoryRetainer", this.OnRetainerInventoryClose);
+                    this.addonLifecycle.RegisterListener(AddonEvent.PreFinalize, "InventoryRetainerLarge", this.OnRetainerInventoryClose);
+                    // Listen for SelectString close (retainer menu) to trigger final update
+                    this.addonLifecycle.RegisterListener(AddonEvent.PreFinalize, "SelectString", this.OnSelectStringClose);
                 }
                 catch
                 {
@@ -243,10 +249,14 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
                 {
                 }
 
-                // Unregister addon lifecycle listener
+                // Unregister addon lifecycle listeners
                 try
                 {
                     this.addonLifecycle.UnregisterListener(AddonEvent.PreSetup, "RetainerList", this.OnRetainerListSetup);
+                    this.addonLifecycle.UnregisterListener(AddonEvent.PreFinalize, "Bank", this.OnRetainerInventoryClose);
+                    this.addonLifecycle.UnregisterListener(AddonEvent.PreFinalize, "InventoryRetainer", this.OnRetainerInventoryClose);
+                    this.addonLifecycle.UnregisterListener(AddonEvent.PreFinalize, "InventoryRetainerLarge", this.OnRetainerInventoryClose);
+                    this.addonLifecycle.UnregisterListener(AddonEvent.PreFinalize, "SelectString", this.OnSelectStringClose);
                 }
                 catch
                 {
@@ -334,9 +344,73 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
                 this.Characters,
                 this.pluginLog);
 
+        private DateTime lastRetainerInventoryUpdate = DateTime.MinValue;
         
+        /// <summary>
+        /// Handler for retainer inventory/bank addon close events.
+        /// Triggers an import of current character data to capture any crystal changes.
+        /// </summary>
+        private void OnRetainerInventoryClose(AddonEvent type, AddonArgs args)
+        {
+            try
+            {
+                // Throttle to prevent excessive updates
+                if ((DateTime.UtcNow - lastRetainerInventoryUpdate).TotalMilliseconds < 500)
+                    return;
+                
+                lastRetainerInventoryUpdate = DateTime.UtcNow;
+                
+                if (!Player.Available || Player.CID == 0)
+                    return;
+                
+                var sc = CharacterHelper.ImportCurrentCharacter();
+                if (sc != null)
+                {
+                    CharacterHelper.MergeInto(this.Characters, new[] { sc }, CharacterHelper.MergePolicy.Overwrite);
+                    ConfigHelper.SaveAndSync(this.Config, this.Characters);
+                }
+            }
+            catch (Exception ex)
+            {
+                this.pluginLog.Debug($"[CrystalTerror] OnRetainerInventoryClose error: {ex.Message}");
+            }
+        }
 
-        private void OnOpenCommand(string command, string arguments)
+        /// <summary>
+        /// Handler for SelectString close (retainer menu close).
+        /// This fires when exiting a retainer, ensuring we capture the final state.
+        /// </summary>
+        private void OnSelectStringClose(AddonEvent type, AddonArgs args)
+        {
+            try
+            {
+                // Only process if we're at a summoning bell (retainer context)
+                if (!Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.OccupiedSummoningBell])
+                    return;
+                
+                // Throttle to prevent excessive updates
+                if ((DateTime.UtcNow - lastRetainerInventoryUpdate).TotalMilliseconds < 500)
+                    return;
+                
+                lastRetainerInventoryUpdate = DateTime.UtcNow;
+                
+                if (!Player.Available || Player.CID == 0)
+                    return;
+                
+                var sc = CharacterHelper.ImportCurrentCharacter();
+                if (sc != null)
+                {
+                    CharacterHelper.MergeInto(this.Characters, new[] { sc }, CharacterHelper.MergePolicy.Overwrite);
+                    ConfigHelper.SaveAndSync(this.Config, this.Characters);
+                }
+            }
+            catch (Exception ex)
+            {
+                this.pluginLog.Debug($"[CrystalTerror] OnSelectStringClose error: {ex.Message}");
+            }
+        }
+
+                private void OnOpenCommand(string command, string arguments)
         {
             // Toggle the main window when the command is executed. If arguments are provided, still open the window.
             if (string.IsNullOrWhiteSpace(arguments))
