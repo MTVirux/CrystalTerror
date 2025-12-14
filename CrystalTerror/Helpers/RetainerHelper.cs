@@ -1,35 +1,32 @@
-using System;
-using System.Collections.Generic;
+namespace CrystalTerror.Helpers;
 
-namespace CrystalTerror
+/// <summary>
+/// Utilities for creating and repairing Retainer objects and owner relationships.
+/// </summary>
+public static class RetainerHelper
 {
-    /// <summary>
-    /// Utilities for creating and repairing Retainer objects and owner relationships.
-    /// </summary>
-    public static class RetainerHelper
+    public static Retainer Create(StoredCharacter owner, string name, ulong retainerId, int? job, int level, int ilvl, int gathering = 0, int perception = 0)
     {
-        public static Retainer Create(StoredCharacter owner, string name, ulong atid, int? job, int level, int ilvl, int gathering = 0, int perception = 0)
+        if (owner == null) throw new ArgumentNullException(nameof(owner));
+
+        var r = new Retainer(owner)
         {
-            if (owner == null) throw new ArgumentNullException(nameof(owner));
+            Name = name ?? string.Empty,
+            Atid = retainerId,
+            Job = job,
+            Level = level,
+            Ilvl = ilvl,
+            Gathering = gathering,
+            Perception = perception,
+            Inventory = new Inventory()
+        };
 
-            var r = new Retainer(owner)
-            {
-                Name = name ?? string.Empty,
-                atid = atid,
-                Job = job,
-                Level = level,
-                Ilvl = ilvl,
-                Gathering = gathering,
-                Perception = perception,
-                Inventory = new Inventory()
-            };
+        return r;
+    }
 
-            return r;
-        }
-
-        public static Retainer CreateFromAutoRetainer(StoredCharacter owner, string? name, ulong atid, int? job, int level, int ilvl, int gathering = 0, int perception = 0)
+        public static Retainer CreateFromAutoRetainer(StoredCharacter owner, string? name, ulong retainerId, int? job, int level, int ilvl, int gathering = 0, int perception = 0)
         {
-            return Create(owner, name ?? string.Empty, atid, job, level, ilvl, gathering, perception);
+            return Create(owner, name ?? string.Empty, retainerId, job, level, ilvl, gathering, perception);
         }
 
         public static void SetOwnerForRetainers(StoredCharacter owner)
@@ -56,4 +53,3 @@ namespace CrystalTerror
             }
         }
     }
-}

@@ -9,7 +9,7 @@ public class DataManagement : ConfigEntry
 {
     public override string Path => "Data Management";
 
-    public override NuiBuilder Builder { get; init; } = null!;
+    public override NuiBuilder? Builder { get; init; }
 
     public DataManagement()
     {

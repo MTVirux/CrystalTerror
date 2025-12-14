@@ -14,7 +14,6 @@ public class ConfigWindow : Window, IDisposable
 {
     private readonly CrystalTerrorPlugin plugin;
     private WindowLockButtonComponent? lockButtonComponent;
-    private TitleBarButton? lockButton;
     internal ConfigFileSystem FileSystem;
     private ConfigWindowContainerComponent? containerComponent;
 

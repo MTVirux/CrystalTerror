@@ -1,43 +1,41 @@
-using System;
-using System.Linq;
 using Lumina.Excel.Sheets;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Dalamud.Plugin.Services;
 
-namespace CrystalTerror
+namespace CrystalTerror.Helpers;
+
+/// <summary>
+/// Helper utilities for calculating retainer stats from their equipped items.
+/// Based on AutoRetainer's ItemLevel.Calculate logic.
+/// </summary>
+public static class RetainerStatsHelper
 {
+    // Item UI categories that can have an offhand
+    private static readonly uint[] CanHaveOffhand = [2, 6, 8, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32];
+    
+    // Item UI categories to ignore (waist slot)
+    private static readonly uint[] IgnoreCategory = [105];
+
+    // BaseParam IDs for Gathering and Perception
+    private const uint GatheringParamId = 72;
+    private const uint PerceptionParamId = 73;
+
     /// <summary>
-    /// Helper utilities for calculating retainer stats from their equipped items.
-    /// Based on AutoRetainer's ItemLevel.Calculate logic.
+    /// Calculate retainer stats (item level, gathering, perception) from their currently equipped gear.
+    /// Returns null if retainer inventory is not accessible.
     /// </summary>
-    public static class RetainerStatsHelper
+    public static unsafe (int? ItemLevel, int Gathering, int Perception) CalculateRetainerStats()
     {
-        // Item UI categories that can have an offhand
-        private static readonly uint[] CanHaveOffhand = [2, 6, 8, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32];
-        
-        // Item UI categories to ignore (waist slot)
-        private static readonly uint[] IgnoreCategory = [105];
+        int gathering = 0;
+        int perception = 0;
 
-        // BaseParam IDs for Gathering and Perception
-        private const uint GatheringParamId = 72;
-        private const uint PerceptionParamId = 73;
+        var container = InventoryManager.Instance()->GetInventoryContainer(InventoryType.RetainerEquippedItems);
+        if (container == null) return (null, 0, 0);
 
-        /// <summary>
-        /// Calculate retainer stats (item level, gathering, perception) from their currently equipped gear.
-        /// Returns null if retainer inventory is not accessible.
-        /// </summary>
-        public static unsafe (int? ItemLevel, int Gathering, int Perception) CalculateRetainerStats()
-        {
-            int gathering = 0;
-            int perception = 0;
+        var sheet = Services.DataService.Manager.GetExcelSheet<Item>();
+        if (sheet == null) return (null, 0, 0);
 
-            var container = InventoryManager.Instance()->GetInventoryContainer(InventoryType.RetainerEquippedItems);
-            if (container == null) return (null, 0, 0);
-
-            var sheet = Services.DataService.Manager.GetExcelSheet<Item>();
-            if (sheet == null) return (null, 0, 0);
-
-            uint sum = 0;
+        uint sum = 0;
             int count = 12; // Default to 12 gear slots (13 slots minus waist)
 
             for (int i = 0; i < 13; i++)
@@ -157,7 +155,7 @@ namespace CrystalTerror
                 if (currentChar == null)
                     return;
 
-                var retainer = currentChar.Retainers.FirstOrDefault(r => r.atid == activeRetainer->RetainerId);
+                var retainer = currentChar.Retainers.FirstOrDefault(r => r.Atid == activeRetainer->RetainerId);
                 if (retainer == null)
                     return;
 
@@ -175,4 +173,3 @@ namespace CrystalTerror
         }
 
     }
-}

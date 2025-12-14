@@ -1,23 +1,25 @@
-using System.Collections.Generic;
 using Dalamud.Configuration;
 
-namespace CrystalTerror
+namespace CrystalTerror;
+
+/// <summary>
+/// Plugin configuration persisted by Dalamud's config system.
+/// </summary>
+public class Configuration : IPluginConfiguration
 {
-    public class Configuration : IPluginConfiguration
-    {
-        /// <inheritdoc />
-        public int Version { get; set; } = 1;
+    /// <inheritdoc />
+    public int Version { get; set; } = 1;
 
-        // ===== Data Storage =====
-        
-        /// <summary>
-        /// Stored characters persisted by Dalamud's plugin config system.
-        /// </summary>
-        public List<StoredCharacter> Characters { get; set; } = new List<StoredCharacter>();
+    // ===== Data Storage =====
+    
+    /// <summary>
+    /// Stored characters persisted by Dalamud's plugin config system.
+    /// </summary>
+    public List<StoredCharacter> Characters { get; set; } = new List<StoredCharacter>();
 
-        // ===== General Settings =====
+    // ===== General Settings =====
 
-        /// <summary>
+    /// <summary>
         /// If true, the main window is opened on plugin start.
         /// </summary>
         public bool ShowOnStart { get; set; } = true;
@@ -180,11 +182,10 @@ namespace CrystalTerror
         /// <summary>
         /// Saved position for the config window when pinned.
         /// </summary>
-        public System.Numerics.Vector2 ConfigWindowPos { get; set; } = new System.Numerics.Vector2(100, 100);
+        public Vector2 ConfigWindowPos { get; set; } = new Vector2(100, 100);
 
         /// <summary>
         /// Saved size for the config window when pinned.
         /// </summary>
-        public System.Numerics.Vector2 ConfigWindowSize { get; set; } = new System.Numerics.Vector2(600, 400);
-    }
+        public Vector2 ConfigWindowSize { get; set; } = new Vector2(600, 400);
 }

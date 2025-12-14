@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Dalamud.Data;
@@ -11,43 +8,43 @@ using System.Text;
 using System.IO;
 using Newtonsoft.Json;
 
-namespace CrystalTerror
+namespace CrystalTerror.Helpers;
+
+/// <summary>
+/// Helper utilities for character-related import functions.
+/// Provides import from the currently logged-in character and mass import from AutoRetainer IPC.
+/// </summary>
+public static class CharacterHelper
 {
     /// <summary>
-    /// Helper utilities for character-related import functions.
-    /// Provides import from the currently logged-in character and mass import from AutoRetainer IPC.
+    /// Create a <see cref="StoredCharacter"/> representing the currently logged-in player.
+    /// Returns null if the client is not logged in or LocalPlayer is unavailable.
     /// </summary>
-    public static class CharacterHelper
+    public static StoredCharacter? ImportCurrentCharacter()
     {
-        /// <summary>
-        /// Create a <see cref="StoredCharacter"/> representing the currently logged-in player.
-        /// Returns null if the client is not logged in or LocalPlayer is unavailable.
-        /// </summary>
-        public static StoredCharacter? ImportCurrentCharacter()
+        // Use ContentId to determine login state and IObjectTable to access the local player.
+        if (Services.PlayerService.State.ContentId == 0) return null;
+
+        var local = Services.PlayerService.Objects.LocalPlayer;
+        if (local == null) return null;
+
+        // Default to the numeric home world id
+        var worldStr = string.Empty;
+        try
         {
-            // Use ContentId to determine login state and IObjectTable to access the local player.
-            if (Services.PlayerService.State.ContentId == 0) return null;
+            worldStr = local.HomeWorld.RowId.ToString();
+        }
+        catch
+        {
+            worldStr = string.Empty;
+        }
 
-            var local = Services.PlayerService.Objects.LocalPlayer;
-            if (local == null) return null;
-
-            // Default to the numeric home world id
-            var worldStr = string.Empty;
-            try
+        // Try to resolve the human-readable world name from game data
+        try
+        {
+            var sheet = Services.DataService.Manager.GetExcelSheet<Lumina.Excel.Sheets.World>();
+            if (sheet != null)
             {
-                worldStr = local.HomeWorld.RowId.ToString();
-            }
-            catch
-            {
-                worldStr = string.Empty;
-            }
-
-            // Try to resolve the human-readable world name from game data
-            try
-            {
-                var sheet = Services.DataService.Manager.GetExcelSheet<Lumina.Excel.Sheets.World>();
-                if (sheet != null)
-                {
                     var row = sheet.GetRowOrDefault((uint)local.HomeWorld.RowId);
                     if (row.HasValue)
                     {
@@ -333,7 +330,7 @@ namespace CrystalTerror
                         foreach (var newRetainer in sc.Retainers)
                         {
                             var existingRetainer = existing.Retainers.FirstOrDefault(er => 
-                                (er.atid != 0 && er.atid == newRetainer.atid) || 
+                                (er.Atid != 0 && er.Atid == newRetainer.Atid) || 
                                 string.Equals(er.Name, newRetainer.Name, StringComparison.OrdinalIgnoreCase));
                             
                             if (existingRetainer != null)
@@ -351,14 +348,14 @@ namespace CrystalTerror
                         
                         existing.Retainers = sc.Retainers;
                         RetainerHelper.SetOwnerForRetainers(existing);
-                        existing.Inventory = sc.Inventory;
+                        existing.Inventory = sc.Inventory ?? existing.Inventory;
                         existing.LastUpdateUtc = sc.LastUpdateUtc;
                         existing.ServiceAccount = sc.ServiceAccount;
                         break;
                     case MergePolicy.Merge:
                         foreach (var r in sc.Retainers)
                         {
-                            var match = existing.Retainers.FirstOrDefault(er => (er.atid != 0 && er.atid == r.atid) || string.Equals(er.Name, r.Name, StringComparison.OrdinalIgnoreCase));
+                            var match = existing.Retainers.FirstOrDefault(er => (er.Atid != 0 && er.Atid == r.Atid) || string.Equals(er.Name, r.Name, StringComparison.OrdinalIgnoreCase));
                             if (match == null)
                             {
                                 // ensure owner is set to existing character
@@ -369,7 +366,7 @@ namespace CrystalTerror
                             {
                                 // Update match with new data
                                 match.Name = r.Name;
-                                match.atid = r.atid;
+                                match.Atid = r.Atid;
                                 if (r.Job.HasValue) match.Job = r.Job;
                                 match.Level = r.Level;
                                 match.Ilvl = r.Ilvl;
@@ -379,17 +376,16 @@ namespace CrystalTerror
                             }
                         }
 
-                        if (existing.Inventory == null && sc.Inventory != null)
-                            existing.Inventory = sc.Inventory;
+                    if (existing.Inventory == null && sc.Inventory != null)
+                        existing.Inventory = sc.Inventory;
 
-                        if (sc.LastUpdateUtc > existing.LastUpdateUtc)
-                            existing.LastUpdateUtc = sc.LastUpdateUtc;
+                    if (sc.LastUpdateUtc > existing.LastUpdateUtc)
+                        existing.LastUpdateUtc = sc.LastUpdateUtc;
 
-                        if (sc.ServiceAccount != 0)
-                            existing.ServiceAccount = sc.ServiceAccount;
+                    if (sc.ServiceAccount != 0)
+                        existing.ServiceAccount = sc.ServiceAccount;
 
-                        break;
-                }
+                    break;
             }
         }
     }

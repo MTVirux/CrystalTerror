@@ -1,19 +1,16 @@
-using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
 using Dalamud.Plugin;
 
-namespace CrystalTerror
-{
-    /// <summary>
-    /// Helper utilities for integrating with AutoRetainer IPC.
-    /// </summary>
-    public static class AutoRetainerHelper
-    {
-        public record RetainerInfo(string Name, ulong Atid, int? Job, int Level, int Ilvl, int Gathering, int Perception, string OwnerName, string OwnerWorld);
+namespace CrystalTerror.Helpers;
 
-        private static bool isProcessingVenture = false;
+/// <summary>
+/// Helper utilities for integrating with AutoRetainer IPC.
+/// </summary>
+public static class AutoRetainerHelper
+{
+    public record RetainerInfo(string Name, ulong Atid, int? Job, int Level, int Ilvl, int Gathering, int Perception, string OwnerName, string OwnerWorld);
+
+    private static bool isProcessingVenture = false;
 
         /// <summary>
         /// Query AutoRetainer IPC to collect retainers for all registered characters.
@@ -193,7 +190,7 @@ namespace CrystalTerror
                 }
 
                 // Log retainer stats for Informationging
-                log.Debug($"[CrystalTerror] {retainer.Name}: Level={retainer.Level}, Gathering={retainer.Gathering}, Job={ClassJobExtensions.GetAbreviation(retainer.Job)}");
+                log.Debug($"[CrystalTerror] {retainer.Name}: Level={retainer.Level}, Gathering={retainer.Gathering}, Job={ClassJobExtensions.GetAbbreviation(retainer.Job)}");
 
                 // Check if auto venture is enabled for this retainer
                 if (!retainer.EnableAutoVenture)
@@ -205,7 +202,7 @@ namespace CrystalTerror
                 // Check if retainer is eligible
                 if (retainer.Job == null || !VentureHelper.IsRetainerEligibleForVenture(retainer, CrystalType.Shard))
                 {
-                    var jobName = retainer.Job.HasValue ? ClassJobExtensions.GetAbreviation(retainer.Job) : "Unknown";
+                    var jobName = retainer.Job.HasValue ? ClassJobExtensions.GetAbbreviation(retainer.Job) : "Unknown";
                     log.Debug($"[CrystalTerror] ✗ Skipping {retainer.Name} - Job: {jobName} (not MIN/BTN/FSH)");
                     return;
                 }
@@ -235,4 +232,3 @@ namespace CrystalTerror
             }
         }
     }
-}

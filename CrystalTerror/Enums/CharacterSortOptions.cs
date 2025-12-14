@@ -1,15 +1,14 @@
-namespace CrystalTerror
+namespace CrystalTerror;
+
+/// <summary>
+/// How saved characters should be presented in the UI.
+/// </summary>
+public enum CharacterSortOptions
 {
-    /// <summary>
-    /// How saved characters should be presented in the UI.
-    /// </summary>
-    public enum CharacterSortOptions
-    {
-        Alphabetical,
-        ReverseAlphabetical,
-        World,
-        ReverseWorld,
-        AutoRetainer,
-        Custom,
-    }
+    Alphabetical,
+    ReverseAlphabetical,
+    World,
+    ReverseWorld,
+    AutoRetainer,
+    Custom,
 }

@@ -10,7 +10,7 @@ public class WarningThresholds : ConfigEntry
 {
     public override string Path => "Warning Thresholds";
 
-    public override NuiBuilder Builder { get; init; } = null!;
+    public override NuiBuilder? Builder { get; init; }
 
     public WarningThresholds()
     {

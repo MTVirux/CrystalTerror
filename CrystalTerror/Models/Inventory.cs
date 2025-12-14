@@ -1,16 +1,13 @@
-using System;
-using System.Collections.Generic;
+namespace CrystalTerror;
 
-namespace CrystalTerror
+/// <summary>
+/// Explicit inventory structure: one property for each Element x CrystalType combination.
+/// Properties are named `{Element}_{CrystalType}`, e.g. `Fire_Shard`.
+/// Includes helpers to get/set by enum and to export as dictionary.
+/// </summary>
+[Serializable]
+public class Inventory
 {
-    [Serializable]
-    /// <summary>
-    /// Explicit inventory structure: one property for each Element x CrystalType combination.
-    /// Properties are named `{Element}_{CrystalType}`, e.g. `Fire_Shard`.
-    /// Includes helpers to get/set by enum and to export as dictionary.
-    /// </summary>
-    public class Inventory
-    {
         // Fire
         public long Fire_Shard { get; set; }
         public long Fire_Crystal { get; set; }
@@ -164,11 +161,16 @@ namespace CrystalTerror
             };
         }
 
+        /// <summary>
+        /// Calculates the total count of all crystals in this inventory.
+        /// </summary>
         public long Total()
         {
-            long sum = 0;
-            foreach (var v in ToDictionary().Values) sum += v;
-            return sum;
+            return Fire_Shard + Fire_Crystal + Fire_Cluster +
+                   Ice_Shard + Ice_Crystal + Ice_Cluster +
+                   Wind_Shard + Wind_Crystal + Wind_Cluster +
+                   Earth_Shard + Earth_Crystal + Earth_Cluster +
+                   Lightning_Shard + Lightning_Crystal + Lightning_Cluster +
+                   Water_Shard + Water_Crystal + Water_Cluster;
         }
-    }
 }

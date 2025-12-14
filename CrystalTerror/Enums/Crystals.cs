@@ -1,27 +1,24 @@
-using System;
+namespace CrystalTerror;
 
-namespace CrystalTerror
+/// <summary>
+/// Elements used for crystals.
+/// </summary>
+public enum Element
 {
-    /// <summary>
-    /// Elements used for crystals.
-    /// </summary>
-    public enum Element
-    {
-        Fire,
-        Ice,
-        Wind,
-        Earth,
-        Lightning,
-        Water,
-    }
+    Fire,
+    Ice,
+    Wind,
+    Earth,
+    Lightning,
+    Water,
+}
 
-    /// <summary>
-    /// Crystal sizes/types.
-    /// </summary>
-    public enum CrystalType
-    {
-        Shard,
-        Crystal,
-        Cluster,
-    }
+/// <summary>
+/// Crystal sizes/types.
+/// </summary>
+public enum CrystalType
+{
+    Shard,
+    Crystal,
+    Cluster,
 }

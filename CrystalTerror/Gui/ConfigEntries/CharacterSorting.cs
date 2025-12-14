@@ -9,7 +9,7 @@ public class CharacterSorting : ConfigEntry
 {
     public override string Path => "Character Sorting";
 
-    public override NuiBuilder Builder { get; init; } = null!;
+    public override NuiBuilder? Builder { get; init; }
 
     public CharacterSorting()
     {

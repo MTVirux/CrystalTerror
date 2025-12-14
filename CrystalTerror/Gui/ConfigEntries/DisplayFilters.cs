@@ -9,7 +9,7 @@ public class DisplayFilters : ConfigEntry
 {
     public override string Path => "Display Filters";
 
-    public override NuiBuilder Builder { get; init; } = null!;
+    public override NuiBuilder? Builder { get; init; }
 
     public DisplayFilters()
     {

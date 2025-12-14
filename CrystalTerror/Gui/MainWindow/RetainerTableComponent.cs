@@ -95,7 +95,7 @@ public class RetainerTableComponent : IUIComponent
 					if (isGatheringRetainer)
 					{
 						bool enableAutoVenture = r.EnableAutoVenture;
-						if (ImGui.Checkbox($"##auto_venture_{r.atid}", ref enableAutoVenture))
+						if (ImGui.Checkbox($"##auto_venture_{r.Atid}", ref enableAutoVenture))
 						{
 							r.EnableAutoVenture = enableAutoVenture;
 							ConfigHelper.Save(this.plugin.Config);

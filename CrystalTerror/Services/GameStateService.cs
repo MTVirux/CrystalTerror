@@ -1,15 +1,14 @@
 using Dalamud.Plugin.Services;
 
-namespace CrystalTerror.Services
+namespace CrystalTerror.Services;
+
+/// <summary>
+/// Provides global access to game state services.
+/// </summary>
+public static class GameStateService
 {
     /// <summary>
-    /// Provides global access to game state services.
+    /// Gets the condition service for checking game state (at summoning bell, in combat, etc.).
     /// </summary>
-    public static class GameStateService
-    {
-        /// <summary>
-        /// Gets the condition service for checking game state (at summoning bell, in combat, etc.).
-        /// </summary>
-        public static ICondition Condition { get; internal set; } = null!;
-    }
+    public static ICondition Condition { get; internal set; } = null!;
 }

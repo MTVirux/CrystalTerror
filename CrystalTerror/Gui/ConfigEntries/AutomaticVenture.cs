@@ -10,7 +10,7 @@ public class AutomaticVenture : ConfigEntry
 {
     public override string Path => "Automatic Venture Assignment";
 
-    public override NuiBuilder Builder { get; init; } = null!;
+    public override NuiBuilder? Builder { get; init; }
 
     public AutomaticVenture()
     {

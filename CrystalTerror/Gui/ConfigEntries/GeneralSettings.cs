@@ -9,7 +9,7 @@ public class GeneralSettings : ConfigEntry
 {
     public override string Path => "General Settings";
 
-    public override NuiBuilder Builder { get; init; } = null!;
+    public override NuiBuilder? Builder { get; init; }
 
     public GeneralSettings()
     {

@@ -1,83 +1,80 @@
-namespace CrystalTerror
+using CrystalTerror.Helpers;
+using Dalamud.Interface.Windowing;
+using Dalamud.Plugin;
+using Dalamud.IoC;
+using Dalamud.Game.Inventory;
+using Dalamud.Game.Inventory.InventoryEventArgTypes;
+using Dalamud.Game.Command;
+using Dalamud.Plugin.Services;
+using Dalamud.Data;
+using Dalamud.Game.Addon.Lifecycle;
+using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using ECommons;
+using System.Collections;
+
+namespace CrystalTerror.Core;
+
+public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
 {
-    using System;
-    using System.Collections;
-    using System.Collections.Generic;
-    using System.Linq;
-    using CrystalTerror.Helpers;
-    using Dalamud.Interface.Windowing;
-    using Dalamud.Plugin;
-    using Dalamud.IoC;
-    using Dalamud.Game.Inventory;
-    using Dalamud.Game.Inventory.InventoryEventArgTypes;
-    using Dalamud.Game.Command;
-    using Dalamud.Plugin.Services;
-    using Dalamud.Data;
-    using Dalamud.Game.Addon.Lifecycle;
-    using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-    using ECommons;
+    public static CrystalTerrorPlugin Instance { get; private set; } = null!;
 
-    public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
+    public IDalamudPluginInterface PluginInterface { get; init; }
+
+    public Configuration Config { get; private set; } = new Configuration();
+
+    private readonly WindowSystem windowSystem = new(typeof(CrystalTerrorPlugin).AssemblyQualifiedName);
+    private readonly Gui.MainWindow.MainWindow mainWindow;
+    private readonly Gui.ConfigWindow.ConfigWindow configWindow;
+    private readonly ICommandManager commandManager;
+    private readonly Dalamud.Plugin.Services.IPlayerState playerState;
+    private readonly Dalamud.Plugin.Services.IObjectTable objects;
+    private readonly IFramework framework;
+    private readonly IAddonLifecycle addonLifecycle;
+    private readonly ICondition condition;
+    private ulong lastLocalContentId;
+    private string lastPlayerKey = string.Empty;
+    // Ensure framework events don't run before plugin finished loading config/characters
+    private bool isInitialized = false;
+    private readonly IDataManager dataManager;
+
+    private bool disposed;
+    private readonly IPluginLog pluginLog;
+
+    [PluginService]
+    public static IGameInventory GameInventory { get; private set; } = null!;
+
+    // AutoRetainer IPC for setting ventures
+    private Dalamud.Plugin.Ipc.ICallGateSubscriber<uint, object>? autoRetainerSetVenture;
+    private Dalamud.Plugin.Ipc.ICallGateSubscriber<string, object>? autoRetainerOnSendToVenture;
+
+    // In-memory list of imported/stored characters for the UI.
+    public List<StoredCharacter> Characters { get; } = new();
+
+    public CrystalTerrorPlugin(IDalamudPluginInterface pluginInterface, ICommandManager commandManager, Dalamud.Plugin.Services.IPlayerState playerState, Dalamud.Plugin.Services.IObjectTable objects, IDataManager dataManager, IFramework framework, IAddonLifecycle addonLifecycle, ICondition condition, IPluginLog pluginLog, Dalamud.Plugin.Services.ITextureProvider textureProvider)
     {
-        public static CrystalTerrorPlugin Instance { get; private set; } = null!;
+        Instance = this;
+        this.PluginInterface = pluginInterface;
+        
+        // Initialize ECommons first (required for logging and other services)
+        ECommons.ECommonsMain.Init(pluginInterface, this);
+        
+        // Initialize global services
+        Services.ServiceManager.Initialize(pluginInterface, playerState, objects, dataManager, pluginLog, condition);
 
-        public IDalamudPluginInterface PluginInterface { get; init; }
+        this.Config = ConfigHelper.Load();
 
-        public Configuration Config { get; private set; } = new Configuration();
+        this.commandManager = commandManager;
+        this.playerState = playerState;
+        this.objects = objects;
+        this.dataManager = dataManager;
+        this.framework = framework;
+        this.addonLifecycle = addonLifecycle;
+        this.condition = condition;
+        this.pluginLog = pluginLog;
 
-        private readonly WindowSystem windowSystem = new(typeof(CrystalTerrorPlugin).AssemblyQualifiedName);
-        private readonly Gui.MainWindow.MainWindow mainWindow;
-        private readonly Gui.ConfigWindow.ConfigWindow configWindow;
-        private readonly ICommandManager commandManager;
-        private readonly Dalamud.Plugin.Services.IPlayerState playerState;
-        private readonly Dalamud.Plugin.Services.IObjectTable objects;
-        private readonly IFramework framework;
-        private readonly IAddonLifecycle addonLifecycle;
-        private readonly ICondition condition;
-        private ulong lastLocalContentId;
-        private string lastPlayerKey = string.Empty;
-        // Ensure framework events don't run before plugin finished loading config/characters
-        private bool isInitialized = false;
-        private readonly IDataManager dataManager;
-
-        private bool disposed;
-        private readonly IPluginLog pluginLog;
-
-        [PluginService]
-        public static IGameInventory GameInventory { get; private set; } = null!;
-
-        // AutoRetainer IPC for setting ventures
-        private Dalamud.Plugin.Ipc.ICallGateSubscriber<uint, object>? autoRetainerSetVenture;
-        private Dalamud.Plugin.Ipc.ICallGateSubscriber<string, object>? autoRetainerOnSendToVenture;
-
-        // In-memory list of imported/stored characters for the UI.
-        public List<StoredCharacter> Characters { get; } = new();
-
-        public CrystalTerrorPlugin(IDalamudPluginInterface pluginInterface, ICommandManager commandManager, Dalamud.Plugin.Services.IPlayerState playerState, Dalamud.Plugin.Services.IObjectTable objects, IDataManager dataManager, IFramework framework, IAddonLifecycle addonLifecycle, ICondition condition, IPluginLog pluginLog, Dalamud.Plugin.Services.ITextureProvider textureProvider)
-        {
-            Instance = this;
-            this.PluginInterface = pluginInterface;
-            
-            // Initialize ECommons first (required for logging and other services)
-            ECommons.ECommonsMain.Init(pluginInterface, this);
-            
-            // Initialize global services
-            Services.ServiceManager.Initialize(pluginInterface, playerState, objects, dataManager, pluginLog, condition);
-
-            this.Config = ConfigHelper.Load();
-
-            this.commandManager = commandManager;
-            this.playerState = playerState;
-            this.objects = objects;
-            this.dataManager = dataManager;
-            this.framework = framework;
-            this.addonLifecycle = addonLifecycle;
-            this.condition = condition;
-            this.pluginLog = pluginLog;
-
-            // Initialize local content id tracking. Subscription to framework updates
-            // is deferred until after config/characters are loaded to avoid a race
-            // where the framework fires before `Characters` is populated.
+        // Initialize local content id tracking. Subscription to framework updates
+        // is deferred until after config/characters are loaded to avoid a race
+        // where the framework fires before `Characters` is populated.
             this.lastLocalContentId = 0;
 
             this.mainWindow = new Gui.MainWindow.MainWindow(this, textureProvider);
@@ -129,7 +126,7 @@ namespace CrystalTerror
                     {
                         // character changed (or first login) — import current character automatically
                         var sc = CharacterHelper.ImportCurrentCharacter();
-                        if (sc != null)
+                        if (sc != null && this.Config != null)
                         {
                             CharacterHelper.MergeInto(this.Characters, new[] { sc }, CharacterHelper.MergePolicy.Merge);
                             ConfigHelper.SaveAndSync(this.Config, this.Characters);
@@ -348,4 +345,3 @@ namespace CrystalTerror
                 this.mainWindow.IsOpen = true;
         }
     }
-}
