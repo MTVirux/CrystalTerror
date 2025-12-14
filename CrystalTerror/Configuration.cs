@@ -77,7 +77,7 @@ public class Configuration : IPluginConfiguration
         /// <summary>
         /// Color to use for the currently logged in character's header.
         /// </summary>
-        public System.Numerics.Vector4 CurrentCharacterColor { get; set; } = new System.Numerics.Vector4(0.2f, 0.8f, 0.2f, 1.0f);
+        public System.Numerics.Vector4 CurrentCharacterColor { get; set; } = new System.Numerics.Vector4(0.090f, 0.494f, 0.118f, 1.0f);
 
         // ===== Display Filters =====
 

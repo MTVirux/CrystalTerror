@@ -29,6 +29,23 @@ public static class AutoRetainerHelper
     private static bool isProcessingVenture = false;
 
     /// <summary>
+    /// Get the ordered list of character ContentIds from AutoRetainer.
+    /// This is the order shown in AutoRetainer's UI.
+    /// </summary>
+    public static List<ulong> GetCharacterOrder()
+    {
+        try
+        {
+            var getRegistered = Svc.PluginInterface.GetIpcSubscriber<List<ulong>>("AutoRetainer.GetRegisteredCIDs");
+            return getRegistered?.InvokeFunc() ?? new List<ulong>();
+        }
+        catch
+        {
+            return new List<ulong>();
+        }
+    }
+
+    /// <summary>
     /// Query AutoRetainer IPC to collect retainers for all registered characters.
     /// Returns an empty list if AutoRetainer IPC is unavailable.
     /// </summary>

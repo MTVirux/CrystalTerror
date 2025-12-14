@@ -450,7 +450,28 @@ public class CharacterListPanel : IUIComponent
             CharacterSortOptions.ReverseAlphabetical => characters.OrderByDescending(c => c.Name).ToList(),
             CharacterSortOptions.World => characters.OrderBy(c => c.World).ThenBy(c => c.Name).ToList(),
             CharacterSortOptions.ReverseWorld => characters.OrderByDescending(c => c.World).ThenByDescending(c => c.Name).ToList(),
+            CharacterSortOptions.AutoRetainer => ApplyAutoRetainerSorting(characters),
             _ => characters
         };
+    }
+
+    private List<StoredCharacter> ApplyAutoRetainerSorting(List<StoredCharacter> characters)
+    {
+        var cidOrder = AutoRetainerHelper.GetCharacterOrder();
+        if (cidOrder.Count == 0)
+            return characters; // Fall back to original order if AutoRetainer unavailable
+
+        // Create a dictionary for O(1) lookup of position by CID
+        var cidPositions = new Dictionary<ulong, int>();
+        for (int i = 0; i < cidOrder.Count; i++)
+        {
+            cidPositions[cidOrder[i]] = i;
+        }
+
+        // Sort by AutoRetainer position. Characters not in AutoRetainer go to the end.
+        return characters
+            .OrderBy(c => c.ContentId != 0 && cidPositions.TryGetValue(c.ContentId, out var pos) ? pos : int.MaxValue)
+            .ThenBy(c => c.Name) // Secondary sort for characters not in AutoRetainer
+            .ToList();
     }
 }
