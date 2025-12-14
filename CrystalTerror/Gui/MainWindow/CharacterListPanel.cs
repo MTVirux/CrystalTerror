@@ -159,7 +159,8 @@ public class CharacterListPanel : IUIComponent
 
         // Build header text with crystal totals
         var headerText = BuildCharacterHeaderText(character, showIgnored);
-        var headerId = $"{headerText}##{character.UniqueKey}";
+        // Use stable ID that won't change when totals update
+        var headerId = $"{character.Name} @ {character.World}##{character.UniqueKey}";
 
         // Force collapsed for ignored characters
         if (character.IsIgnored)
@@ -168,6 +169,17 @@ public class CharacterListPanel : IUIComponent
         }
 
         var isOpen = ImGui.CollapsingHeader(headerId, headerFlags);
+
+        // Render totals on the same line if enabled
+        if (plugin.Config.ShowTotalsInHeaders)
+        {
+            ImGui.SameLine();
+            var totalsText = BuildTotalsText(character, showIgnored);
+            if (!string.IsNullOrEmpty(totalsText))
+            {
+                ImGui.TextDisabled(totalsText);
+            }
+        }
 
         // Pop colors
         if (colorsPushed > 0)
@@ -193,11 +205,11 @@ public class CharacterListPanel : IUIComponent
 
     private string BuildCharacterHeaderText(StoredCharacter character, bool showIgnored)
     {
-        var namePart = $"{character.Name} @ {character.World}";
-        
-        if (!plugin.Config.ShowTotalsInHeaders)
-            return namePart;
+        return $"{character.Name} @ {character.World}";
+    }
 
+    private string BuildTotalsText(StoredCharacter character, bool showIgnored)
+    {
         // Calculate totals
         var totals = CalculateCharacterTotals(character, showIgnored);
         var totalParts = new List<string>();
@@ -232,8 +244,8 @@ public class CharacterListPanel : IUIComponent
         }
 
         return totalParts.Count > 0 
-            ? $"{namePart}  [{string.Join("  ", totalParts)}]"
-            : namePart;
+            ? $"[{string.Join("  ", totalParts)}]"
+            : string.Empty;
     }
 
     private Dictionary<Element, (long shard, long crystal, long cluster)> CalculateCharacterTotals(StoredCharacter character, bool showIgnored)
@@ -428,8 +440,8 @@ public class CharacterListPanel : IUIComponent
         // Apply sort
         characters = ApplySorting(characters);
 
-        // Show current character at top if configured
-        if (plugin.Config.ShowCurrentCharacterAtTop && Player.Available && Player.CID != 0)
+        // Always show current character at top - this overrides any sorting
+        if (Player.Available && Player.CID != 0)
         {
             var current = characters.FirstOrDefault(c => c.MatchesCID(Player.CID));
             if (current != null)
