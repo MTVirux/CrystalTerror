@@ -92,12 +92,8 @@ public class MainWindow : Window, IDisposable
 			{
 				if (m == ImGuiMouseButton.Left)
 				{
+					// Toggle pin state
 					plugin.Config.PinMainWindow = !plugin.Config.PinMainWindow;
-					if (plugin.Config.PinMainWindow)
-					{
-						plugin.Config.MainWindowPos = ImGui.GetWindowPos();
-						plugin.Config.MainWindowSize = ImGui.GetWindowSize();
-					}
 					ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
 				}
 			},
@@ -113,15 +109,27 @@ public class MainWindow : Window, IDisposable
 
 	public override void PreDraw()
 	{
+		static bool IsValidVec(System.Numerics.Vector2 v)
+		{
+			return !(float.IsNaN(v.X) || float.IsNaN(v.Y)) && v.X > 1f && v.Y > 1f;
+		}
+
 		if (this.plugin.Config.PinMainWindow)
 		{
-			Flags |= ImGuiWindowFlags.NoMove;
-			ImGui.SetNextWindowPos(this.plugin.Config.MainWindowPos);
-			ImGui.SetNextWindowSize(this.plugin.Config.MainWindowSize);
+			// Prevent user from moving/resizing when pinned
+			Flags |= ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize;
+
+			// Only apply saved pos/size if they look valid (avoid 0,0 sentinel)
+			if (IsValidVec(this.plugin.Config.MainWindowPos) && IsValidVec(this.plugin.Config.MainWindowSize))
+			{
+				ImGui.SetNextWindowPos(this.plugin.Config.MainWindowPos);
+				ImGui.SetNextWindowSize(this.plugin.Config.MainWindowSize);
+			}
 		}
 		else
 		{
 			Flags &= ~ImGuiWindowFlags.NoMove;
+			Flags &= ~ImGuiWindowFlags.NoResize;
 		}
 
 		RespectCloseHotkey = !this.plugin.Config.IgnoreEscapeOnMainWindow;
@@ -134,10 +142,17 @@ public class MainWindow : Window, IDisposable
 		{
 			var pos = ImGui.GetWindowPos();
 			var size = ImGui.GetWindowSize();
-			if (pos != plugin.Config.MainWindowPos || size != plugin.Config.MainWindowSize)
+
+			// Don't persist invalid positions/sizes (e.g., 0,0)
+			if (!(float.IsNaN(pos.X) || float.IsNaN(pos.Y) || float.IsNaN(size.X) || float.IsNaN(size.Y))
+				&& pos.X > 1f && pos.Y > 1f && size.X > 1f && size.Y > 1f)
 			{
-				plugin.Config.MainWindowPos = pos;
-				plugin.Config.MainWindowSize = size;
+				if (pos != plugin.Config.MainWindowPos || size != plugin.Config.MainWindowSize)
+				{
+					plugin.Config.MainWindowPos = pos;
+					plugin.Config.MainWindowSize = size;
+					ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
+				}
 			}
 		}
 	}
