@@ -19,7 +19,7 @@
   "AssemblyVersion": "1.0.2.0",
   "RepoUrl": "https://github.com/MTVirux/CrystalTerror",
   "ApplicableVersion": "any",
-  "DalamudApiLevel": 13,
+  "DalamudApiLevel": 14,
   "ImageUrls": null,
   "IconUrl": null
 }
