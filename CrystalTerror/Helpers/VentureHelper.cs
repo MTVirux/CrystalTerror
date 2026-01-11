@@ -4,6 +4,7 @@ namespace CrystalTerror.Helpers;
 
 /// <summary>
 /// Helper utilities for determining optimal ventures based on crystal/shard inventory.
+/// Uses global capacity calculations to maximize storage across character + all retainers.
 /// </summary>
 public static class VentureHelper
 {
@@ -11,6 +12,26 @@ public static class VentureHelper
     private const int JobMiner = 16;
     private const int JobBotanist = 17;
     private const int JobFisher = 18;
+
+    /// <summary>
+    /// Check if a retainer is a gathering class (MIN, BTN, or FSH).
+    /// </summary>
+    public static bool IsGatheringRetainer(Retainer retainer)
+    {
+        if (retainer?.Job == null)
+            return false;
+
+        var jobId = retainer.Job.Value;
+        return jobId == JobMiner || jobId == JobBotanist || jobId == JobFisher;
+    }
+
+    /// <summary>
+    /// Check if a retainer is a Fisher.
+    /// </summary>
+    public static bool IsFisher(Retainer retainer)
+    {
+        return retainer?.Job == JobFisher;
+    }
 
     /// <summary>
     /// Check if a retainer is eligible for venture override based on job and stats.
@@ -41,82 +62,155 @@ public static class VentureHelper
     }
 
     /// <summary>
-    /// Determine the venture ID for the crystal/shard type with the lowest count in the retainer's inventory.
-    /// Returns null if no suitable venture is found based on configuration, or if all enabled types are above the threshold.
+    /// Determine the venture ID for the crystal/shard type with the lowest effective count.
+    /// Uses global capacity calculations across character + all retainers.
+    /// Returns QuickExploration if all enabled types are at capacity/threshold.
+    /// Returns null if retainer is ineligible (e.g., FSH disabled, non-gathering class).
     /// </summary>
-    /// <param name="retainer">The retainer whose inventory to analyze.</param>
-    /// <param name="config">Configuration to determine which crystal types are enabled.</param>
+    /// <param name="character">The character who owns this retainer (for global counts).</param>
+    /// <param name="retainer">The retainer to assign a venture to.</param>
+    /// <param name="config">Configuration for venture settings.</param>
     /// <param name="log">Optional logger for detailed output.</param>
-    /// <returns>VentureId for the lowest crystal/shard, or null if none applicable or all above threshold.</returns>
-    public static VentureId? DetermineLowestCrystalVenture(Retainer retainer, Configuration config, IPluginLog? log = null)
+    /// <returns>VentureId for optimal venture, QuickExploration if all full, or null if ineligible.</returns>
+    public static VentureId? DetermineLowestCrystalVenture(StoredCharacter character, Retainer retainer, Configuration config, IPluginLog? log = null)
     {
+        if (character == null) throw new ArgumentNullException(nameof(character));
         if (retainer == null) throw new ArgumentNullException(nameof(retainer));
         if (config == null) throw new ArgumentNullException(nameof(config));
 
-        var inv = retainer.Inventory;
-        if (inv == null)
+        var jobAbbr = ClassJobExtensions.GetAbbreviation(retainer.Job);
+        log?.Debug($"[VentureHelper] Analyzing venture for {retainer.Name} (Job: {jobAbbr}, Level: {retainer.Level}, Gathering: {retainer.Gathering})");
+
+        // Check if retainer is a gathering class
+        if (!IsGatheringRetainer(retainer))
         {
-            log?.Debug($"[VentureHelper] Retainer {retainer.Name} has no inventory data.");
+            log?.Debug($"[VentureHelper] {retainer.Name} is not a gathering retainer (Job: {jobAbbr}), skipping");
             return null;
         }
 
-        log?.Debug($"[VentureHelper] Analyzing inventory for {retainer.Name} (Job: {ClassJobExtensions.GetAbbreviation(retainer.Job)}, Level: {retainer.Level}, Gathering: {retainer.Gathering})");
-
-        // Build list of candidates based on config
-        var candidates = new List<(Element element, CrystalType type, long count, VentureId ventureId)>();
-
-        var elements = new[] { Element.Fire, Element.Ice, Element.Wind, Element.Earth, Element.Lightning, Element.Water };
-
-        foreach (var element in elements)
+        // Check FSH eligibility
+        if (IsFisher(retainer) && !config.AutoVentureFSHEnabled)
         {
-            // Add shards if enabled and retainer is eligible
-            if (config.AutoVentureShardsEnabled && IsRetainerEligibleForVenture(retainer, CrystalType.Shard))
-            {
-                var shardCount = inv.GetCount(element, CrystalType.Shard);
-                var shardVenture = GetVentureId(element, CrystalType.Shard);
-                if (shardVenture.HasValue)
-                    candidates.Add((element, CrystalType.Shard, shardCount, shardVenture.Value));
-            }
+            log?.Debug($"[VentureHelper] {retainer.Name} is FSH and FSH is disabled, skipping");
+            return null;
+        }
 
-            // Add crystals if enabled and retainer is eligible (requires level > 26 and Gathering > 90)
-            if (config.AutoVentureCrystalsEnabled && IsRetainerEligibleForVenture(retainer, CrystalType.Crystal))
+        // Calculate global capacity metrics
+        var effectiveCounts = VentureCapacityCalculator.CalculateEffectiveCounts(character, config.AutoVentureRewardAmount);
+        var capacities = VentureCapacityCalculator.CalculateGlobalCapacity(character);
+        var pendingRewards = VentureCapacityCalculator.GetPendingVentureRewards(character, config.AutoVentureRewardAmount);
+
+        log?.Debug($"[VentureHelper] Global capacity: {capacities.Values.FirstOrDefault()} per type (1 char + {character.Retainers?.Count(r => !r.IsIgnored) ?? 0} retainers)");
+
+        // Build list of candidates
+        var candidates = new List<(Element element, CrystalType type, long effectiveCount, long capacity, long threshold, bool isFull, VentureId ventureId)>();
+
+        foreach (var element in VentureCapacityCalculator.AllElements)
+        {
+            foreach (var type in VentureCapacityCalculator.VentureTypes)
             {
-                var crystalCount = inv.GetCount(element, CrystalType.Crystal);
-                var crystalVenture = GetVentureId(element, CrystalType.Crystal);
-                if (crystalVenture.HasValue)
-                    candidates.Add((element, CrystalType.Crystal, crystalCount, crystalVenture.Value));
+                // Check global type toggles
+                if (type == CrystalType.Shard && !config.AutoVentureShardsEnabled)
+                    continue;
+                if (type == CrystalType.Crystal && !config.AutoVentureCrystalsEnabled)
+                    continue;
+
+                // Check per-type enabled setting
+                var perTypeSetting = config.GetPerTypeSetting(element, type);
+                if (!perTypeSetting.Enabled)
+                    continue;
+
+                // Check retainer eligibility for this type
+                if (!IsRetainerEligibleForVenture(retainer, type))
+                    continue;
+
+                // Get venture ID
+                var ventureId = GetVentureId(element, type);
+                if (!ventureId.HasValue)
+                    continue;
+
+                // Get counts
+                var effectiveCount = effectiveCounts.GetValueOrDefault((element, type), 0);
+                var capacity = capacities.GetValueOrDefault((element, type), 0);
+                
+                // Determine threshold: per-type if set, otherwise global
+                var threshold = perTypeSetting.Threshold > 0 ? perTypeSetting.Threshold : config.AutoVentureThreshold;
+
+                // Check if type is full
+                var isFull = VentureCapacityCalculator.IsTypeFull(effectiveCount, capacity, threshold, config.AutoVentureRewardAmount);
+
+                candidates.Add((element, type, effectiveCount, capacity, threshold, isFull, ventureId.Value));
             }
         }
 
         if (candidates.Count == 0)
         {
-            log?.Debug($"[VentureHelper] No eligible venture candidates for {retainer.Name} (Shards: {config.AutoVentureShardsEnabled}, Crystals: {config.AutoVentureCrystalsEnabled})");
+            log?.Debug($"[VentureHelper] No eligible candidates for {retainer.Name}");
             return null;
         }
 
-        log?.Debug($"[VentureHelper] Found {candidates.Count} candidate(s) for {retainer.Name}");
-        foreach (var candidate in candidates.OrderBy(c => c.count))
+        // Log all candidates
+        log?.Debug($"[VentureHelper] {candidates.Count} candidate(s) for {retainer.Name}:");
+        foreach (var c in candidates.OrderBy(x => x.effectiveCount))
         {
-            log?.Debug($"  - {candidate.element} {candidate.type}: {candidate.count} (Venture ID: {(uint)candidate.ventureId})");
+            var pending = pendingRewards.GetValueOrDefault((c.element, c.type), 0);
+            var status = c.isFull ? "FULL" : "available";
+            log?.Debug($"  - {c.element} {c.type}: {c.effectiveCount} effective ({c.effectiveCount - pending} current + {pending} pending), capacity={c.capacity}, threshold={c.threshold}, {status}");
         }
 
-        // Check threshold: if all enabled types are above threshold, skip this retainer
-        if (config.AutoVentureThreshold > 0)
+        // Filter out full types
+        var availableCandidates = candidates.Where(c => !c.isFull).ToList();
+
+        if (availableCandidates.Count == 0)
         {
-            var allAboveThreshold = candidates.All(c => c.count >= config.AutoVentureThreshold);
-            if (allAboveThreshold)
-            {
-                // All crystal/shard types are above threshold, return null to skip venture assignment
-                log?.Debug($"[VentureHelper] All crystal/shard types for {retainer.Name} are above threshold ({config.AutoVentureThreshold}). Lowest count: {candidates.Min(c => c.count)}");
-                log?.Debug($"  Counts: {string.Join(", ", candidates.OrderBy(c => c.element).ThenBy(c => c.type).Select(c => $"{c.element} {c.type}={c.count}"))}");
-                return null;
-            }
+            // All types are full - assign Quick Exploration
+            log?.Information($"[VentureHelper] All enabled types are at capacity/threshold for {retainer.Name}, assigning Quick Exploration");
+            return VentureId.QuickExploration;
         }
 
-        // Find the candidate with the lowest count
-        var lowest = candidates.OrderBy(c => c.count).ThenBy(c => c.type).First();
-        log?.Information($"[VentureHelper] Selected {lowest.element} {lowest.type} for {retainer.Name} (count: {lowest.count}, venture: {GetVentureName(lowest.ventureId)})");
-        return lowest.ventureId;
+        // Sort by effective count (lowest first), then apply priority tiebreaker
+        var sorted = availableCandidates
+            .OrderBy(c => c.effectiveCount)
+            .ThenBy(c => GetPriorityOrder(c.type, config.AutoVenturePriority))
+            .ThenBy(c => c.element) // Final tiebreaker: element order
+            .ToList();
+
+        var selected = sorted.First();
+        log?.Information($"[VentureHelper] Selected {selected.element} {selected.type} for {retainer.Name} (effective: {selected.effectiveCount}, venture: {GetVentureName(selected.ventureId)})");
+        
+        return selected.ventureId;
+    }
+
+    /// <summary>
+    /// Get priority order for sorting based on VenturePriority setting.
+    /// Lower values = higher priority.
+    /// </summary>
+    private static int GetPriorityOrder(CrystalType type, VenturePriority priority)
+    {
+        return priority switch
+        {
+            VenturePriority.PreferCrystals => type == CrystalType.Crystal ? 0 : 1,
+            VenturePriority.PreferShards => type == CrystalType.Shard ? 0 : 1,
+            _ => 0 // Balanced - no preference
+        };
+    }
+
+    /// <summary>
+    /// Legacy method for backward compatibility. Uses retainer-only counting.
+    /// Consider using the overload that takes StoredCharacter for global counts.
+    /// </summary>
+    [Obsolete("Use DetermineLowestCrystalVenture(StoredCharacter, Retainer, Configuration, IPluginLog?) for global capacity calculations")]
+    public static VentureId? DetermineLowestCrystalVenture(Retainer retainer, Configuration config, IPluginLog? log = null)
+    {
+        // If we don't have the owner character, we can't do global calculations
+        // Fall back to using the retainer's owner if available
+        if (retainer?.OwnerCharacter != null)
+        {
+            return DetermineLowestCrystalVenture(retainer.OwnerCharacter, retainer, config, log);
+        }
+
+        log?.Warning($"[VentureHelper] No owner character for {retainer?.Name}, cannot perform global capacity calculation");
+        return null;
     }
 
     /// <summary>
