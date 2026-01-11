@@ -156,7 +156,44 @@ public class Configuration : IPluginConfiguration
         /// If all enabled crystal/shard types for a retainer are above this threshold, skip venture assignment for that retainer.
         /// Set to 0 to disable threshold checking (always assign ventures).
         /// </summary>
-        public long AutoVentureThreshold { get; set; } = 9879;
+        public long AutoVentureThreshold { get; set; } = 0;
+
+        /// <summary>
+        /// Priority preference when crystal/shard counts are tied.
+        /// </summary>
+        public VenturePriority AutoVenturePriority { get; set; } = VenturePriority.Balanced;
+
+        /// <summary>
+        /// Expected reward amount per venture. Used to estimate pending rewards from active ventures.
+        /// Default is 120 (standard 1-hour gathering venture yield).
+        /// </summary>
+        public int AutoVentureRewardAmount { get; set; } = 120;
+
+        /// <summary>
+        /// Whether to include Fisher (FSH) retainers in automatic venture assignment.
+        /// If false, FSH retainers are skipped entirely.
+        /// </summary>
+        public bool AutoVentureFSHEnabled { get; set; } = false;
+
+        /// <summary>
+        /// Per element×type venture settings. Key format: "Element_CrystalType" (e.g., "Fire_Crystal").
+        /// Each entry controls whether the type is enabled and its individual threshold.
+        /// </summary>
+        public Dictionary<string, PerTypeVentureSetting> AutoVenturePerTypeSettings { get; set; } = new();
+
+        /// <summary>
+        /// Get or create the per-type setting for a specific element and crystal type.
+        /// </summary>
+        public PerTypeVentureSetting GetPerTypeSetting(Element element, CrystalType type)
+        {
+            var key = $"{element}_{type}";
+            if (!AutoVenturePerTypeSettings.TryGetValue(key, out var setting))
+            {
+                setting = new PerTypeVentureSetting();
+                AutoVenturePerTypeSettings[key] = setting;
+            }
+            return setting;
+        }
 
         // ===== Window Settings =====
 
