@@ -143,6 +143,10 @@ public static class CharacterHelper
                     // Get retainer stats (iLvl, Gathering, Perception)
                     var (ilvl, gathering, perception) = GetRetainerStats(rname);
 
+                    // Get venture data from client struct
+                    uint ventureId = rptr->VentureId;
+                    long ventureEndsAt = rptr->VentureComplete;
+
                     var ret = RetainerHelper.Create(
                         sc, 
                         rname, 
@@ -151,7 +155,9 @@ public static class CharacterHelper
                         rptr->Level, 
                         ilvl, 
                         gathering, 
-                        perception
+                        perception,
+                        ventureId,
+                        ventureEndsAt
                     );
 
                     // Populate retainer crystal inventory from ItemFinderModule cache
@@ -292,7 +298,7 @@ public static class CharacterHelper
 
             foreach (var ri in g)
             {
-                var r = RetainerHelper.CreateFromAutoRetainer(sc, ri.Name, ri.Atid, ri.Job, ri.Level, ri.Ilvl, ri.Gathering, ri.Perception);
+                var r = RetainerHelper.CreateFromAutoRetainer(sc, ri.Name, ri.Atid, ri.Job, ri.Level, ri.Ilvl, ri.Gathering, ri.Perception, ri.VentureID, ri.VentureEndsAt);
                 sc.Retainers.Add(r);
             }
 
