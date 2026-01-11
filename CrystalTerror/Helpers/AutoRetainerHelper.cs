@@ -11,7 +11,7 @@ public static class AutoRetainerHelper
 {
     /// <summary>
     /// Information about a retainer from AutoRetainer IPC.
-    /// Now includes OwnerCID for reliable character identification.
+    /// Includes OwnerCID for reliable character identification and venture tracking data.
     /// </summary>
     public record RetainerInfo(
         string Name, 
@@ -23,7 +23,9 @@ public static class AutoRetainerHelper
         int Perception, 
         string OwnerName, 
         string OwnerWorld,
-        ulong OwnerCID
+        ulong OwnerCID,
+        uint VentureID,
+        long VentureEndsAt
     );
 
     private static bool isProcessingVenture = false;
@@ -100,6 +102,13 @@ public static class AutoRetainerHelper
                             
                             int gathering = 0;
                             int perception = 0;
+                            uint ventureID = 0;
+                            long ventureEndsAt = 0;
+                            
+                            // Extract venture data from retainer
+                            try { ventureID = (uint)(rr.VentureID ?? 0u); } catch { }
+                            try { ventureEndsAt = (long)(rr.VentureEndsAt ?? 0L); } catch { }
+                            
                             try
                             {
                                 var getAdditional = Svc.PluginInterface.GetIpcSubscriber<ulong, string, object>("AutoRetainer.GetAdditionalRetainerData");
@@ -116,10 +125,10 @@ public static class AutoRetainerHelper
                             }
                             catch { }
 
-                            outList.Add(new RetainerInfo(name, atid, job, level, ilvl, gathering, perception, ownerName, ownerWorld, cid));
+                            outList.Add(new RetainerInfo(name, atid, job, level, ilvl, gathering, perception, ownerName, ownerWorld, cid, ventureID, ventureEndsAt));
                             try
                             {
-                                Svc.Log.Debug($"[CrystalTerror] AutoRetainer found retainer: {name} (Atid={atid}) Owner={ownerName}@{ownerWorld} (CID={cid:X16}) Level={level} Ilvl={ilvl}");
+                                Svc.Log.Debug($"[CrystalTerror] AutoRetainer found retainer: {name} (Atid={atid}) Owner={ownerName}@{ownerWorld} (CID={cid:X16}) Level={level} Ilvl={ilvl} VentureID={ventureID}");
                             }
                             catch { }
                         }
@@ -165,7 +174,7 @@ public static class AutoRetainerHelper
     /// <summary>
     /// Handler for AutoRetainer.OnSendRetainerToVenture IPC hook.
     /// Called just before AutoRetainer sends a retainer to a venture.
-    /// Calculates the appropriate venture based on crystal/shard inventory.
+    /// Calculates the appropriate venture based on global crystal/shard capacity.
     /// </summary>
     public static void HandleRetainerSendToVenture(
         string retainerName,
@@ -223,34 +232,53 @@ public static class AutoRetainerHelper
                 return;
             }
 
-            if (retainer.Job == null || !VentureHelper.IsRetainerEligibleForVenture(retainer, CrystalType.Shard))
-            {
-                var jobName = retainer.Job.HasValue ? ClassJobExtensions.GetAbbreviation(retainer.Job) : "Unknown";
-                log.Debug($"[CrystalTerror] ✗ Skipping {retainer.Name} - Job: {jobName} (not MIN/BTN/FSH)");
-                return;
-            }
-
-            var ventureId = VentureHelper.DetermineLowestCrystalVenture(retainer, config, log);
+            // Use the new global capacity-based venture determination
+            var ventureId = VentureHelper.DetermineLowestCrystalVenture(currentChar, retainer, config, log);
+            
             if (ventureId.HasValue)
             {
                 log.Information($"[CrystalTerror] ✓ Overriding venture for {retainer.Name} with {VentureHelper.GetVentureName(ventureId.Value)} (ID: {(uint)ventureId.Value})");
                 autoRetainerSetVenture.InvokeAction((uint)ventureId.Value);
+
+                // Update local retainer state for immediate re-calculation accuracy
+                retainer.CurrentVentureId = (uint)ventureId.Value;
+                retainer.VentureEndsAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 3600; // 1-hour venture
             }
             else
             {
-                log.Debug($"[CrystalTerror] ✗ No suitable venture for {retainer.Name} - Level: {retainer.Level}, Gathering: {retainer.Gathering}");
-                log.Debug($"  (Crystals require Level > 26 AND Gathering > 90)");
+                log.Debug($"[CrystalTerror] ✗ No suitable venture for {retainer.Name}");
+                if (!VentureHelper.IsGatheringRetainer(retainer))
+                {
+                    log.Debug($"  (Not a gathering retainer: {ClassJobExtensions.GetAbbreviation(retainer.Job)})");
+                }
+                else if (VentureHelper.IsFisher(retainer) && !config.AutoVentureFSHEnabled)
+                {
+                    log.Debug($"  (FSH retainer and FSH is disabled)");
                 }
             }
-            catch (Exception ex)
-            {
-                log.Error($"[CrystalTerror] Error in venture override handler: {ex.Message}");
-                log.Error($"  Stack trace: {ex.StackTrace}");
-            }
-            finally
-            {
-                // Always release the lock when we're done
-                isProcessingVenture = false;
-            }
+        }
+        catch (Exception ex)
+        {
+            log.Error($"[CrystalTerror] Error in venture override handler: {ex.Message}");
+            log.Error($"  Stack trace: {ex.StackTrace}");
+        }
+        finally
+        {
+            // Always release the lock when we're done
+            isProcessingVenture = false;
         }
     }
+
+    /// <summary>
+    /// Update retainer venture tracking data from AutoRetainer IPC.
+    /// Call this when importing retainer data to populate CurrentVentureId and VentureEndsAt.
+    /// </summary>
+    public static void UpdateRetainerVentureData(Retainer retainer, uint ventureId, long ventureEndsAt)
+    {
+        if (retainer == null)
+            return;
+
+        retainer.CurrentVentureId = ventureId > 0 ? ventureId : null;
+        retainer.VentureEndsAt = ventureEndsAt > 0 ? ventureEndsAt : null;
+    }
+}
