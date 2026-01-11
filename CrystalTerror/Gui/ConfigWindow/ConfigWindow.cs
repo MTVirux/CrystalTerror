@@ -34,21 +34,33 @@ public class ConfigWindow : Window, IDisposable
         this.SizeConstraints = new WindowSizeConstraints()
         {
             MinimumSize = new System.Numerics.Vector2(600, 400),
-            MaximumSize = ImGui.GetIO().DisplaySize,
+            MaximumSize = new System.Numerics.Vector2(float.MaxValue, float.MaxValue),
         };
 
         // Initialize lock button component
         this.lockButtonComponent = new WindowLockButtonComponent(plugin, isConfigWindow: true);
 
         // Create and add lock button to title bar
-        //lockButton = new TitleBarButton
-        //{
-        //    Click = this.lockButtonComponent.OnLockButtonClick,
-        //    Icon = this.lockButtonComponent.CurrentIcon,
-        //    IconOffset = new System.Numerics.Vector2(3, 2),
-        //    ShowTooltip = () => ImGui.SetTooltip("Lock window position and size"),
-        //};
-        //TitleBarButtons.Add(lockButton);
+        TitleBarButtons.Add(new TitleBarButton
+        {
+            Click = (m) => 
+            {
+                if (m == ImGuiMouseButton.Left)
+                {
+                    // Toggle pin state
+                    plugin.Config.PinConfigWindow = !plugin.Config.PinConfigWindow;
+                    if (plugin.Config.PinConfigWindow)
+                    {
+                        plugin.Config.ConfigWindowPos = ImGui.GetWindowPos();
+                        plugin.Config.ConfigWindowSize = ImGui.GetWindowSize();
+                    }
+                    ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
+                }
+            },
+            Icon = FontAwesomeIcon.Thumbtack,
+            IconOffset = new System.Numerics.Vector2(2, 2),
+            ShowTooltip = () => ImGui.SetTooltip(plugin.Config.PinConfigWindow ? "Unlock window" : "Lock window position and size"),
+        });
 
         // Initialize config file system
         FileSystem = new(() => ConfigTabs);
