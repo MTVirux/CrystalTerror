@@ -9,11 +9,11 @@ using Dalamud.Interface.Utility;
 using Dalamud.Bindings.ImGui;
 using ImGui = Dalamud.Bindings.ImGui.ImGui;
 using ECommons.ImGuiMethods;
+using Dalamud.Interface.Colors;
 
 /// <summary>
 /// Main character list panel component that displays all characters and their retainers
-/// in a style similar to AutoRetainer's retainer tab.
-/// Uses ECommons ImGuiEx for consistent styling.
+/// in a style similar to AutoRetainer's retainer tab with collapsing headers and tables.
 /// </summary>
 public class CharacterListPanel : IUIComponent
 {
@@ -21,6 +21,7 @@ public class CharacterListPanel : IUIComponent
     private readonly CrystalCountsUtility countsUtility;
     private readonly Dalamud.Plugin.Services.ITextureProvider textureProvider;
     private string filterText = string.Empty;
+    private float statusTextWidth = 0f;
 
     public CharacterListPanel(CrystalTerrorPlugin plugin, CrystalCountsUtility countsUtility, Dalamud.Plugin.Services.ITextureProvider textureProvider)
     {
@@ -68,13 +69,14 @@ public class CharacterListPanel : IUIComponent
 
     private void RenderFilterBar()
     {
+        // Search filter
         ImGui.SetNextItemWidth(200f * ImGuiHelpers.GlobalScale);
         ImGui.InputTextWithHint("##filter", "Filter characters...", ref filterText, 100);
         
         ImGui.SameLine();
         
         // Refresh button
-        if (ImGuiEx.IconButton(FontAwesomeIcon.Sync, "Refresh current character"))
+        if (ImGuiEx.IconButton(FontAwesomeIcon.Sync, "##refresh"))
         {
             try
             {
@@ -87,11 +89,12 @@ public class CharacterListPanel : IUIComponent
             }
             catch { }
         }
+        ImGuiEx.Tooltip("Refresh current character");
         
         ImGui.SameLine();
         
         // Import from AutoRetainer
-        if (ImGuiEx.IconButton(FontAwesomeIcon.Download, "Import from AutoRetainer"))
+        if (ImGuiEx.IconButton(FontAwesomeIcon.Download, "##importar"))
         {
             try
             {
@@ -104,8 +107,8 @@ public class CharacterListPanel : IUIComponent
             }
             catch { }
         }
+        ImGuiEx.Tooltip("Import from AutoRetainer");
 
-        // Show CTRL hint for showing ignored characters
         ImGui.SameLine();
         ImGui.TextDisabled("(Hold CTRL to show ignored)");
     }
@@ -126,68 +129,110 @@ public class CharacterListPanel : IUIComponent
             return;
         }
 
-        // Render each character as a collapsing section
-        foreach (var character in characters)
+        // Collect overlay texts for status display at the end
+        var overlayTexts = new List<(Vector2 pos, List<(Vector4? color, string text)> texts)>();
+
+        // Render each character as a collapsing section with retainer table
+        for (var index = 0; index < characters.Count; index++)
         {
-            RenderCharacterEntry(character, showIgnored);
+            var character = characters[index];
+            RenderCharacterEntry(character, index, showIgnored, overlayTexts);
         }
+
+        // Draw overlay texts (totals displayed on the right side)
+        statusTextWidth = 0f;
+        DrawOverlayTexts(overlayTexts);
     }
 
-    private void RenderCharacterEntry(StoredCharacter character, bool showIgnored)
+    private void RenderCharacterEntry(StoredCharacter character, int index, bool showIgnored, List<(Vector2 pos, List<(Vector4?, string)> texts)> overlayTexts)
     {
         var isCurrentCharacter = character.MatchesCID(Player.CID);
-        var headerFlags = ImGuiTreeNodeFlags.None;
         
-        // Style the header
-        var headerColor = GetHeaderColor(character, isCurrentCharacter);
-        var textColor = character.IsIgnored ? new Vector4(0.5f, 0.5f, 0.5f, 1.0f) : (Vector4?)null;
+        ImGui.PushID(character.UniqueKey);
+        var rCurPos = ImGui.GetCursorPos();
 
-        // Push colors if needed
-        int colorsPushed = 0;
-        if (headerColor.HasValue)
+        // Auto-venture enable toggle button (like AutoRetainer's multi-mode button)
+        if (plugin.Config.AutoVentureEnabled)
         {
-            ImGui.PushStyleColor(ImGuiCol.Header, headerColor.Value);
-            ImGui.PushStyleColor(ImGuiCol.HeaderHovered, headerColor.Value * new Vector4(1.2f, 1.2f, 1.2f, 1.0f));
-            ImGui.PushStyleColor(ImGuiCol.HeaderActive, headerColor.Value * new Vector4(1.4f, 1.4f, 1.4f, 1.0f));
-            colorsPushed += 3;
+            var colen = false;
+            if (character.AutoVentureEnabled)
+            {
+                ImGui.PushStyleColor(ImGuiCol.Button, 0xFF097000u); // Green when enabled
+                colen = true;
+            }
+            if (ImGuiEx.IconButton(FontAwesomeIcon.Bolt, $"##av_{character.UniqueKey}"))
+            {
+                character.AutoVentureEnabled = !character.AutoVentureEnabled;
+                ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
+            }
+            if (colen) ImGui.PopStyleColor();
+            ImGuiEx.Tooltip(character.AutoVentureEnabled 
+                ? "Auto Venture enabled for this character (click to disable)" 
+                : "Auto Venture disabled for this character (click to enable)");
+            ImGui.SameLine(0, 3);
         }
-        if (textColor.HasValue)
+
+        // Settings button
+        if (ImGuiEx.IconButton(FontAwesomeIcon.UserCog, $"##cfg_{character.UniqueKey}"))
         {
-            ImGui.PushStyleColor(ImGuiCol.Text, textColor.Value);
-            colorsPushed++;
+            ImGui.OpenPopup($"popup_{character.UniqueKey}");
+        }
+        ImGuiEx.Tooltip("Configure Character");
+        ImGui.SameLine(0, 3);
+
+        // Character config popup
+        if (ImGui.BeginPopup($"popup_{character.UniqueKey}"))
+        {
+            DrawCharacterConfig(character);
+            ImGui.EndPopup();
         }
 
-        // Build header text with crystal totals
-        var headerText = BuildCharacterHeaderText(character, showIgnored);
-        // Use stable ID that won't change when totals update
-        var headerId = $"{character.Name} @ {character.World}##{character.UniqueKey}";
+        // Progress bar background (visual indicator)
+        var initCurpos = ImGui.GetCursorPos();
+        
+        // Calculate how "full" the character is based on crystal totals
+        if (plugin.Config.ShowProgressBars)
+        {
+            var totals = CalculateCharacterTotals(character, showIgnored);
+            var totalCrystals = totals.Values.Sum(t => t.shard + t.crystal + t.cluster);
+            var maxExpected = plugin.Config.ProgressBarMaxValue > 0 ? plugin.Config.ProgressBarMaxValue : 100000L;
+            var prog = Math.Min(1.0f, (float)totalCrystals / maxExpected);
+            
+            ImGui.PushStyleColor(ImGuiCol.PlotHistogram, prog >= 1.0f ? 0xFF005000u : 0xFF500000u);
+            ImGui.ProgressBar(prog, new(ImGui.GetContentRegionAvail().X, ImGui.CalcTextSize("A").Y + ImGui.GetStyle().FramePadding.Y * 2), "");
+            ImGui.PopStyleColor();
+            ImGui.SetCursorPos(initCurpos);
+        }
 
-        // Force collapsed for ignored characters
+        // Push style for current/preferred character
+        var colpref = PushColorIfCurrentCharacter(character, isCurrentCharacter);
+
+        // Ignored styling
         if (character.IsIgnored)
         {
-            ImGui.SetNextItemOpen(false, ImGuiCond.Always);
+            ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.5f, 0.5f, 0.5f, 1.0f));
         }
 
-        var isOpen = ImGui.CollapsingHeader(headerId, headerFlags);
+        // Collapsing header
+        var headerText = GetCutCharacterString(character, statusTextWidth);
+        var isOpen = ImGui.CollapsingHeader($"{headerText}###chara_{character.UniqueKey}");
 
-        // Render totals on the same line if enabled
-        if (plugin.Config.ShowTotalsInHeaders)
+        if (character.IsIgnored)
         {
-            ImGui.SameLine();
-            var totalsText = BuildTotalsText(character, showIgnored);
-            if (!string.IsNullOrEmpty(totalsText))
-            {
-                ImGui.TextDisabled(totalsText);
-            }
+            ImGui.PopStyleColor();
         }
 
-        // Pop colors
-        if (colorsPushed > 0)
+        if (colpref)
         {
-            ImGui.PopStyleColor(colorsPushed);
+            ImGui.PopStyleColor();
         }
 
-        // Context menu
+        // Build overlay text (crystal totals on right side)
+        // When expanded, show only character's inventory; when collapsed, show totals including retainers
+        var totalsInfo = BuildTotalsOverlayText(character, showIgnored, isOpen);
+        overlayTexts.Add((new Vector2(ImGui.GetContentRegionMax().X - ImGui.GetStyle().FramePadding.X, rCurPos.Y + ImGui.GetStyle().FramePadding.Y), totalsInfo));
+
+        // Context menu on header
         if (ImGui.BeginPopupContextItem($"ctx_{character.UniqueKey}"))
         {
             RenderCharacterContextMenu(character);
@@ -197,55 +242,762 @@ public class CharacterListPanel : IUIComponent
         // Render content if open
         if (isOpen)
         {
-            ImGui.Indent();
             RenderCharacterContent(character, showIgnored);
-            ImGui.Unindent();
+            ImGui.Dummy(new Vector2(2, 2));
+        }
+
+        ImGui.PopID();
+    }
+
+    private void DrawCharacterConfig(StoredCharacter character)
+    {
+        ImGui.CollapsingHeader($"{character.Name} Configuration##conf", ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.Bullet | ImGuiTreeNodeFlags.OpenOnArrow);
+        ImGui.Dummy(new Vector2(400, 1));
+
+        // Auto venture toggle
+        var autoVenture = character.AutoVentureEnabled;
+        if (ImGui.Checkbox("Enable Auto Venture", ref autoVenture))
+        {
+            character.AutoVentureEnabled = autoVenture;
+            ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
+        }
+        ImGuiEx.Tooltip("When enabled, CrystalTerror will automatically assign crystal ventures for this character's retainers.");
+
+        // Ignore toggle
+        var isIgnored = character.IsIgnored;
+        if (ImGui.Checkbox("Ignore Character", ref isIgnored))
+        {
+            character.IsIgnored = isIgnored;
+            ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
+        }
+        ImGuiEx.Tooltip("Ignored characters are hidden by default. Hold CTRL to show them.");
+
+        ImGui.Separator();
+
+        // Delete character
+        if (ImGui.Button("Delete Character Data") && ImGui.GetIO().KeyCtrl)
+        {
+            plugin.Characters.Remove(character);
+            ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
+            ImGui.CloseCurrentPopup();
+        }
+        ImGuiEx.Tooltip("Hold CTRL and click to delete this character's stored data.");
+    }
+
+    private void RenderCharacterContent(StoredCharacter character, bool showIgnored)
+    {
+        ImGui.PushID($"content_{character.UniqueKey}");
+
+        // Retainer table
+        var retainers = character.Retainers ?? new List<Retainer>();
+        if (!showIgnored)
+        {
+            retainers = retainers.Where(r => !r.IsIgnored).ToList();
+        }
+
+        if (retainers.Count == 0)
+        {
+            ImGui.TextDisabled("No retainers");
+            ImGui.PopID();
+            return;
+        }
+
+        // Draw retainer table similar to AutoRetainer's style
+        DrawRetainerTable(character, retainers);
+
+        ImGui.PopID();
+    }
+
+    private void DrawRetainerTable(StoredCharacter character, List<Retainer> retainers)
+    {
+        // Get visible elements for crystal columns
+        var visibleElements = Enum.GetValues<Element>().Where(e => countsUtility.IsElementVisible(e)).ToArray();
+        
+        // Column count: Enable, Name, and then crystal counts
+        var baseColumns = 2; // Enable checkbox, Name
+        var crystalColumns = visibleElements.Length;
+        var columnCount = baseColumns + crystalColumns;
+
+        if (!ImGui.BeginTable($"##retainertable_{character.UniqueKey}", columnCount, 
+            ImGuiTableFlags.SizingStretchSame | ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg))
+            return;
+
+        // Setup columns
+        ImGui.TableSetupColumn("##enable", ImGuiTableColumnFlags.WidthFixed, 25f);
+        ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoResize);
+        
+        foreach (var element in visibleElements)
+        {
+            var elName = plugin.Config.UseAbbreviatedElementNames 
+                ? element.ToString().Substring(0, 2) 
+                : element.ToString();
+            ImGui.TableSetupColumn(elName, ImGuiTableColumnFlags.WidthStretch);
+        }
+        
+        // Custom header row with centered crystal column headers
+        ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
+        ImGui.TableNextColumn(); // Enable column (empty header)
+        ImGui.TableNextColumn();
+        ImGui.TextUnformatted("Name");
+        foreach (var element in visibleElements)
+        {
+            ImGui.TableNextColumn();
+            var elName = plugin.Config.UseAbbreviatedElementNames 
+                ? element.ToString().Substring(0, 2) 
+                : element.ToString();
+            var textWidth = ImGui.CalcTextSize(elName).X;
+            var columnWidth = ImGui.GetColumnWidth();
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (columnWidth - textWidth) * 0.5f);
+            ImGui.TextUnformatted(elName);
+        }
+
+        foreach (var retainer in retainers)
+        {
+            DrawRetainerRow(character, retainer, visibleElements);
+        }
+
+        ImGui.EndTable();
+
+        // Character's own inventory section (collapsible)
+        if (character.Inventory != null)
+        {
+            ImGuiEx.TreeNodeCollapsingHeader($"Character Inventory##charinv_{character.UniqueKey}", () =>
+            {
+                DrawInventoryMiniTable(character.Inventory, $"charinv_table_{character.UniqueKey}", visibleElements);
+            });
         }
     }
 
-    private string BuildCharacterHeaderText(StoredCharacter character, bool showIgnored)
+    private void DrawRetainerRow(StoredCharacter character, Retainer retainer, Element[] visibleElements)
     {
-        return $"{character.Name} @ {character.World}";
+        ImGui.TableNextRow();
+        ImGui.TableNextColumn();
+
+        // Enable checkbox for auto venture
+        if (plugin.Config.AutoVentureEnabled && character.AutoVentureEnabled)
+        {
+            var enableAutoVenture = retainer.EnableAutoVenture;
+            if (ImGui.Checkbox($"##av_{retainer.Atid}", ref enableAutoVenture))
+            {
+                retainer.EnableAutoVenture = enableAutoVenture;
+                ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
+            }
+            ImGuiEx.Tooltip(enableAutoVenture 
+                ? "Auto Venture enabled (click to disable)" 
+                : "Auto Venture disabled (click to enable)");
+        }
+        else
+        {
+            ImGui.TextDisabled("-");
+        }
+
+        // Name column
+        ImGui.TableNextColumn();
+        
+        // Determine warning level for coloring
+        var warningLevel = GetRetainerWarningLevel(retainer);
+        var warningColor = GetWarningColor(warningLevel);
+        var hasWarning = warningLevel > 0;
+        
+        // Apply style for ignored retainers or warning level
+        if (retainer.IsIgnored)
+        {
+            ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.5f, 0.5f, 0.5f, 1.0f));
+        }
+        else if (hasWarning)
+        {
+            ImGui.PushStyleColor(ImGuiCol.Text, warningColor);
+        }
+        
+        ImGui.TextUnformatted(retainer.Name);
+        
+        // Pop name color immediately after rendering the name
+        if (retainer.IsIgnored || hasWarning)
+        {
+            ImGui.PopStyleColor();
+        }
+        
+        // Tooltip showing job, level and stats
+        if (ImGui.IsItemHovered())
+        {
+            RenderRetainerTooltip(retainer);
+        }
+        
+        // Right-click context menu for retainer
+        if (ImGui.BeginPopupContextItem($"retctx_{retainer.Atid}"))
+        {
+            DrawRetainerContextMenu(retainer);
+            ImGui.EndPopup();
+        }
+
+        // Right-click config popup (separate from context menu)
+        if (ImGui.IsItemClicked(ImGuiMouseButton.Right) && ImGui.GetIO().KeyShift)
+        {
+            ImGui.OpenPopup($"retpopup_{retainer.Atid}");
+        }
+        if (ImGui.BeginPopup($"retpopup_{retainer.Atid}"))
+        {
+            DrawRetainerConfig(retainer);
+            ImGui.EndPopup();
+        }
+
+        // Crystal columns (centered)
+        foreach (var element in visibleElements)
+        {
+            ImGui.TableNextColumn();
+            var crystalText = BuildCrystalCellText(retainer, element);
+            var cellColor = GetCrystalCellThresholdColor(retainer, element);
+            
+            // Center the text
+            var textWidth = ImGui.CalcTextSize(crystalText).X;
+            var columnWidth = ImGui.GetColumnWidth();
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (columnWidth - textWidth) * 0.5f);
+            
+            if (cellColor.HasValue)
+                ImGui.TextColored(cellColor.Value, crystalText);
+            else
+                ImGui.TextUnformatted(crystalText);
+            
+            // Tooltip showing exact crystal counts
+            if (ImGui.IsItemHovered())
+            {
+                RenderCrystalCellTooltip(retainer, element);
+            }
+        }
     }
 
-    private string BuildTotalsText(StoredCharacter character, bool showIgnored)
+    /// <summary>
+    /// Renders a tooltip for a crystal cell showing exact counts for each crystal type.
+    /// </summary>
+    private void RenderCrystalCellTooltip(Retainer retainer, Element element)
     {
-        // Calculate totals
-        var totals = CalculateCharacterTotals(character, showIgnored);
-        var totalParts = new List<string>();
+        if (retainer.Inventory == null) return;
+        
+        ImGui.BeginTooltip();
+        ImGui.TextUnformatted($"{element}");
+        ImGui.Separator();
+        
+        if (plugin.Config.ShowShards)
+        {
+            var shard = retainer.Inventory.GetCount(element, CrystalType.Shard);
+            ImGui.TextUnformatted($"Shards: {shard:N0}");
+        }
+        if (plugin.Config.ShowCrystals)
+        {
+            var crystal = retainer.Inventory.GetCount(element, CrystalType.Crystal);
+            ImGui.TextUnformatted($"Crystals: {crystal:N0}");
+        }
+        if (plugin.Config.ShowClusters)
+        {
+            var cluster = retainer.Inventory.GetCount(element, CrystalType.Cluster);
+            ImGui.TextUnformatted($"Clusters: {cluster:N0}");
+        }
+        
+        ImGui.EndTooltip();
+    }
 
+    /// <summary>
+    /// Renders a tooltip for a retainer showing job, level, and stats with color-coded warnings.
+    /// </summary>
+    private void RenderRetainerTooltip(Retainer retainer)
+    {
+        ImGui.BeginTooltip();
+        
+        // Job
+        var jobText = ClassJobExtensions.GetAbbreviation(retainer.Job) ?? "Unknown";
+        ImGui.TextUnformatted($"Job: {jobText}");
+        
+        // Level with color coding
+        // Red if under 26, Yellow if under 81, otherwise white
+        ImGui.TextUnformatted("Level: ");
+        ImGui.SameLine(0, 0);
+        var levelColor = GetLevelWarningColor(retainer.Level);
+        ImGui.PushStyleColor(ImGuiCol.Text, levelColor);
+        ImGui.TextUnformatted(retainer.Level.ToString());
+        ImGui.PopStyleColor();
+        
+        // Stats for gathering retainers
+        if (IsGatheringRetainer(retainer))
+        {
+            // Gathering - Red if under 90
+            ImGui.TextUnformatted("Gathering: ");
+            ImGui.SameLine(0, 0);
+            var gatheringColor = retainer.Gathering < 90 
+                ? new Vector4(1.0f, 0.4f, 0.4f, 1.0f) // Red
+                : new Vector4(1.0f, 1.0f, 1.0f, 1.0f); // White
+            ImGui.PushStyleColor(ImGuiCol.Text, gatheringColor);
+            ImGui.TextUnformatted(retainer.Gathering.ToString());
+            ImGui.PopStyleColor();
+            
+            // Perception - Yellow if under 1620
+            ImGui.TextUnformatted("Perception: ");
+            ImGui.SameLine(0, 0);
+            var perceptionColor = retainer.Perception < 1620 
+                ? new Vector4(1.0f, 1.0f, 0.4f, 1.0f) // Yellow
+                : new Vector4(1.0f, 1.0f, 1.0f, 1.0f); // White
+            ImGui.PushStyleColor(ImGuiCol.Text, perceptionColor);
+            ImGui.TextUnformatted(retainer.Perception.ToString());
+            ImGui.PopStyleColor();
+        }
+        else
+        {
+            // Item level for combat retainers
+            ImGui.TextUnformatted($"Item Level: {retainer.Ilvl}");
+        }
+        
+        ImGui.EndTooltip();
+    }
+
+    /// <summary>
+    /// Gets the warning level for a retainer (0=none, 1=yellow, 2=red).
+    /// Based on: Level under 26 = red, Level under 81 = yellow,
+    /// Gathering under 90 = red, Perception under 1620 = yellow.
+    /// Returns the highest warning level.
+    /// </summary>
+    private int GetRetainerWarningLevel(Retainer retainer)
+    {
+        var level = 0;
+        
+        // Level warnings
+        if (retainer.Level < 26)
+        {
+            level = Math.Max(level, 2); // Red
+        }
+        else if (retainer.Level < 81)
+        {
+            level = Math.Max(level, 1); // Yellow
+        }
+        
+        // Gathering warning (only for gatherers)
+        if (IsGatheringRetainer(retainer) && retainer.Gathering < 90)
+        {
+            level = Math.Max(level, 2); // Red
+        }
+        
+        // Perception warning (only for gatherers)
+        if (IsGatheringRetainer(retainer) && retainer.Perception < 1620)
+        {
+            level = Math.Max(level, 1); // Yellow
+        }
+        
+        return level;
+    }
+
+    /// <summary>
+    /// Gets the color for a warning level (0=white, 1=yellow, 2=red).
+    /// </summary>
+    private Vector4 GetWarningColor(int warningLevel)
+    {
+        return warningLevel switch
+        {
+            2 => new Vector4(1.0f, 0.4f, 0.4f, 1.0f), // Red
+            1 => new Vector4(1.0f, 1.0f, 0.4f, 1.0f), // Yellow
+            _ => new Vector4(1.0f, 1.0f, 1.0f, 1.0f), // White
+        };
+    }
+
+    /// <summary>
+    /// Gets the color for a retainer's level (red if under 26, yellow if under 81, white otherwise).
+    /// </summary>
+    private Vector4 GetLevelWarningColor(int level)
+    {
+        if (level < 26)
+        {
+            return new Vector4(1.0f, 0.4f, 0.4f, 1.0f); // Red
+        }
+        else if (level < 81)
+        {
+            return new Vector4(1.0f, 1.0f, 0.4f, 1.0f); // Yellow
+        }
+        return new Vector4(1.0f, 1.0f, 1.0f, 1.0f); // White
+    }
+
+    private string BuildStatsText(Retainer retainer)
+    {
+        var parts = new List<string>();
+        
+        if (retainer.Level > 0)
+        {
+            parts.Add($"L{retainer.Level}");
+        }
+
+        // Show iLvl for combat, Gathering for gatherers
+        if (IsGatheringRetainer(retainer))
+        {
+            if (retainer.Gathering > 0)
+            {
+                parts.Add($"G{retainer.Gathering}");
+            }
+        }
+        else if (retainer.Ilvl > 0)
+        {
+            parts.Add($"i{retainer.Ilvl}");
+        }
+
+        return parts.Count > 0 ? string.Join(" ", parts) : "-";
+    }
+
+    private string BuildCrystalCellText(Retainer retainer, Element element)
+    {
+        if (retainer.Inventory == null) return "-";
+
+        var parts = new List<string>();
+        
+        if (plugin.Config.ShowShards)
+        {
+            var shard = retainer.Inventory.GetCount(element, CrystalType.Shard);
+            parts.Add(countsUtility.FormatNumber(shard, plugin.Config.UseReducedNotationInTables));
+        }
+        if (plugin.Config.ShowCrystals)
+        {
+            var crystal = retainer.Inventory.GetCount(element, CrystalType.Crystal);
+            parts.Add(countsUtility.FormatNumber(crystal, plugin.Config.UseReducedNotationInTables));
+        }
+        if (plugin.Config.ShowClusters)
+        {
+            var cluster = retainer.Inventory.GetCount(element, CrystalType.Cluster);
+            parts.Add(countsUtility.FormatNumber(cluster, plugin.Config.UseReducedNotationInTables));
+        }
+
+        return parts.Count > 0 ? string.Join("/", parts) : "-";
+    }
+
+    /// <summary>
+    /// Determines the threshold color for a retainer's crystal cell based on configured thresholds.
+    /// </summary>
+    private Vector4? GetCrystalCellThresholdColor(Retainer retainer, Element element)
+    {
+        if (retainer.Inventory == null) return null;
+
+        // Calculate total based on visible crystal types
+        var total = 0L;
+        if (plugin.Config.ShowShards)
+            total += retainer.Inventory.GetCount(element, CrystalType.Shard);
+        if (plugin.Config.ShowCrystals)
+            total += retainer.Inventory.GetCount(element, CrystalType.Crystal);
+        if (plugin.Config.ShowClusters)
+            total += retainer.Inventory.GetCount(element, CrystalType.Cluster);
+
+        // Determine color based on threshold settings (check from highest to lowest, first match wins)
+        if (plugin.Config.RetainerCrystalThreshold3Enabled && total >= plugin.Config.RetainerCrystalThreshold3Value)
+            return plugin.Config.RetainerCrystalThreshold3Color;
+        if (plugin.Config.RetainerCrystalThreshold2Enabled && total >= plugin.Config.RetainerCrystalThreshold2Value)
+            return plugin.Config.RetainerCrystalThreshold2Color;
+        if (plugin.Config.RetainerCrystalThreshold1Enabled && total >= plugin.Config.RetainerCrystalThreshold1Value)
+            return plugin.Config.RetainerCrystalThreshold1Color;
+
+        return null;
+    }
+
+    private void DrawRetainerConfig(Retainer retainer)
+    {
+        ImGui.CollapsingHeader($"{retainer.Name} Configuration##retconf", ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.Bullet);
+        ImGui.Dummy(new Vector2(300, 1));
+
+        // Enable auto venture
+        var enableAutoVenture = retainer.EnableAutoVenture;
+        if (ImGui.Checkbox("Enable Auto Venture", ref enableAutoVenture))
+        {
+            retainer.EnableAutoVenture = enableAutoVenture;
+            ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
+        }
+
+        // Ignore toggle
+        var isIgnored = retainer.IsIgnored;
+        if (ImGui.Checkbox("Ignore Retainer", ref isIgnored))
+        {
+            retainer.IsIgnored = isIgnored;
+            ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
+        }
+
+        ImGui.Separator();
+
+        // Stats display
+        ImGui.Text($"Job: {ClassJobExtensions.GetAbbreviation(retainer.Job)} ({ClassJobExtensions.GetClassJob(retainer.Job)?.Name ?? "Unknown"})");
+        ImGui.Text($"Level: {retainer.Level}");
+        
+        if (IsGatheringRetainer(retainer))
+        {
+            ImGui.Text($"Gathering: {retainer.Gathering}");
+            ImGui.Text($"Perception: {retainer.Perception}");
+        }
+        else
+        {
+            ImGui.Text($"Item Level: {retainer.Ilvl}");
+        }
+
+        ImGui.Separator();
+
+        // Delete button
+        if (ImGui.Button("Delete Retainer Data") && ImGui.GetIO().KeyCtrl)
+        {
+            retainer.OwnerCharacter?.Retainers?.Remove(retainer);
+            ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
+            ImGui.CloseCurrentPopup();
+        }
+        ImGuiEx.Tooltip("Hold CTRL and click to delete.");
+    }
+
+    private void DrawRetainerContextMenu(Retainer retainer)
+    {
+        if (ImGui.MenuItem(retainer.IsIgnored ? "Unignore Retainer" : "Ignore Retainer"))
+        {
+            retainer.IsIgnored = !retainer.IsIgnored;
+            ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
+        }
+
+        var enableAutoVenture = retainer.EnableAutoVenture;
+        if (ImGui.MenuItem("Enable Auto Venture", "", ref enableAutoVenture))
+        {
+            retainer.EnableAutoVenture = enableAutoVenture;
+            ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
+        }
+
+        ImGui.Separator();
+
+        if (ImGui.MenuItem("Delete Retainer"))
+        {
+            retainer.OwnerCharacter?.Retainers?.Remove(retainer);
+            ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
+        }
+    }
+
+    private void DrawInventoryMiniTable(Inventory inventory, string tableId, Element[] visibleElements)
+    {
+        var columnCount = 1 + visibleElements.Length;
+        if (!ImGui.BeginTable(tableId, columnCount, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingFixedFit))
+            return;
+
+        // Setup columns
+        ImGui.TableSetupColumn("Type", ImGuiTableColumnFlags.WidthFixed, 60f);
+        foreach (var element in visibleElements)
+        {
+            var elName = plugin.Config.UseAbbreviatedElementNames 
+                ? element.ToString().Substring(0, 2) 
+                : element.ToString();
+            ImGui.TableSetupColumn(elName, ImGuiTableColumnFlags.WidthFixed, 90f);
+        }
+        
+        // Custom header row with centered crystal column headers
+        ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
+        ImGui.TableNextColumn();
+        ImGui.TextUnformatted("Type");
+        foreach (var element in visibleElements)
+        {
+            ImGui.TableNextColumn();
+            var elName = plugin.Config.UseAbbreviatedElementNames 
+                ? element.ToString().Substring(0, 2) 
+                : element.ToString();
+            var textWidth = ImGui.CalcTextSize(elName).X;
+            var columnWidth = ImGui.GetColumnWidth();
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (columnWidth - textWidth) * 0.5f);
+            ImGui.TextUnformatted(elName);
+        }
+
+        // Rows for each crystal type
+        var crystalTypes = new[] { CrystalType.Shard, CrystalType.Crystal, CrystalType.Cluster };
+        var showTypes = new[] { plugin.Config.ShowShards, plugin.Config.ShowCrystals, plugin.Config.ShowClusters };
+
+        for (int i = 0; i < crystalTypes.Length; i++)
+        {
+            if (!showTypes[i]) continue;
+
+            ImGui.TableNextRow();
+            ImGui.TableNextColumn();
+            ImGui.TextUnformatted(crystalTypes[i].ToString());
+
+            foreach (var element in visibleElements)
+            {
+                ImGui.TableNextColumn();
+                var count = inventory.GetCount(element, crystalTypes[i]);
+                var color = countsUtility.GetCrystalWarningColor(count);
+                var text = countsUtility.FormatNumber(count, plugin.Config.UseReducedNotationInTables);
+                
+                // Center the text
+                var textWidth = ImGui.CalcTextSize(text).X;
+                var columnWidth = ImGui.GetColumnWidth();
+                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (columnWidth - textWidth) * 0.5f);
+                
+                if (color.HasValue)
+                    ImGui.TextColored(color.Value, text);
+                else
+                    ImGui.TextUnformatted(text);
+            }
+        }
+
+        ImGui.EndTable();
+    }
+
+    private List<(Vector4? color, string text)> BuildTotalsOverlayText(StoredCharacter character, bool showIgnored, bool isExpanded = false)
+    {
+        var result = new List<(Vector4?, string)>();
+        
+        // When expanded, show only character's inventory; when collapsed, show totals including retainers
+        var totals = isExpanded 
+            ? CalculateCharacterOnlyTotals(character) 
+            : CalculateCharacterTotals(character, showIgnored);
+        
+        // Calculate threshold multiplier: when expanded (character only) use 1, otherwise non-ignored retainer count + 1
+        var retainers = character.Retainers ?? new List<Retainer>();
+        var nonIgnoredRetainerCount = retainers.Count(r => !r.IsIgnored);
+        var thresholdMultiplier = isExpanded ? 1 : nonIgnoredRetainerCount + 1;
+
+        // Build a summary string for the header overlay
         foreach (var element in Enum.GetValues<Element>())
         {
             if (!countsUtility.IsElementVisible(element))
                 continue;
 
             var (shard, crystal, cluster) = totals[element];
-            var elementTotal = new List<string>();
+            var total = (plugin.Config.ShowShards ? shard : 0) 
+                      + (plugin.Config.ShowCrystals ? crystal : 0) 
+                      + (plugin.Config.ShowClusters ? cluster : 0);
             
-            if (plugin.Config.ShowShards) elementTotal.Add(countsUtility.FormatNumber(shard, plugin.Config.UseReducedNotationInHeaders));
-            if (plugin.Config.ShowCrystals) elementTotal.Add(countsUtility.FormatNumber(crystal, plugin.Config.UseReducedNotationInHeaders));
-            if (plugin.Config.ShowClusters) elementTotal.Add(countsUtility.FormatNumber(cluster, plugin.Config.UseReducedNotationInHeaders));
+            var elName = plugin.Config.UseAbbreviatedElementNames 
+                ? element.ToString().Substring(0, 2) 
+                : element.ToString().Substring(0, 1);
+            
+            // Determine color based on threshold settings (check from highest to lowest, first match wins)
+            // Threshold values are multiplied by (retainer count + 1)
+            Vector4? color = null;
+            if (plugin.Config.RetainerCrystalThreshold3Enabled && total >= plugin.Config.RetainerCrystalThreshold3Value * thresholdMultiplier)
+                color = plugin.Config.RetainerCrystalThreshold3Color;
+            else if (plugin.Config.RetainerCrystalThreshold2Enabled && total >= plugin.Config.RetainerCrystalThreshold2Value * thresholdMultiplier)
+                color = plugin.Config.RetainerCrystalThreshold2Color;
+            else if (plugin.Config.RetainerCrystalThreshold1Enabled && total >= plugin.Config.RetainerCrystalThreshold1Value * thresholdMultiplier)
+                color = plugin.Config.RetainerCrystalThreshold1Color;
+            
+            result.Add((color, $"{elName}:{countsUtility.FormatNumber(total, true)}"));
+        }
 
-            if (elementTotal.Count > 0)
+        return result;
+    }
+
+    private void DrawOverlayTexts(List<(Vector2 pos, List<(Vector4? color, string text)> texts)> overlayTexts)
+    {
+        if (overlayTexts.Count == 0) return;
+
+        // First pass: Calculate maximum width for each column position across all rows
+        var maxColumnCount = overlayTexts.Max(o => o.texts.Count);
+        var columnWidths = new float[maxColumnCount];
+        
+        foreach (var (_, texts) in overlayTexts)
+        {
+            for (var i = 0; i < texts.Count; i++)
             {
-                var elementStr = string.Join("/", elementTotal);
-                if (plugin.Config.ShowElementNamesInTotals)
-                {
-                    var elName = plugin.Config.UseAbbreviatedElementNames 
-                        ? element.ToString().Substring(0, 2) 
-                        : element.ToString();
-                    totalParts.Add($"{elName}: {elementStr}");
-                }
-                else
-                {
-                    totalParts.Add(elementStr);
-                }
+                var textWidth = ImGui.CalcTextSize(texts[i].text).X;
+                columnWidths[i] = Math.Max(columnWidths[i], textWidth);
             }
         }
 
-        return totalParts.Count > 0 
-            ? $"[{string.Join("  ", totalParts)}]"
-            : string.Empty;
+        // Calculate total width using fixed column widths
+        var itemSpacing = ImGui.GetStyle().ItemSpacing.X;
+        var totalWidth = columnWidths.Sum() + (maxColumnCount - 1) * itemSpacing;
+        statusTextWidth = Math.Max(statusTextWidth, totalWidth);
+
+        // Second pass: Draw each row using calculated column widths for alignment
+        foreach (var (pos, texts) in overlayTexts)
+        {
+            if (texts.Count == 0) continue;
+
+            var savedPos = ImGui.GetCursorPos();
+            var xPos = pos.X - totalWidth;
+            
+            for (var i = 0; i < texts.Count; i++)
+            {
+                var (color, text) = texts[i];
+                var textWidth = ImGui.CalcTextSize(text).X;
+                
+                // Right-align text within column by adding padding
+                var columnPadding = columnWidths[i] - textWidth;
+                ImGui.SetCursorPos(new Vector2(xPos + columnPadding, pos.Y));
+                
+                if (color.HasValue)
+                    ImGui.TextColored(color.Value, text);
+                else
+                    ImGui.TextDisabled(text);
+                
+                xPos += columnWidths[i] + itemSpacing;
+            }
+
+            ImGui.SetCursorPos(savedPos);
+        }
+    }
+
+    private bool PushColorIfCurrentCharacter(StoredCharacter character, bool isCurrentCharacter)
+    {
+        if (!isCurrentCharacter || !plugin.Config.ColorCurrentCharacter)
+            return false;
+
+        ImGui.PushStyleColor(ImGuiCol.Text, plugin.Config.CurrentCharacterColor);
+        return true;
+    }
+
+    private string GetCutCharacterString(StoredCharacter character, float reservedWidth)
+    {
+        var displayName = FormatCharacterName(character.Name);
+        var chstr = plugin.Config.ShowWorldInHeader 
+            ? $"{displayName} @ {character.World}" 
+            : displayName;
+        var maxWidth = ImGui.GetContentRegionAvail().X - reservedWidth - CollapsingHeaderSpacingsWidth;
+        
+        var mod = false;
+        while (ImGui.CalcTextSize(chstr).X > maxWidth && chstr.Length > 5)
+        {
+            mod = true;
+            chstr = chstr[..^1];
+        }
+        
+        if (mod) chstr += "...";
+        return chstr;
+    }
+
+    private string FormatCharacterName(string fullName)
+    {
+        if (string.IsNullOrEmpty(fullName))
+            return fullName;
+
+        var parts = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        
+        return plugin.Config.NameDisplayFormat switch
+        {
+            NameDisplayFormat.FirstName => parts.Length > 0 ? parts[0] : fullName,
+            NameDisplayFormat.LastName => parts.Length > 1 ? parts[1] : (parts.Length > 0 ? parts[0] : fullName),
+            NameDisplayFormat.Initials => parts.Length > 1 
+                ? $"{parts[0][0]}.{parts[1][0]}." 
+                : (parts.Length > 0 ? $"{parts[0][0]}." : fullName),
+            _ => fullName // FullName is default
+        };
+    }
+
+    private static float CollapsingHeaderSpacingsWidth => 
+        ImGui.GetStyle().FramePadding.X * 2f + ImGui.GetStyle().ItemSpacing.X * 2 + ImGui.CalcTextSize("▲...").X;
+
+    private void RenderCharacterContextMenu(StoredCharacter character)
+    {
+        if (ImGui.MenuItem(character.IsIgnored ? "Unignore Character" : "Ignore Character"))
+        {
+            character.IsIgnored = !character.IsIgnored;
+            ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
+        }
+
+        if (ImGui.MenuItem("Delete Character"))
+        {
+            plugin.Characters.Remove(character);
+            ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
+        }
+
+        ImGui.Separator();
+
+        if (ImGui.MenuItem("Refresh Character Data") && character.MatchesCID(Player.CID))
+        {
+            var sc = CharacterHelper.ImportCurrentCharacter();
+            if (sc != null)
+            {
+                CharacterHelper.MergeInto(plugin.Characters, new[] { sc }, CharacterHelper.MergePolicy.Overwrite);
+                ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
+            }
+        }
     }
 
     private Dictionary<Element, (long shard, long crystal, long cluster)> CalculateCharacterTotals(StoredCharacter character, bool showIgnored)
@@ -275,152 +1027,20 @@ public class CharacterListPanel : IUIComponent
         return result;
     }
 
-    private Vector4? GetHeaderColor(StoredCharacter character, bool isCurrentCharacter)
+    private Dictionary<Element, (long shard, long crystal, long cluster)> CalculateCharacterOnlyTotals(StoredCharacter character)
     {
-        if (character.IsIgnored)
-            return new Vector4(0.3f, 0.3f, 0.3f, 1.0f);
+        var result = new Dictionary<Element, (long shard, long crystal, long cluster)>();
 
-        if (isCurrentCharacter && plugin.Config.ColorCurrentCharacter)
-            return plugin.Config.CurrentCharacterColor;
-
-        // Check character total thresholds
-        var totals = CalculateCharacterTotals(character, false);
-        long grandTotal = 0;
         foreach (var element in Enum.GetValues<Element>())
         {
-            var (shard, crystal, cluster) = totals[element];
-            if (plugin.Config.ShowShards) grandTotal += shard;
-            if (plugin.Config.ShowCrystals) grandTotal += crystal;
-            if (plugin.Config.ShowClusters) grandTotal += cluster;
-        }
+            long shard = character.Inventory?.GetCount(element, CrystalType.Shard) ?? 0;
+            long crystal = character.Inventory?.GetCount(element, CrystalType.Crystal) ?? 0;
+            long cluster = character.Inventory?.GetCount(element, CrystalType.Cluster) ?? 0;
 
-        var thresholds = new List<(int value, Vector4 color)>();
-        if (plugin.Config.CharacterTotalThreshold1Enabled)
-            thresholds.Add((plugin.Config.CharacterTotalThreshold1Value, plugin.Config.CharacterTotalThreshold1Color));
-        if (plugin.Config.CharacterTotalThreshold2Enabled)
-            thresholds.Add((plugin.Config.CharacterTotalThreshold2Value, plugin.Config.CharacterTotalThreshold2Color));
-        if (plugin.Config.CharacterTotalThreshold3Enabled)
-            thresholds.Add((plugin.Config.CharacterTotalThreshold3Value, plugin.Config.CharacterTotalThreshold3Color));
-
-        thresholds.Sort((a, b) => a.value.CompareTo(b.value));
-
-        Vector4? result = null;
-        foreach (var threshold in thresholds)
-        {
-            if (grandTotal >= threshold.value)
-                result = threshold.color;
+            result[element] = (shard, crystal, cluster);
         }
 
         return result;
-    }
-
-    private void RenderCharacterContextMenu(StoredCharacter character)
-    {
-        if (ImGui.MenuItem(character.IsIgnored ? "Unignore Character" : "Ignore Character"))
-        {
-            character.IsIgnored = !character.IsIgnored;
-            ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
-        }
-
-        if (ImGui.MenuItem("Delete Character"))
-        {
-            plugin.Characters.Remove(character);
-            ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
-        }
-
-        ImGui.Separator();
-
-        if (ImGui.MenuItem("Refresh Character Data") && character.MatchesCID(Player.CID))
-        {
-            var sc = CharacterHelper.ImportCurrentCharacter();
-            if (sc != null)
-            {
-                CharacterHelper.MergeInto(plugin.Characters, new[] { sc }, CharacterHelper.MergePolicy.Overwrite);
-                ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
-            }
-        }
-    }
-
-    private void RenderCharacterContent(StoredCharacter character, bool showIgnored)
-    {
-        // Character's own inventory
-        ImGuiEx.TreeNodeCollapsingHeader($"Character Inventory##{character.UniqueKey}", () =>
-        {
-            RenderInventoryTable(character.Inventory, $"char_inv_{character.UniqueKey}");
-        });
-
-        // Retainers
-        if (character.Retainers != null && character.Retainers.Count > 0)
-        {
-            var retainers = showIgnored ? character.Retainers : character.Retainers.Where(r => !r.IsIgnored).ToList();
-            
-            foreach (var retainer in retainers)
-            {
-                var retainerRow = new RetainerEntryRow(plugin, countsUtility, retainer, textureProvider);
-                retainerRow.Render();
-            }
-        }
-        else
-        {
-            ImGui.TextDisabled("No retainers");
-        }
-    }
-
-    private void RenderInventoryTable(Inventory? inventory, string tableId)
-    {
-        if (inventory == null)
-        {
-            ImGui.TextDisabled("No inventory data");
-            return;
-        }
-
-        var visibleElements = Enum.GetValues<Element>().Where(e => countsUtility.IsElementVisible(e)).ToArray();
-        if (visibleElements.Length == 0)
-        {
-            ImGui.TextDisabled("No elements visible");
-            return;
-        }
-
-        // Create table with columns for each visible element
-        var columnCount = 1 + visibleElements.Length; // Type column + element columns
-        if (!ImGui.BeginTable(tableId, columnCount, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingFixedFit))
-            return;
-
-        // Setup columns
-        ImGui.TableSetupColumn("Type", ImGuiTableColumnFlags.WidthFixed, 60f);
-        foreach (var element in visibleElements)
-        {
-            ImGui.TableSetupColumn(element.ToString(), ImGuiTableColumnFlags.WidthFixed, 70f);
-        }
-        ImGui.TableHeadersRow();
-
-        // Render rows for each crystal type
-        var crystalTypes = new[] { CrystalType.Shard, CrystalType.Crystal, CrystalType.Cluster };
-        var showTypes = new[] { plugin.Config.ShowShards, plugin.Config.ShowCrystals, plugin.Config.ShowClusters };
-
-        for (int i = 0; i < crystalTypes.Length; i++)
-        {
-            if (!showTypes[i]) continue;
-
-            ImGui.TableNextRow();
-            ImGui.TableNextColumn();
-            ImGui.TextUnformatted(crystalTypes[i].ToString());
-
-            foreach (var element in visibleElements)
-            {
-                ImGui.TableNextColumn();
-                var count = inventory.GetCount(element, crystalTypes[i]);
-                var color = countsUtility.GetCrystalWarningColor(count);
-                var text = countsUtility.FormatNumber(count, plugin.Config.UseReducedNotationInTables);
-                
-                if (color.HasValue)
-                    ImGui.TextColored(color.Value, text);
-                else
-                    ImGui.TextUnformatted(text);
-            }
-        }
-
-        ImGui.EndTable();
     }
 
     private List<StoredCharacter> GetFilteredCharacters()
@@ -437,10 +1057,16 @@ public class CharacterListPanel : IUIComponent
             ).ToList();
         }
 
+        // Hide characters without gathering retainers if option is enabled
+        if (plugin.Config.HideNonGatheringCharacters)
+        {
+            characters = characters.Where(c => c.Retainers.Any(r => IsGatheringRetainer(r))).ToList();
+        }
+
         // Apply sort
         characters = ApplySorting(characters);
 
-        // Always show current character at top - this overrides any sorting
+        // Always show current character at top
         if (Player.Available && Player.CID != 0)
         {
             var current = characters.FirstOrDefault(c => c.MatchesCID(Player.CID));
@@ -471,19 +1097,23 @@ public class CharacterListPanel : IUIComponent
     {
         var cidOrder = AutoRetainerHelper.GetCharacterOrder();
         if (cidOrder.Count == 0)
-            return characters; // Fall back to original order if AutoRetainer unavailable
+            return characters;
 
-        // Create a dictionary for O(1) lookup of position by CID
         var cidPositions = new Dictionary<ulong, int>();
         for (int i = 0; i < cidOrder.Count; i++)
         {
             cidPositions[cidOrder[i]] = i;
         }
 
-        // Sort by AutoRetainer position. Characters not in AutoRetainer go to the end.
         return characters
             .OrderBy(c => c.ContentId != 0 && cidPositions.TryGetValue(c.ContentId, out var pos) ? pos : int.MaxValue)
-            .ThenBy(c => c.Name) // Secondary sort for characters not in AutoRetainer
+            .ThenBy(c => c.Name)
             .ToList();
+    }
+
+    private bool IsGatheringRetainer(Retainer retainer)
+    {
+        // MIN=16, BTN=17, FSH=18
+        return retainer.Job == 16 || retainer.Job == 17 || retainer.Job == 18;
     }
 }
