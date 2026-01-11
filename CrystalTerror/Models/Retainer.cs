@@ -27,6 +27,23 @@ public class Retainer
     /// <summary>Perception stat for non-combat retainers (when available from AutoRetainer).</summary>
     public int Perception { get; set; } = 0;
 
+    /// <summary>The venture ID currently assigned to this retainer (null/0 if none).</summary>
+    public uint? CurrentVentureId { get; set; } = null;
+
+    /// <summary>Unix timestamp when the current venture completes (null if no active venture).</summary>
+    public long? VentureEndsAt { get; set; } = null;
+
+    /// <summary>
+    /// Whether this retainer has an active venture in progress.
+    /// True if CurrentVentureId is set and VentureEndsAt is in the future.
+    /// </summary>
+    [Newtonsoft.Json.JsonIgnore]
+    public bool HasActiveVenture => 
+        CurrentVentureId.HasValue && 
+        CurrentVentureId.Value > 0 && 
+        VentureEndsAt.HasValue && 
+        VentureEndsAt.Value > DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
     private bool _enableAutoVenture = true;
     private bool _isIgnored = false;
 
