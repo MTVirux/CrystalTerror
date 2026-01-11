@@ -207,7 +207,10 @@ public static class CharacterHelper
                 return (calculatedIlvl.Value, calculatedGathering, calculatedPerception);
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Svc.Log.Debug($"[CrystalTerror] Failed to calculate retainer stats from gear: {ex.Message}");
+        }
 
         // Fall back to AutoRetainer IPC
         try
@@ -262,7 +265,10 @@ public static class CharacterHelper
                 }
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Svc.Log.Debug($"[CrystalTerror] Failed to read retainer crystals: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -298,7 +304,7 @@ public static class CharacterHelper
 
             foreach (var ri in g)
             {
-                var r = RetainerHelper.CreateFromAutoRetainer(sc, ri.Name, ri.Atid, ri.Job, ri.Level, ri.Ilvl, ri.Gathering, ri.Perception, ri.VentureID, ri.VentureEndsAt);
+                var r = RetainerHelper.Create(sc, ri.Name ?? string.Empty, ri.Atid, ri.Job, ri.Level, ri.Ilvl, ri.Gathering, ri.Perception, ri.VentureID, ri.VentureEndsAt);
                 sc.Retainers.Add(r);
             }
 

@@ -6,11 +6,9 @@ using Dalamud.Game.Inventory;
 using Dalamud.Game.Inventory.InventoryEventArgTypes;
 using Dalamud.Game.Command;
 using Dalamud.Plugin.Services;
-using Dalamud.Data;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using ECommons;
-using System.Collections;
 
 namespace CrystalTerror.Core;
 

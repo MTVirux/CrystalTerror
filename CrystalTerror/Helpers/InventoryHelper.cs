@@ -44,7 +44,10 @@ public static class InventoryHelper
                 Svc.GameInventory.ItemChangedExplicit -= OnInventoryItemChanged;
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Svc.Log.Warning($"[CrystalTerror] InventoryHelper dispose error: {ex.Message}");
+        }
         finally
         {
             plugin = null;

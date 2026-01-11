@@ -87,7 +87,10 @@ public class CharacterListPanel : IUIComponent
                     ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Svc.Log.Warning($"[CrystalTerror] Failed to refresh current character: {ex.Message}");
+            }
         }
         ImGuiEx.Tooltip("Refresh current character");
         
@@ -105,7 +108,10 @@ public class CharacterListPanel : IUIComponent
                     ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Svc.Log.Warning($"[CrystalTerror] Failed to import from AutoRetainer: {ex.Message}");
+            }
         }
         ImGuiEx.Tooltip("Import from AutoRetainer");
 

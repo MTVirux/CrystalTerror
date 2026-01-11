@@ -26,32 +26,34 @@ public static class RetainerHelper
         return r;
     }
 
-        public static Retainer CreateFromAutoRetainer(StoredCharacter owner, string? name, ulong retainerId, int? job, int level, int ilvl, int gathering = 0, int perception = 0, uint ventureId = 0, long ventureEndsAt = 0)
+    /// <summary>
+    /// Sets the owner reference for all retainers belonging to a character.
+    /// </summary>
+    public static void SetOwnerForRetainers(StoredCharacter owner)
+    {
+        if (owner == null) throw new ArgumentNullException(nameof(owner));
+        if (owner.Retainers == null) return;
+
+        foreach (var r in owner.Retainers)
         {
-            return Create(owner, name ?? string.Empty, retainerId, job, level, ilvl, gathering, perception, ventureId, ventureEndsAt);
+            r.OwnerCharacter = owner;
         }
+    }
 
-        public static void SetOwnerForRetainers(StoredCharacter owner)
+    /// <summary>
+    /// Repairs owner references for all retainers after deserialization.
+    /// The OwnerCharacter property is not serialized, so this must be called after loading.
+    /// </summary>
+    public static void RepairOwnerReferences(IEnumerable<StoredCharacter> characters)
+    {
+        if (characters == null) return;
+        foreach (var sc in characters)
         {
-            if (owner == null) throw new ArgumentNullException(nameof(owner));
-            if (owner.Retainers == null) return;
-
-            foreach (var r in owner.Retainers)
+            if (sc?.Retainers == null) continue;
+            foreach (var r in sc.Retainers)
             {
-                try { r.OwnerCharacter = owner; } catch { }
-            }
-        }
-
-        public static void RepairOwnerReferences(IEnumerable<StoredCharacter> characters)
-        {
-            if (characters == null) return;
-            foreach (var sc in characters)
-            {
-                if (sc?.Retainers == null) continue;
-                foreach (var r in sc.Retainers)
-                {
-                    try { r.OwnerCharacter = sc; } catch { }
-                }
+                r.OwnerCharacter = sc;
             }
         }
     }
+}
