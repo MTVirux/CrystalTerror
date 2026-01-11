@@ -95,6 +95,18 @@ public static class VentureHelper
             return null;
         }
 
+        // Check venture credit threshold - if enabled and credits are low, force Quick Exploration
+        if (config.AutoVentureCreditCheckEnabled && config.AutoVentureCreditThreshold > 0)
+        {
+            var currentCredits = VentureCreditHelper.GetVentureCreditCount();
+            if (currentCredits < config.AutoVentureCreditThreshold)
+            {
+                log?.Information($"[VentureHelper] Venture credits ({currentCredits}) below threshold ({config.AutoVentureCreditThreshold}), assigning Quick Exploration for {retainer.Name}");
+                return VentureId.QuickExploration;
+            }
+            log?.Debug($"[VentureHelper] Venture credits check passed: {currentCredits} >= {config.AutoVentureCreditThreshold}");
+        }
+
         // Calculate global capacity metrics
         var effectiveCounts = VentureCapacityCalculator.CalculateEffectiveCounts(character, config.AutoVentureRewardAmount);
         var capacities = VentureCapacityCalculator.CalculateGlobalCapacity(character);

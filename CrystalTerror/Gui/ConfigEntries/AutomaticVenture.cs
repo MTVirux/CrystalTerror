@@ -77,6 +77,51 @@ public class AutomaticVenture : ConfigEntry
                 }
             })
 
+            // === Venture Credit Check ===
+            .TextWrapped("Venture Credit Management:")
+            .Widget("Enable Venture Credit Check", (x) =>
+            {
+                var val = Plugin.Config.AutoVentureCreditCheckEnabled;
+                if (ImGui.Checkbox(x, ref val))
+                {
+                    Plugin.Config.AutoVentureCreditCheckEnabled = val;
+                    ConfigHelper.Save(Plugin.Config);
+                }
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.SetTooltip("When enabled, checks venture credit count before assigning crystal ventures.\n" +
+                        "If credits are below threshold, Quick Exploration is assigned instead.\n" +
+                        "Quick Exploration rewards venture credits, helping to replenish your supply.");
+                }
+            })
+            .If(() => Plugin.Config.AutoVentureCreditCheckEnabled)
+            .Widget(() =>
+            {
+                var val = Plugin.Config.AutoVentureCreditThreshold;
+                ImGui.SetNextItemWidth(200);
+                if (ImGui.InputInt("Minimum Venture Credits", ref val))
+                {
+                    if (val < 1) val = 1;
+                    Plugin.Config.AutoVentureCreditThreshold = val;
+                    ConfigHelper.Save(Plugin.Config);
+                }
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.SetTooltip("Minimum venture credits required to assign crystal/shard ventures.\n" +
+                        "If your credit count falls below this, Quick Exploration is assigned instead.\n\n" +
+                        "Recommended: Set to at least 2× your retainer count to ensure you always have\n" +
+                        "enough credits for a full round of ventures.");
+                }
+
+                // Show current venture credit count
+                var currentCredits = VentureCreditHelper.GetVentureCreditCount();
+                var color = currentCredits >= Plugin.Config.AutoVentureCreditThreshold 
+                    ? new Vector4(0.0f, 1.0f, 0.0f, 1.0f)  // Green
+                    : new Vector4(1.0f, 0.5f, 0.0f, 1.0f); // Orange
+                ImGui.TextColored(color, $"Current Venture Credits: {currentCredits}");
+            })
+            .EndIf()
+
             .Widget(() =>
             {
                 if (!Plugin.Config.AutoVentureShardsEnabled && !Plugin.Config.AutoVentureCrystalsEnabled && Plugin.Config.AutoVentureEnabled)
@@ -139,7 +184,9 @@ public class AutomaticVenture : ConfigEntry
                 {
                     ImGui.SetTooltip("Global threshold for all crystal/shard types.\n" +
                         "When all enabled types reach this count, assign Quick Exploration instead.\n" +
-                        "Set to 0 to disable global threshold (fill to capacity).\n" +
+                        "Set to 0 to disable global threshold (fill to capacity).\n\n" +
+                        "Fill to capacity = 9,999 × (1 character + N retainers).\n" +
+                        "Example: 1 character + 10 retainers = 109,989 max per type.\n\n" +
                         "Per-type thresholds override this value when set.");
                 }
             })
@@ -220,7 +267,9 @@ public class AutomaticVenture : ConfigEntry
                     }
                     if (ImGui.IsItemHovered())
                     {
-                        ImGui.SetTooltip($"Threshold for {typeName}.\n0 = use global threshold or fill to capacity.");
+                        ImGui.SetTooltip($"Threshold for {typeName}.\n" +
+                            "0 = use global threshold, or fill to capacity if global is also 0.\n\n" +
+                            "Fill to capacity = 9,999 × (1 character + N retainers).");
                     }
                 }
             }
