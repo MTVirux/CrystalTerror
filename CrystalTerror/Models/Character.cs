@@ -37,6 +37,9 @@ public class StoredCharacter
     /// <summary>If true, this character is hidden from the main window UI.</summary>
     public bool IsIgnored { get; set; } = false;
 
+    /// <summary>If true, automatic venture assignment is enabled for this character's retainers.</summary>
+    public bool AutoVentureEnabled { get; set; } = true;
+
     /// <summary>
     /// Gets a unique key for this character based on ContentId (preferred) or Name@World (fallback).
     /// </summary>

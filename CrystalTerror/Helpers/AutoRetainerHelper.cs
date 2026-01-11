@@ -226,6 +226,13 @@ public static class AutoRetainerHelper
 
             log.Debug($"[CrystalTerror] {retainer.Name}: Level={retainer.Level}, Gathering={retainer.Gathering}, Job={ClassJobExtensions.GetAbbreviation(retainer.Job)}");
 
+            // Check per-character auto-venture toggle
+            if (!currentChar.AutoVentureEnabled)
+            {
+                log.Debug($"[CrystalTerror] ✗ Skipping {retainer.Name} - Auto venture disabled for character {currentChar.Name}");
+                return;
+            }
+
             if (!retainer.EnableAutoVenture)
             {
                 log.Debug($"[CrystalTerror] ✗ Skipping {retainer.Name} - Auto venture disabled for this retainer");
