@@ -9,7 +9,11 @@ public class Retainer
     /// <summary>Retainer display name.</summary>
     public string Name { get; set; } = string.Empty;
 
-    /// <summary>Persisted retainer identifier (AutoRetainer ID).</summary>
+    /// <summary>
+    /// AutoRetainer's unique identifier for this retainer.
+    /// Used to match retainers across import sessions when names might change.
+    /// Note: Named "Atid" (AutoRetainer ID) for serialization compatibility.
+    /// </summary>
     public ulong Atid { get; set; }
 
     /// <summary>Retainer job/class id (if available from AutoRetainer offline data). Null = unknown.</summary>

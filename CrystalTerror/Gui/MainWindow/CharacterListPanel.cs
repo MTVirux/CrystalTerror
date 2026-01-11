@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using CrystalTerror.Gui.Common;
+using CrystalTerror.Helpers;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using Dalamud.Bindings.ImGui;
@@ -53,12 +54,7 @@ public class CharacterListPanel : IUIComponent
         {
             try
             {
-                var imported = CharacterHelper.ImportFromAutoRetainer();
-                if (imported.Count > 0)
-                {
-                    CharacterHelper.MergeInto(plugin.Characters, imported, CharacterHelper.MergePolicy.Merge);
-                    ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
-                }
+                CharacterHelper.ImportFromAutoRetainerAndSave(plugin.Characters, plugin.Config);
             }
             catch (Exception ex)
             {
@@ -80,12 +76,7 @@ public class CharacterListPanel : IUIComponent
         {
             try
             {
-                var sc = CharacterHelper.ImportCurrentCharacter();
-                if (sc != null)
-                {
-                    CharacterHelper.MergeInto(plugin.Characters, new[] { sc }, CharacterHelper.MergePolicy.Overwrite);
-                    ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
-                }
+                CharacterHelper.ImportCurrentCharacterAndSave(plugin.Characters, plugin.Config);
             }
             catch (Exception ex)
             {
@@ -101,12 +92,7 @@ public class CharacterListPanel : IUIComponent
         {
             try
             {
-                var imported = CharacterHelper.ImportFromAutoRetainer();
-                if (imported.Count > 0)
-                {
-                    CharacterHelper.MergeInto(plugin.Characters, imported, CharacterHelper.MergePolicy.Merge);
-                    ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
-                }
+                CharacterHelper.ImportFromAutoRetainerAndSave(plugin.Characters, plugin.Config);
             }
             catch (Exception ex)
             {
@@ -523,7 +509,7 @@ public class CharacterListPanel : IUIComponent
         ImGui.PopStyleColor();
         
         // Stats for gathering retainers
-        if (IsGatheringRetainer(retainer))
+        if (VentureHelper.IsGatheringRetainer(retainer))
         {
             // Gathering - Red if under 90
             ImGui.TextUnformatted("Gathering: ");
@@ -575,13 +561,13 @@ public class CharacterListPanel : IUIComponent
         }
         
         // Gathering warning (only for gatherers)
-        if (IsGatheringRetainer(retainer) && retainer.Gathering < 90)
+        if (VentureHelper.IsGatheringRetainer(retainer) && retainer.Gathering < 90)
         {
             level = Math.Max(level, 2); // Red
         }
         
         // Perception warning (only for gatherers)
-        if (IsGatheringRetainer(retainer) && retainer.Perception < 1620)
+        if (VentureHelper.IsGatheringRetainer(retainer) && retainer.Perception < 1620)
         {
             level = Math.Max(level, 1); // Yellow
         }
@@ -628,7 +614,7 @@ public class CharacterListPanel : IUIComponent
         }
 
         // Show iLvl for combat, Gathering for gatherers
-        if (IsGatheringRetainer(retainer))
+        if (VentureHelper.IsGatheringRetainer(retainer))
         {
             if (retainer.Gathering > 0)
             {
@@ -722,7 +708,7 @@ public class CharacterListPanel : IUIComponent
         ImGui.Text($"Job: {ClassJobExtensions.GetAbbreviation(retainer.Job)} ({ClassJobExtensions.GetClassJob(retainer.Job)?.Name ?? "Unknown"})");
         ImGui.Text($"Level: {retainer.Level}");
         
-        if (IsGatheringRetainer(retainer))
+        if (VentureHelper.IsGatheringRetainer(retainer))
         {
             ImGui.Text($"Gathering: {retainer.Gathering}");
             ImGui.Text($"Perception: {retainer.Perception}");
@@ -1066,7 +1052,7 @@ public class CharacterListPanel : IUIComponent
         // Hide characters without gathering retainers if option is enabled
         if (plugin.Config.HideNonGatheringCharacters)
         {
-            characters = characters.Where(c => c.Retainers.Any(r => IsGatheringRetainer(r))).ToList();
+            characters = characters.Where(c => c.Retainers.Any(r => VentureHelper.IsGatheringRetainer(r))).ToList();
         }
 
         // Apply sort
@@ -1117,9 +1103,4 @@ public class CharacterListPanel : IUIComponent
             .ToList();
     }
 
-    private bool IsGatheringRetainer(Retainer retainer)
-    {
-        // MIN=16, BTN=17, FSH=18
-        return retainer.Job == 16 || retainer.Job == 17 || retainer.Job == 18;
-    }
 }

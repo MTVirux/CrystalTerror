@@ -88,12 +88,7 @@ public static class InventoryHelper
 
             lastUpdate = now;
 
-            var sc = CharacterHelper.ImportCurrentCharacter();
-            if (sc != null)
-            {
-                CharacterHelper.MergeInto(plugin.Characters, new[] { sc }, CharacterHelper.MergePolicy.Overwrite);
-                ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
-            }
+            CharacterHelper.ImportCurrentCharacterAndSave(plugin.Characters, plugin.Config);
         }
         catch (Exception ex)
         {

@@ -72,6 +72,44 @@ public static class CharacterHelper
     }
 
     /// <summary>
+    /// Imports the current character, merges into the character list, and saves the config.
+    /// This is a convenience method that combines the common pattern of import + merge + save.
+    /// </summary>
+    /// <param name="characters">The character list to merge into.</param>
+    /// <param name="config">The configuration to save.</param>
+    /// <param name="policy">The merge policy to use (defaults to Overwrite).</param>
+    /// <returns>True if a character was successfully imported and saved.</returns>
+    public static bool ImportCurrentCharacterAndSave(List<StoredCharacter> characters, Configuration config, MergePolicy policy = MergePolicy.Overwrite)
+    {
+        var character = ImportCurrentCharacter();
+        if (character == null)
+            return false;
+
+        MergeInto(characters, new[] { character }, policy);
+        ConfigHelper.SaveAndSync(config, characters);
+        return true;
+    }
+
+    /// <summary>
+    /// Imports characters from AutoRetainer, merges into the character list, and saves the config.
+    /// This is a convenience method that combines the common pattern of import + merge + save.
+    /// </summary>
+    /// <param name="characters">The character list to merge into.</param>
+    /// <param name="config">The configuration to save.</param>
+    /// <param name="policy">The merge policy to use (defaults to Merge).</param>
+    /// <returns>The number of characters imported.</returns>
+    public static int ImportFromAutoRetainerAndSave(List<StoredCharacter> characters, Configuration config, MergePolicy policy = MergePolicy.Merge)
+    {
+        var imported = ImportFromAutoRetainer();
+        if (imported.Count == 0)
+            return 0;
+
+        MergeInto(characters, imported, policy);
+        ConfigHelper.SaveAndSync(config, characters);
+        return imported.Count;
+    }
+
+    /// <summary>
     /// Populates the character's crystal inventory from the game's InventoryManager.
     /// </summary>
     private static void PopulateCharacterCrystals(StoredCharacter sc)
@@ -94,13 +132,13 @@ public static class CharacterHelper
                 var crystalTypes = new CrystalType[] { CrystalType.Shard, CrystalType.Crystal, CrystalType.Cluster };
                 var baseItemIds = new uint[] { 2, 8, 14 };
 
-                for (int ti = 0; ti < crystalTypes.Length; ++ti)
+                for (int typeIndex = 0; typeIndex < crystalTypes.Length; ++typeIndex)
                 {
-                    for (int ei = 0; ei < elements.Length; ++ei)
+                    for (int elementIndex = 0; elementIndex < elements.Length; ++elementIndex)
                     {
-                        uint itemId = baseItemIds[ti] + (uint)ei;
+                        uint itemId = baseItemIds[typeIndex] + (uint)elementIndex;
                         int count = invMgr->GetItemCountInContainer(itemId, InventoryType.Crystals);
-                        sc.Inventory.SetCount(elements[ei], crystalTypes[ti], count);
+                        sc.Inventory.SetCount(elements[elementIndex], crystalTypes[typeIndex], count);
                     }
                 }
 
@@ -255,13 +293,13 @@ public static class CharacterHelper
             var elements = new Element[] { Element.Fire, Element.Ice, Element.Wind, Element.Earth, Element.Lightning, Element.Water };
             var crystalTypes = new CrystalType[] { CrystalType.Shard, CrystalType.Crystal, CrystalType.Cluster };
 
-            for (int ti = 0; ti < crystalTypes.Length; ++ti)
+            for (int typeIndex = 0; typeIndex < crystalTypes.Length; ++typeIndex)
             {
-                for (int ei = 0; ei < elements.Length; ++ei)
+                for (int elementIndex = 0; elementIndex < elements.Length; ++elementIndex)
                 {
-                    int idx = ti * 6 + ei;
+                    int idx = typeIndex * 6 + elementIndex;
                     ushort val = crystals[idx];
-                    ret.Inventory.SetCount(elements[ei], crystalTypes[ti], val);
+                    ret.Inventory.SetCount(elements[elementIndex], crystalTypes[typeIndex], val);
                 }
             }
         }
@@ -314,10 +352,18 @@ public static class CharacterHelper
         return outChars;
     }
 
+    /// <summary>
+    /// Defines how imported character data should be merged with existing data.
+    /// </summary>
     public enum MergePolicy
     {
+        /// <summary>Preserve existing data unchanged; only add new characters.</summary>
         Skip,
+
+        /// <summary>Replace all existing data (inventory, retainers) with imported data.</summary>
         Overwrite,
+
+        /// <summary>Merge retainer lists, updating existing and adding new retainers.</summary>
         Merge
     }
 
