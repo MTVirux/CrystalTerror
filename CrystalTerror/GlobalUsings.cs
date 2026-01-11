@@ -8,6 +8,7 @@ global using System.Threading.Tasks;
 // Project namespaces
 global using CrystalTerror;
 global using CrystalTerror.Core;
+global using CrystalTerror.Enums;
 global using CrystalTerror.Helpers;
 global using CrystalTerror.Services;
 

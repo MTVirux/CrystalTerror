@@ -80,6 +80,18 @@ public class Configuration : IPluginConfiguration
         // Default: #265B2AFF (R:0x26, G:0x5B, B:0x2A, A:0xFF)
         public System.Numerics.Vector4 CurrentCharacterColor { get; set; } = new System.Numerics.Vector4(0.14901961f, 0.35686275f, 0.16470588f, 1.0f);
 
+        // ===== Progress Bar Settings (AutoRetainer-style) =====
+
+        /// <summary>
+        /// If true, show progress bars behind character headers (AutoRetainer-style).
+        /// </summary>
+        public bool ShowProgressBars { get; set; } = false;
+
+        /// <summary>
+        /// Maximum value for progress bar calculation. A character with this total crystal count shows a full bar.
+        /// </summary>
+        public long ProgressBarMaxValue { get; set; } = 100000;
+
         // ===== Display Filters =====
 
         // Elements
@@ -94,6 +106,17 @@ public class Configuration : IPluginConfiguration
         public bool ShowShards { get; set; } = true;
         public bool ShowCrystals { get; set; } = true;
         public bool ShowClusters { get; set; } = true;
+
+        // Character Name Display
+        /// <summary>
+        /// How character names are displayed in the UI (full name, first name, last name, or initials).
+        /// </summary>
+        public NameDisplayFormat NameDisplayFormat { get; set; } = NameDisplayFormat.FullName;
+
+        /// <summary>
+        /// Whether to show the world/server name after the character name.
+        /// </summary>
+        public bool ShowWorldInHeader { get; set; } = true;
 
         // ===== Character Sorting =====
 
@@ -174,6 +197,19 @@ public class Configuration : IPluginConfiguration
         /// If false, FSH retainers are skipped entirely.
         /// </summary>
         public bool AutoVentureFSHEnabled { get; set; } = false;
+
+        /// <summary>
+        /// Whether to check venture credit count before assigning crystal ventures.
+        /// If true and credits are below threshold, Quick Exploration is assigned instead.
+        /// </summary>
+        public bool AutoVentureCreditCheckEnabled { get; set; } = false;
+
+        /// <summary>
+        /// Minimum venture credits required to assign crystal/shard ventures.
+        /// If current credit count is below this, Quick Exploration is assigned instead.
+        /// Default is 0 (disabled). Typical values: 2-10 depending on retainer count.
+        /// </summary>
+        public int AutoVentureCreditThreshold { get; set; } = 2;
 
         /// <summary>
         /// Per element×type venture settings. Key format: "Element_CrystalType" (e.g., "Fire_Crystal").
