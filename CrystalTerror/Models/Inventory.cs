@@ -173,4 +173,13 @@ public class Inventory
                    Lightning_Shard + Lightning_Crystal + Lightning_Cluster +
                    Water_Shard + Water_Crystal + Water_Cluster;
         }
+
+        /// <summary>
+        /// Returns true if all crystal counts are zero (inventory is empty).
+        /// Used to prevent overwriting existing inventory data with empty imports.
+        /// </summary>
+        public bool IsEmpty()
+        {
+            return Total() == 0;
+        }
 }

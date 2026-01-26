@@ -446,10 +446,11 @@ public static class CharacterHelper
 
     /// <summary>
     /// Overwrites existing character data with imported data.
+    /// Preserves existing inventory data when imported data has empty inventories.
     /// </summary>
     private static void MergeOverwrite(StoredCharacter existing, StoredCharacter sc)
     {
-        // Preserve retainer stats when new values are 0 (gear not accessible)
+        // Preserve retainer stats and inventories when new values are 0/empty (gear not accessible or AutoRetainer import)
         foreach (var newRetainer in sc.Retainers)
         {
             var existingRetainer = existing.Retainers.FirstOrDefault(er =>
@@ -459,6 +460,12 @@ public static class CharacterHelper
             if (existingRetainer != null)
             {
                 PreserveNonZeroStats(existingRetainer, newRetainer);
+                
+                // Preserve existing inventory if new one is empty
+                if (newRetainer.Inventory == null || newRetainer.Inventory.IsEmpty())
+                {
+                    newRetainer.Inventory = existingRetainer.Inventory ?? new Inventory();
+                }
             }
         }
 
@@ -469,13 +476,24 @@ public static class CharacterHelper
 
         existing.Retainers = sc.Retainers;
         RetainerHelper.SetOwnerForRetainers(existing);
-        existing.Inventory = sc.Inventory ?? existing.Inventory;
+        
+        // Only update character inventory if incoming has actual data
+        if (sc.Inventory != null && !sc.Inventory.IsEmpty())
+        {
+            existing.Inventory = sc.Inventory;
+        }
+        else if (existing.Inventory == null)
+        {
+            existing.Inventory = new Inventory();
+        }
+        
         existing.LastUpdateUtc = sc.LastUpdateUtc;
         if (sc.ServiceAccount != 0) existing.ServiceAccount = sc.ServiceAccount;
     }
 
     /// <summary>
     /// Merges imported character data with existing data.
+    /// Preserves existing inventory data when imported data has empty inventories.
     /// </summary>
     private static void MergeMerge(StoredCharacter existing, StoredCharacter sc)
     {
@@ -498,7 +516,13 @@ public static class CharacterHelper
                 if (r.Job.HasValue) match.Job = r.Job;
                 match.Level = r.Level;
                 PreserveNonZeroStats(match, r);
-                if (r.Inventory != null) match.Inventory = r.Inventory;
+                
+                // Only update inventory if the incoming one has actual data
+                // This prevents AutoRetainer imports from wiping existing crystal counts
+                if (r.Inventory != null && !r.Inventory.IsEmpty())
+                {
+                    match.Inventory = r.Inventory;
+                }
             }
         }
 
@@ -507,8 +531,15 @@ public static class CharacterHelper
         if (!string.IsNullOrEmpty(sc.World)) existing.World = sc.World;
         if (sc.HomeWorldId != 0) existing.HomeWorldId = sc.HomeWorldId;
 
-        if (existing.Inventory == null && sc.Inventory != null)
+        // Only update character inventory if incoming has actual data
+        if (sc.Inventory != null && !sc.Inventory.IsEmpty())
+        {
             existing.Inventory = sc.Inventory;
+        }
+        else if (existing.Inventory == null)
+        {
+            existing.Inventory = new Inventory();
+        }
 
         if (sc.LastUpdateUtc > existing.LastUpdateUtc)
             existing.LastUpdateUtc = sc.LastUpdateUtc;
