@@ -157,12 +157,7 @@ public static class AutoRetainerHelper
             if (sc != null)
             {
                 CharacterHelper.MergeInto(characters, new[] { sc }, CharacterHelper.MergePolicy.Merge);
-                try
-                {
-                    config.Characters = characters;
-                    Svc.PluginInterface.SavePluginConfig(config);
-                }
-                catch { }
+                ConfigHelper.SaveAndSync(config, characters);
             }
         }
         catch (Exception ex)

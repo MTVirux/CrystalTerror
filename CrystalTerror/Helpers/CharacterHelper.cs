@@ -376,6 +376,9 @@ public static class CharacterHelper
         if (target == null) throw new ArgumentNullException(nameof(target));
         if (imported == null) return;
 
+        var originalCount = target.Count;
+        Svc.Log.Debug($"[CrystalTerror] MergeInto: Starting with {originalCount} characters, policy={policy}");
+
         foreach (var sc in imported)
         {
             // Find existing character by ContentId first, then by Name+World
@@ -388,6 +391,8 @@ public static class CharacterHelper
                 Svc.Log.Debug($"[CrystalTerror] Added new character: {sc.Name}@{sc.World} (CID={sc.ContentId:X16})");
                 continue;
             }
+
+            Svc.Log.Debug($"[CrystalTerror] Merging into existing character: {existing.Name}@{existing.World} (CID={existing.ContentId:X16})");
 
             // Update existing character's ContentId if it was missing
             if (existing.ContentId == 0 && sc.ContentId != 0)
@@ -405,6 +410,7 @@ public static class CharacterHelper
             switch (policy)
             {
                 case MergePolicy.Skip:
+                    Svc.Log.Debug($"[CrystalTerror] Skipping merge for {existing.Name}@{existing.World} (policy=Skip)");
                     break;
 
                 case MergePolicy.Overwrite:
@@ -416,6 +422,8 @@ public static class CharacterHelper
                     break;
             }
         }
+
+        Svc.Log.Debug($"[CrystalTerror] MergeInto: Finished with {target.Count} characters (was {originalCount})");
     }
 
     /// <summary>

@@ -70,15 +70,39 @@ internal static class ConfigHelper
     {
         try
         {
-            Svc.Log.Debug($"[ConfigHelper] Saving config with {characters.Count} characters");
+            var originalCount = characters.Count;
+            Svc.Log.Debug($"[ConfigHelper] Saving config with {originalCount} characters");
 
             // Deduplicate characters before persisting
             var deduped = DeduplicateCharacters(characters);
+            
+            // Safety check: if deduplication removed too many characters, something went wrong
+            if (deduped.Count == 0 && originalCount > 0)
+            {
+                Svc.Log.Error($"[ConfigHelper] Deduplication would remove all {originalCount} characters! Aborting save to prevent data loss.");
+                return false;
+            }
+            
+            // Log if any characters were removed by deduplication
+            if (deduped.Count < originalCount)
+            {
+                Svc.Log.Warning($"[ConfigHelper] Deduplication reduced character count from {originalCount} to {deduped.Count}");
+                foreach (var c in characters)
+                {
+                    if (!deduped.Any(d => d.ContentId != 0 ? d.ContentId == c.ContentId : d.Matches(c)))
+                    {
+                        Svc.Log.Warning($"[ConfigHelper] Character removed by deduplication: {c.Name}@{c.World} (CID={c.ContentId:X16})");
+                    }
+                }
+            }
+            
+            // Update the list safely - clear and refill only after we're sure dedup succeeded
             characters.Clear();
             characters.AddRange(deduped);
             config.Characters = deduped;
             
             Svc.PluginInterface.SavePluginConfig(config);
+            Svc.Log.Debug($"[ConfigHelper] Config saved successfully with {deduped.Count} characters");
             return true;
         }
         catch (Exception ex)
@@ -90,6 +114,7 @@ internal static class ConfigHelper
 
     /// <summary>
     /// Removes duplicate characters. Now uses ContentId as primary dedup key when available.
+    /// Also tracks Name+World to catch duplicates between CID and non-CID entries.
     /// </summary>
     private static List<StoredCharacter> DeduplicateCharacters(IEnumerable<StoredCharacter> characters)
     {
@@ -100,28 +125,45 @@ internal static class ConfigHelper
         var seenCIDs = new HashSet<ulong>();
         var seenNameWorlds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // Sort by LastUpdateUtc descending so we keep the most recent
+        // Sort by ContentId presence first (prefer entries with CID), then by LastUpdateUtc descending
         var sorted = characters
             .Where(c => c != null)
-            .OrderByDescending(c => c.LastUpdateUtc)
+            .OrderByDescending(c => c.ContentId != 0 ? 1 : 0) // Prefer entries with ContentId
+            .ThenByDescending(c => c.LastUpdateUtc)
             .ThenByDescending(c => c.Retainers?.Count ?? 0);
 
         foreach (var c in sorted)
         {
+            var nameWorldKey = $"{c.Name?.Trim() ?? ""}@{c.World?.Trim() ?? ""}";
+            
             // Check ContentId first (most reliable)
             if (c.ContentId != 0)
             {
                 if (seenCIDs.Contains(c.ContentId))
+                {
+                    Svc.Log.Debug($"[ConfigHelper] Skipping duplicate CID: {c.Name}@{c.World} (CID={c.ContentId:X16})");
                     continue;
+                }
+                
+                // Also check if we've already seen this Name+World (could be a legacy entry that was upgraded)
+                if (seenNameWorlds.Contains(nameWorldKey))
+                {
+                    Svc.Log.Debug($"[ConfigHelper] Skipping duplicate by Name+World (has CID): {c.Name}@{c.World} (CID={c.ContentId:X16})");
+                    continue;
+                }
+                
                 seenCIDs.Add(c.ContentId);
+                seenNameWorlds.Add(nameWorldKey); // Track Name+World too to prevent legacy duplicates
             }
             else
             {
-                // Fall back to Name+World
-                var key = $"{c.Name?.Trim() ?? ""}@{c.World?.Trim() ?? ""}";
-                if (seenNameWorlds.Contains(key))
+                // No ContentId - check Name+World
+                if (seenNameWorlds.Contains(nameWorldKey))
+                {
+                    Svc.Log.Debug($"[ConfigHelper] Skipping duplicate by Name+World (no CID): {c.Name}@{c.World}");
                     continue;
-                seenNameWorlds.Add(key);
+                }
+                seenNameWorlds.Add(nameWorldKey);
             }
 
             result.Add(c);
