@@ -212,6 +212,19 @@ public class Configuration : IPluginConfiguration
     public int AutoVentureCreditThreshold { get; set; } = 2;
 
     /// <summary>
+    /// What to do when all enabled crystal/shard types are above threshold (full).
+    /// Default is SpecificVenture (assigns the venture specified by AutoVentureFallbackVentureId).
+    /// Set to Skip to let AutoRetainer handle the venture.
+    /// </summary>
+    public FallbackVentureMode AutoVentureFallbackMode { get; set; } = FallbackVentureMode.SpecificVenture;
+
+    /// <summary>
+    /// The venture ID to assign when crystals are full and AutoVentureFallbackMode is SpecificVenture.
+    /// Default is 395 (Quick Exploration). Can be set to any valid RetainerTask row ID.
+    /// </summary>
+    public uint AutoVentureFallbackVentureId { get; set; } = 395; // Quick Exploration
+
+    /// <summary>
     /// Per element×type venture settings. Key format: "Element_CrystalType" (e.g., "Fire_Crystal").
     /// Each entry controls whether the type is enabled and its individual threshold.
     /// </summary>

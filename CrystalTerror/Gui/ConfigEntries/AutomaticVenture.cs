@@ -13,6 +13,11 @@ public class AutomaticVenture : ConfigEntry
     public override NuiBuilder? Builder { get; init; }
 
     private static readonly string[] PriorityOptions = { "Balanced", "Prefer Crystals", "Prefer Shards" };
+    private static readonly string[] FallbackModeOptions = { "Assign Specific Venture", "Skip (Let AutoRetainer Decide)" };
+    
+    // Cached ventures organized by category
+    private Dictionary<VentureListHelper.VentureCategory, List<VentureListHelper.VentureInfo>>? _venturesByCategory;
+    private string _ventureSearchFilter = "";
 
     public AutomaticVenture()
     {
@@ -183,11 +188,33 @@ public class AutomaticVenture : ConfigEntry
                 if (ImGui.IsItemHovered())
                 {
                     ImGui.SetTooltip("Global threshold for all crystal/shard types.\n" +
-                        "When all enabled types reach this count, assign Quick Exploration instead.\n" +
+                        "When all enabled types reach this count, the fallback venture is assigned.\n" +
                         "Set to 0 to disable global threshold (fill to capacity).\n\n" +
                         "Fill to capacity = 9,999 × (1 character + N retainers).\n" +
                         "Example: 1 character + 10 retainers = 109,989 max per type.\n\n" +
                         "Per-type thresholds override this value when set.");
+                }
+            })
+            .Widget(() =>
+            {
+                var currentModeIndex = (int)Plugin.Config.AutoVentureFallbackMode;
+                ImGui.SetNextItemWidth(200);
+                if (ImGui.Combo("When Crystals Full", ref currentModeIndex, FallbackModeOptions, FallbackModeOptions.Length))
+                {
+                    Plugin.Config.AutoVentureFallbackMode = (FallbackVentureMode)currentModeIndex;
+                    ConfigHelper.Save(Plugin.Config);
+                }
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.SetTooltip("What to do when all enabled crystal/shard types are above threshold.\n" +
+                        "• Assign Specific Venture: Assign the selected venture below\n" +
+                        "• Skip: Do not override, let AutoRetainer handle the venture assignment");
+                }
+
+                // Show venture selection if mode is SpecificVenture
+                if (Plugin.Config.AutoVentureFallbackMode == FallbackVentureMode.SpecificVenture)
+                {
+                    DrawVentureSelector();
                 }
             })
 
@@ -276,5 +303,92 @@ public class AutomaticVenture : ConfigEntry
 
             ImGui.EndTable();
         }
+    }
+
+    /// <summary>
+    /// Draw the venture selector with categories similar to AutoRetainer's Venture Planner.
+    /// </summary>
+    private void DrawVentureSelector()
+    {
+        // Lazy load ventures by category
+        if (_venturesByCategory == null)
+        {
+            _venturesByCategory = VentureListHelper.GetVenturesByCategory();
+        }
+
+        // Show current selection
+        var currentVentureId = Plugin.Config.AutoVentureFallbackVentureId;
+        var currentVentureName = VentureListHelper.GetVentureName(currentVentureId);
+        
+        if (!ImGui.CollapsingHeader($"Fallback Venture: {currentVentureName}##FallbackVentureHeader"))
+        {
+            return;
+        }
+
+        ImGui.Indent();
+
+        // Search filter
+        ImGui.SetNextItemWidth(200);
+        ImGui.InputTextWithHint("##VentureSearch", "Filter ventures...", ref _ventureSearchFilter, 100);
+
+        // Venture selection in a scrollable child region
+        if (ImGui.BeginChild("##VentureList", new Vector2(0, 200), true))
+        {
+            // Define category order - Quick Exploration first, then Field, then gathering types
+            var categoryOrder = new[]
+            {
+                VentureListHelper.VentureCategory.QuickExploration,
+                VentureListHelper.VentureCategory.FieldExploration,
+                VentureListHelper.VentureCategory.Mining,
+                VentureListHelper.VentureCategory.Botany,
+                VentureListHelper.VentureCategory.Fishing,
+                VentureListHelper.VentureCategory.Hunting,
+            };
+
+            foreach (var category in categoryOrder)
+            {
+                if (!_venturesByCategory.TryGetValue(category, out var ventures) || ventures.Count == 0)
+                    continue;
+
+                // Filter ventures by search
+                var filteredVentures = string.IsNullOrEmpty(_ventureSearchFilter)
+                    ? ventures
+                    : ventures.Where(v => v.Name.Contains(_ventureSearchFilter, StringComparison.OrdinalIgnoreCase)).ToList();
+
+                if (filteredVentures.Count == 0)
+                    continue;
+
+                var categoryName = VentureListHelper.GetCategoryDisplayName(category);
+                
+                if (ImGui.CollapsingHeader($"{categoryName} ({filteredVentures.Count})##Category_{category}"))
+                {
+                    ImGui.Indent();
+                    foreach (var venture in filteredVentures)
+                    {
+                        var isSelected = venture.Id == currentVentureId;
+                        var label = venture.Level > 0 
+                            ? $"[Lv{venture.Level}] {venture.Name}##Venture_{venture.Id}"
+                            : $"{venture.Name}##Venture_{venture.Id}";
+                        
+                        if (ImGui.Selectable(label, isSelected))
+                        {
+                            Plugin.Config.AutoVentureFallbackVentureId = venture.Id;
+                            ConfigHelper.Save(Plugin.Config);
+                        }
+                        
+                        if (ImGui.IsItemHovered())
+                        {
+                            var duration = venture.MaxTimeMinutes >= 60 
+                                ? $"{venture.MaxTimeMinutes / 60}h" 
+                                : $"{venture.MaxTimeMinutes}m";
+                            ImGui.SetTooltip($"{venture.Name}\nID: {venture.Id}\nLevel: {venture.Level}\nDuration: {duration}");
+                        }
+                    }
+                    ImGui.Unindent();
+                }
+            }
+        }
+        ImGui.EndChild();
+        ImGui.Unindent();
     }
 }

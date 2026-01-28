@@ -64,14 +64,16 @@ public static class VentureHelper
     /// <summary>
     /// Determine the venture ID for the crystal/shard type with the lowest effective count.
     /// Uses global capacity calculations across character + all retainers.
-    /// Returns QuickExploration if all enabled types are at capacity/threshold.
+    /// When all enabled types are at capacity/threshold, uses the fallback venture setting:
+    /// - SpecificVenture: Returns the venture ID configured in AutoVentureFallbackVentureId
+    /// - Skip: Returns null to let AutoRetainer handle venture assignment
     /// Returns null if retainer is ineligible (e.g., FSH disabled, non-gathering class).
     /// </summary>
     /// <param name="character">The character who owns this retainer (for global counts).</param>
     /// <param name="retainer">The retainer to assign a venture to.</param>
     /// <param name="config">Configuration for venture settings.</param>
     /// <param name="log">Optional logger for detailed output.</param>
-    /// <returns>VentureId for optimal venture, QuickExploration if all full, or null if ineligible.</returns>
+    /// <returns>VentureId for optimal venture, fallback venture if all full, or null if ineligible/skip.</returns>
     public static VentureId? DetermineLowestCrystalVenture(StoredCharacter character, Retainer retainer, Configuration config, IPluginLog? log = null)
     {
         if (character == null) throw new ArgumentNullException(nameof(character));
@@ -175,9 +177,17 @@ public static class VentureHelper
 
         if (availableCandidates.Count == 0)
         {
-            // All types are full - assign Quick Exploration
-            log?.Information($"[VentureHelper] All enabled types are at capacity/threshold for {retainer.Name}, assigning Quick Exploration");
-            return VentureId.QuickExploration;
+            // All types are full - use fallback venture setting
+            if (config.AutoVentureFallbackMode == FallbackVentureMode.Skip)
+            {
+                log?.Information($"[VentureHelper] All enabled types are at capacity/threshold for {retainer.Name}, skipping (fallback=Skip)");
+                return null;
+            }
+            
+            // Assign the configured fallback venture
+            var fallbackVentureId = config.AutoVentureFallbackVentureId;
+            log?.Information($"[VentureHelper] All enabled types are at capacity/threshold for {retainer.Name}, assigning fallback venture ID {fallbackVentureId}");
+            return (VentureId)fallbackVentureId;
         }
 
         // Sort by effective count (lowest first), then apply priority tiebreaker
