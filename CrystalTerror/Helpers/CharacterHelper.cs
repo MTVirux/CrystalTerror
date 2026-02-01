@@ -370,60 +370,64 @@ public static class CharacterHelper
     /// <summary>
     /// Merge imported characters into an existing target list using the given policy.
     /// Now uses ContentId as the primary identifier when available.
+    /// Thread-safe: acquires the character lock during merge operations.
     /// </summary>
     public static void MergeInto(List<StoredCharacter> target, IEnumerable<StoredCharacter> imported, MergePolicy policy = MergePolicy.Merge)
     {
         if (target == null) throw new ArgumentNullException(nameof(target));
         if (imported == null) return;
 
-        var originalCount = target.Count;
-        Svc.Log.Debug($"[CrystalTerror] MergeInto: Starting with {originalCount} characters, policy={policy}");
-
-        foreach (var sc in imported)
+        lock (ConfigHelper.CharacterLock)
         {
-            // Find existing character by ContentId first, then by Name+World
-            var existing = FindExistingCharacter(target, sc);
+            var originalCount = target.Count;
+            Svc.Log.Debug($"[CrystalTerror] MergeInto: Starting with {originalCount} characters, policy={policy}");
 
-            if (existing == null)
+            foreach (var sc in imported)
             {
-                RetainerHelper.SetOwnerForRetainers(sc);
-                target.Add(sc);
-                Svc.Log.Debug($"[CrystalTerror] Added new character: {sc.Name}@{sc.World} (CID={sc.ContentId:X16})");
-                continue;
+                // Find existing character by ContentId first, then by Name+World
+                var existing = FindExistingCharacter(target, sc);
+
+                if (existing == null)
+                {
+                    RetainerHelper.SetOwnerForRetainers(sc);
+                    target.Add(sc);
+                    Svc.Log.Debug($"[CrystalTerror] Added new character: {sc.Name}@{sc.World} (CID={sc.ContentId:X16})");
+                    continue;
+                }
+
+                Svc.Log.Debug($"[CrystalTerror] Merging into existing character: {existing.Name}@{existing.World} (CID={existing.ContentId:X16})");
+
+                // Update existing character's ContentId if it was missing
+                if (existing.ContentId == 0 && sc.ContentId != 0)
+                {
+                    existing.ContentId = sc.ContentId;
+                    Svc.Log.Debug($"[CrystalTerror] Updated CID for {existing.Name}@{existing.World} to {sc.ContentId:X16}");
+                }
+
+                // Update HomeWorldId if missing
+                if (existing.HomeWorldId == 0 && sc.HomeWorldId != 0)
+                {
+                    existing.HomeWorldId = sc.HomeWorldId;
+                }
+
+                switch (policy)
+                {
+                    case MergePolicy.Skip:
+                        Svc.Log.Debug($"[CrystalTerror] Skipping merge for {existing.Name}@{existing.World} (policy=Skip)");
+                        break;
+
+                    case MergePolicy.Overwrite:
+                        MergeOverwrite(existing, sc);
+                        break;
+
+                    case MergePolicy.Merge:
+                        MergeMerge(existing, sc);
+                        break;
+                }
             }
 
-            Svc.Log.Debug($"[CrystalTerror] Merging into existing character: {existing.Name}@{existing.World} (CID={existing.ContentId:X16})");
-
-            // Update existing character's ContentId if it was missing
-            if (existing.ContentId == 0 && sc.ContentId != 0)
-            {
-                existing.ContentId = sc.ContentId;
-                Svc.Log.Debug($"[CrystalTerror] Updated CID for {existing.Name}@{existing.World} to {sc.ContentId:X16}");
-            }
-
-            // Update HomeWorldId if missing
-            if (existing.HomeWorldId == 0 && sc.HomeWorldId != 0)
-            {
-                existing.HomeWorldId = sc.HomeWorldId;
-            }
-
-            switch (policy)
-            {
-                case MergePolicy.Skip:
-                    Svc.Log.Debug($"[CrystalTerror] Skipping merge for {existing.Name}@{existing.World} (policy=Skip)");
-                    break;
-
-                case MergePolicy.Overwrite:
-                    MergeOverwrite(existing, sc);
-                    break;
-
-                case MergePolicy.Merge:
-                    MergeMerge(existing, sc);
-                    break;
-            }
+            Svc.Log.Debug($"[CrystalTerror] MergeInto: Finished with {target.Count} characters (was {originalCount})");
         }
-
-        Svc.Log.Debug($"[CrystalTerror] MergeInto: Finished with {target.Count} characters (was {originalCount})");
     }
 
     /// <summary>
