@@ -31,6 +31,11 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
     private readonly ICondition condition;
     private ulong lastLocalContentId;
     private string lastPlayerKey = string.Empty;
+    // Lock for atomically updating lastPlayerKey to prevent duplicate imports
+    private readonly object _playerKeyLock = new();
+    // Timestamp of last framework import for additional throttling
+    private DateTime lastFrameworkImport = DateTime.MinValue;
+    private const double FrameworkImportThrottleSeconds = 2.0;
     // Ensure framework events don't run before plugin finished loading config/characters
     private bool isInitialized = false;
     private readonly IDataManager dataManager;
@@ -228,7 +233,9 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
 
             if (disposing)
             {
-                ConfigHelper.SaveAndSync(this.Config, this.Characters);
+                // Force save on dispose to ensure no data is lost (bypasses throttling)
+                this.pluginLog.Information("[CrystalTerror] Plugin disposing, forcing final save...");
+                ConfigHelper.ForceSave(this.Config, this.Characters);
 
                 this.windowSystem.RemoveAllWindows();
                 this.mainWindow.Dispose();
@@ -292,26 +299,53 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
                 var localObjId = Player.Object?.GameObjectId ?? 0u;
                 var currentKey = $"{contentId}:{localObjId}";
 
-                if (contentId != 0 && currentKey != this.lastPlayerKey)
+                // Atomically check and update player key to prevent duplicate imports
+                bool shouldImport = false;
+                lock (_playerKeyLock)
+                {
+                    if (contentId != 0 && currentKey != this.lastPlayerKey)
+                    {
+                        // Additional time-based throttle to prevent rapid imports during character cycling
+                        var now = DateTime.UtcNow;
+                        if ((now - this.lastFrameworkImport).TotalSeconds >= FrameworkImportThrottleSeconds)
+                        {
+                            shouldImport = true;
+                            this.lastLocalContentId = contentId;
+                            this.lastPlayerKey = currentKey;
+                            this.lastFrameworkImport = now;
+                            this.pluginLog.Information($"[CrystalTerror] Character change detected: {currentKey}");
+                        }
+                        else
+                        {
+                            this.pluginLog.Debug($"[CrystalTerror] Framework import throttled (last import {(now - this.lastFrameworkImport).TotalSeconds:F1}s ago)");
+                        }
+                    }
+                    else if (contentId == 0 && this.lastLocalContentId != 0)
+                    {
+                        // Logged out, reset tracking id
+                        this.lastLocalContentId = 0;
+                        this.lastPlayerKey = string.Empty;
+                        this.mainWindow.InvalidateSortCache();
+                        this.pluginLog.Information("[CrystalTerror] Player logged out, reset tracking");
+                    }
+                }
+
+                if (shouldImport)
                 {
                     // Character changed (or first login) — import current character automatically
                     var sc = CharacterHelper.ImportCurrentCharacter();
                     if (sc != null)
                     {
+                        this.pluginLog.Debug($"[CrystalTerror] Importing character: {sc.Name}@{sc.World} (CID={sc.ContentId:X16})");
                         CharacterHelper.MergeInto(this.Characters, new[] { sc }, CharacterHelper.MergePolicy.Merge);
                         ConfigHelper.SaveAndSync(this.Config, this.Characters);
                         this.mainWindow.InvalidateSortCache();
+                        this.pluginLog.Information($"[CrystalTerror] Character imported successfully: {sc.Name}@{sc.World}");
                     }
-
-                    this.lastLocalContentId = contentId;
-                    this.lastPlayerKey = currentKey;
-                }
-                else if (contentId == 0 && this.lastLocalContentId != 0)
-                {
-                    // Logged out, reset tracking id
-                    this.lastLocalContentId = 0;
-                    this.lastPlayerKey = string.Empty;
-                    this.mainWindow.InvalidateSortCache();
+                    else
+                    {
+                        this.pluginLog.Warning("[CrystalTerror] ImportCurrentCharacter returned null despite player being available");
+                    }
                 }
 
                 // Update retainer stats when at summoning bell
@@ -320,9 +354,10 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
                     ref this.lastStatsUpdate,
                     StatsUpdateThrottleSeconds);
             }
-            catch
+            catch (Exception ex)
             {
-                // Swallow to avoid throwing in framework update
+                // Log the error instead of swallowing it completely
+                this.pluginLog.Error($"[CrystalTerror] OnFrameworkUpdate error: {ex.Message}");
             }
         }
 
@@ -361,16 +396,19 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
                 if (!Player.Available || Player.CID == 0)
                     return;
                 
+                this.pluginLog.Debug($"[CrystalTerror] OnRetainerInventoryClose triggered for {Player.Name}");
+                
                 var sc = CharacterHelper.ImportCurrentCharacter();
                 if (sc != null)
                 {
                     CharacterHelper.MergeInto(this.Characters, new[] { sc }, CharacterHelper.MergePolicy.Overwrite);
                     ConfigHelper.SaveAndSync(this.Config, this.Characters);
+                    this.pluginLog.Debug($"[CrystalTerror] Retainer inventory update saved for {sc.Name}@{sc.World}");
                 }
             }
             catch (Exception ex)
             {
-                this.pluginLog.Debug($"[CrystalTerror] OnRetainerInventoryClose error: {ex.Message}");
+                this.pluginLog.Warning($"[CrystalTerror] OnRetainerInventoryClose error: {ex.Message}");
             }
         }
 
@@ -395,16 +433,19 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
                 if (!Player.Available || Player.CID == 0)
                     return;
                 
+                this.pluginLog.Debug($"[CrystalTerror] OnSelectStringClose triggered (summoning bell) for {Player.Name}");
+                
                 var sc = CharacterHelper.ImportCurrentCharacter();
                 if (sc != null)
                 {
                     CharacterHelper.MergeInto(this.Characters, new[] { sc }, CharacterHelper.MergePolicy.Overwrite);
                     ConfigHelper.SaveAndSync(this.Config, this.Characters);
+                    this.pluginLog.Debug($"[CrystalTerror] Retainer menu close update saved for {sc.Name}@{sc.World}");
                 }
             }
             catch (Exception ex)
             {
-                this.pluginLog.Debug($"[CrystalTerror] OnSelectStringClose error: {ex.Message}");
+                this.pluginLog.Warning($"[CrystalTerror] OnSelectStringClose error: {ex.Message}");
             }
         }
 
