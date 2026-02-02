@@ -188,6 +188,7 @@ public class AutomaticVenture : ConfigEntry
                 if (ImGui.IsItemHovered())
                 {
                     ImGui.SetTooltip("Global threshold for all crystal/shard types.\n" +
+                        "Enter the total count at which each type is considered \"full\".\n" +
                         "When all enabled types reach this count, the fallback venture is assigned.\n" +
                         "Set to 0 to disable global threshold (fill to capacity).\n\n" +
                         "Fill to capacity = 9,999 × (1 character + N retainers).\n" +
