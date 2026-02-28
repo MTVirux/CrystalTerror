@@ -96,20 +96,7 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
                 HelpMessage = "Open the CrystalTerror main window.",
             });
 
-            this.mainWindow.IsOpen = true;
-            if (this.Config.ShowOnStart)
-            {
-                // Ensure the main window is opened via the plugin UI hook in case the windowing system
-                // needs the OpenMainUi flow to run properly on startup.
-                try
-                {
-                    this.OpenMainUi();
-                }
-                catch
-                {
-                    // ignore
-                }
-            }
+            this.mainWindow.IsOpen = this.Config.ShowOnStart;
 
             // Load persisted characters from Dalamud plugin config into memory
             try
