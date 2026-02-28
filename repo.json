@@ -1,34 +1,34 @@
 [
-  {
-    "Author": "MTVirux",
-    "Name": "Crystal Terror",
-    "Punchline": "A plugin to track crystals, shards and clusters across your FFXIV accounts.",
-    "Description": "DM @mtvirux on discord for assistance or bug reports.",
-    "Tags": [
-      "Inventory",
-      "Account",
-      "Tracking",
-      "Crystal",
-      "Shards",
-      "Clusters",
-      "Management",
-      "Terror",
-      "CT"
-    ],
-    "InternalName": "CrystalTerror",
-    "AssemblyVersion": "1.6.0.7",
-    "TestingAssemblyVersion": "1.6.0.7",
-    "RepoUrl": "https://github.com/MTVirux/CrystalTerror",
-    "ApplicableVersion": "any",
-    "DalamudApiLevel": 14,
-    "TestingDalamudApiLevel": 14,
-    "IsHide": "False",
-    "IsTestingExclusive": "False",
-    "DownloadCount": 11037,
-    "LastUpdate": 1770019267,
-    "DownloadLinkInstall": "https://github.com/MTVirux/CrystalTerror/releases/download/1.6.0.7/CrystalTerror.zip",
-    "DownloadLinkUpdate": "https://github.com/MTVirux/CrystalTerror/releases/download/1.6.0.7/CrystalTerror.zip",
-    "DownloadLinkTesting": "https://github.com/MTVirux/CrystalTerror/releases/download/1.6.0.7/CrystalTerror.zip",
-    "IconUrl": "https://raw.githubusercontent.com/MTVirux/CrystalTerror/main/images/icon.png"
-  }
+{
+  "Author": "MTVirux",
+  "Name": "Crystal Terror",
+  "Punchline": "A plugin to track crystals, shards and clusters across your FFXIV accounts.",
+  "Description": "DM @mtvirux on discord for assistance or bug reports.",
+  "Tags": [
+    "Inventory",
+    "Account",
+    "Tracking",
+    "Crystal",
+    "Shards",
+    "Clusters",
+    "Management",
+    "Terror",
+    "CT"
+  ],
+  "InternalName": "CrystalTerror",
+  "AssemblyVersion": "1.6.0.7",
+  "TestingAssemblyVersion": "1.6.0.8",
+  "RepoUrl": "https://github.com/MTVirux/CrystalTerror",
+  "ApplicableVersion": "any",
+  "DalamudApiLevel": 14,
+  "TestingDalamudApiLevel": 14,
+  "IsHide": "False",
+  "IsTestingExclusive": "False",
+  "DownloadCount": 11037,
+  "LastUpdate": 1772286633,
+  "DownloadLinkInstall": "https://github.com/MTVirux/CrystalTerror/releases/download/1.6.0.7/CrystalTerror.zip",
+  "DownloadLinkUpdate": "https://github.com/MTVirux/CrystalTerror/releases/download/1.6.0.7/CrystalTerror.zip",
+  "DownloadLinkTesting": "https://github.com/MTVirux/CrystalTerror/releases/download/1.6.0.7/CrystalTerror.zip",
+  "IconUrl": "https://raw.githubusercontent.com/MTVirux/CrystalTerror/main/images/icon.png"
+}
 ]
