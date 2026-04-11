@@ -60,6 +60,9 @@ public class MainWindow : Window, IDisposable
 	// UI Components - now using the new modular panel
 	private CrystalCountsUtility? countsUtility;
 	private CharacterListPanel? characterListPanel;
+	
+	// Lock button reference for dynamic icon updates
+	private TitleBarButton? lockButton;
 
 	public MainWindow(CrystalTerrorPlugin plugin, ITextureProvider textureProvider)
 		: base(GetTitleWithVersion())
@@ -86,21 +89,29 @@ public class MainWindow : Window, IDisposable
 		});
 
 		// Lock/pin button
-		TitleBarButtons.Add(new TitleBarButton
+		lockButton = new TitleBarButton
 		{
-			Click = (m) => 
-			{
-				if (m == ImGuiMouseButton.Left)
-				{
-					// Toggle pin state
-					plugin.Config.PinMainWindow = !plugin.Config.PinMainWindow;
-					ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
-				}
-			},
-			Icon = FontAwesomeIcon.Thumbtack,
+			Icon = plugin.Config.PinMainWindow ? FontAwesomeIcon.Lock : FontAwesomeIcon.LockOpen,
 			IconOffset = new System.Numerics.Vector2(3, 2),
-			ShowTooltip = () => ImGui.SetTooltip(plugin.Config.PinMainWindow ? "Unpin window" : "Pin window position"),
-		});
+			ShowTooltip = () => ImGui.SetTooltip("Lock window position and size"),
+		};
+		lockButton.Click = (m) => 
+		{
+			if (m == ImGuiMouseButton.Left)
+			{
+				if (!plugin.Config.PinMainWindow)
+				{
+					// About to lock - save current position/size
+					plugin.Config.MainWindowPos = ImGui.GetWindowPos();
+					plugin.Config.MainWindowSize = ImGui.GetWindowSize();
+				}
+				// Toggle pin state
+				plugin.Config.PinMainWindow = !plugin.Config.PinMainWindow;
+				ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
+				lockButton!.Icon = plugin.Config.PinMainWindow ? FontAwesomeIcon.Lock : FontAwesomeIcon.LockOpen;
+			}
+		};
+		TitleBarButtons.Add(lockButton);
 	}
 
 	public void Dispose()
@@ -132,29 +143,19 @@ public class MainWindow : Window, IDisposable
 			Flags &= ~ImGuiWindowFlags.NoResize;
 		}
 
+		// Update lock button icon to reflect current state
+		if (lockButton != null)
+		{
+			lockButton.Icon = plugin.Config.PinMainWindow ? FontAwesomeIcon.Lock : FontAwesomeIcon.LockOpen;
+		}
+
 		RespectCloseHotkey = !this.plugin.Config.IgnoreEscapeOnMainWindow;
 	}
 
 	public override void PostDraw()
 	{
-		// Save window position/size when pinned
-		if (this.plugin.Config.PinMainWindow)
-		{
-			var pos = ImGui.GetWindowPos();
-			var size = ImGui.GetWindowSize();
-
-			// Don't persist invalid positions/sizes (e.g., 0,0)
-			if (!(float.IsNaN(pos.X) || float.IsNaN(pos.Y) || float.IsNaN(size.X) || float.IsNaN(size.Y))
-				&& pos.X > 1f && pos.Y > 1f && size.X > 1f && size.Y > 1f)
-			{
-				if (pos != plugin.Config.MainWindowPos || size != plugin.Config.MainWindowSize)
-				{
-					plugin.Config.MainWindowPos = pos;
-					plugin.Config.MainWindowSize = size;
-					ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
-				}
-			}
-		}
+		// Position/size is saved only when the user locks the window (in the lock button click handler)
+		// Not continuously tracking position when locked - this matches Kaleidoscope's implementation
 	}
 
 	/// <summary>

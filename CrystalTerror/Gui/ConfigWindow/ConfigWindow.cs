@@ -13,9 +13,11 @@ using ImGui = Dalamud.Bindings.ImGui.ImGui;
 public class ConfigWindow : Window, IDisposable
 {
     private readonly CrystalTerrorPlugin plugin;
-    private WindowLockButtonComponent? lockButtonComponent;
     internal ConfigFileSystem FileSystem;
     private ConfigWindowContainerComponent? containerComponent;
+    
+    // Lock button reference for dynamic icon updates
+    private TitleBarButton? lockButton;
 
     private readonly ConfigFileSystemEntry[] ConfigTabs =
     [
@@ -37,30 +39,31 @@ public class ConfigWindow : Window, IDisposable
             MaximumSize = new System.Numerics.Vector2(float.MaxValue, float.MaxValue),
         };
 
-        // Initialize lock button component
-        this.lockButtonComponent = new WindowLockButtonComponent(plugin, isConfigWindow: true);
-
         // Create and add lock button to title bar
-        TitleBarButtons.Add(new TitleBarButton
+        lockButton = new TitleBarButton
         {
-            Click = (m) => 
-            {
-                if (m == ImGuiMouseButton.Left)
-                {
-                    // Toggle pin state
-                    plugin.Config.PinConfigWindow = !plugin.Config.PinConfigWindow;
-                    if (plugin.Config.PinConfigWindow)
-                    {
-                        plugin.Config.ConfigWindowPos = ImGui.GetWindowPos();
-                        plugin.Config.ConfigWindowSize = ImGui.GetWindowSize();
-                    }
-                    ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
-                }
-            },
-            Icon = FontAwesomeIcon.Thumbtack,
+            Icon = plugin.Config.PinConfigWindow ? FontAwesomeIcon.Lock : FontAwesomeIcon.LockOpen,
             IconOffset = new System.Numerics.Vector2(2, 2),
-            ShowTooltip = () => ImGui.SetTooltip(plugin.Config.PinConfigWindow ? "Unlock window" : "Lock window position and size"),
-        });
+            ShowTooltip = () => ImGui.SetTooltip("Lock window position and size"),
+        };
+        lockButton.Click = (m) => 
+        {
+            if (m == ImGuiMouseButton.Left)
+            {
+                // Toggle pinned state. When enabling pin, capture the current window
+                // position and size so the config window remains where the user placed it.
+                var newPinned = !plugin.Config.PinConfigWindow;
+                plugin.Config.PinConfigWindow = newPinned;
+                if (newPinned)
+                {
+                    plugin.Config.ConfigWindowPos = ImGui.GetWindowPos();
+                    plugin.Config.ConfigWindowSize = ImGui.GetWindowSize();
+                }
+                ConfigHelper.SaveAndSync(plugin.Config, plugin.Characters);
+                lockButton!.Icon = plugin.Config.PinConfigWindow ? FontAwesomeIcon.Lock : FontAwesomeIcon.LockOpen;
+            }
+        };
+        TitleBarButtons.Add(lockButton);
 
         // Initialize config file system
         FileSystem = new(() => ConfigTabs);
@@ -85,6 +88,12 @@ public class ConfigWindow : Window, IDisposable
         else
         {
             Flags &= ~ImGuiWindowFlags.NoMove;
+        }
+        
+        // Update lock button icon to reflect current state
+        if (lockButton != null)
+        {
+            lockButton.Icon = plugin.Config.PinConfigWindow ? FontAwesomeIcon.Lock : FontAwesomeIcon.LockOpen;
         }
     }
 
