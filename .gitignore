@@ -2,6 +2,7 @@ bin/
 obj/
 .vs/
 private/
+CLAUDE.md
 scripts/
 .github/*
 !.github/workflows
