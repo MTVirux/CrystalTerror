@@ -3,7 +3,6 @@ using Dalamud.Plugin.Services;
 using Lumina.Excel.Sheets;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
-using System.Text;
 using System.IO;
 using Newtonsoft.Json;
 
@@ -169,6 +168,13 @@ public static class CharacterHelper
                 var mgr = RetainerManager.Instance();
                 if (mgr == null) return;
 
+                // The game only keeps gear (RetainerEquippedItems) loaded for whichever
+                // retainer is currently active; applying a gear-based calculation to every
+                // retainer in this loop would duplicate that one retainer's stats across
+                // the whole roster.
+                var activePtr = mgr->GetActiveRetainer();
+                ulong activeRetainerId = activePtr != null ? activePtr->RetainerId : 0;
+
                 for (int i = 0; i < 10; ++i)
                 {
                     var rptr = mgr->GetRetainerBySortedIndex((uint)i);
@@ -176,10 +182,12 @@ public static class CharacterHelper
                     if (rptr->RetainerId == 0) continue;
 
                     // Read retainer name from the struct
-                    string rname = ReadRetainerName(rptr);
+                    string rname = rptr->NameString;
 
-                    // Get retainer stats (iLvl, Gathering, Perception)
-                    var (ilvl, gathering, perception) = GetRetainerStats(rname);
+                    // Get retainer stats (iLvl, Gathering, Perception).
+                    // Only the currently active retainer's equipped gear is actually in memory.
+                    bool isActiveRetainer = activeRetainerId != 0 && rptr->RetainerId == activeRetainerId;
+                    var (ilvl, gathering, perception) = GetRetainerStats(rname, isActiveRetainer);
 
                     // Get venture data from client struct
                     uint ventureId = rptr->VentureId;
@@ -212,42 +220,28 @@ public static class CharacterHelper
     }
 
     /// <summary>
-    /// Reads the retainer name from the RetainerManager struct.
+    /// Gets retainer stats from direct calculation (active retainer only) or AutoRetainer IPC.
     /// </summary>
-    private static unsafe string ReadRetainerName(FFXIVClientStructs.FFXIV.Client.Game.RetainerManager.Retainer* rptr)
-    {
-        try
-        {
-            byte* namePtr = (byte*)rptr + 0x08;
-            int len = 0;
-            while (len < 32 && namePtr[len] != 0) ++len;
-            return len > 0 ? Encoding.UTF8.GetString(namePtr, len) : string.Empty;
-        }
-        catch
-        {
-            return string.Empty;
-        }
-    }
-
-    /// <summary>
-    /// Gets retainer stats from direct calculation or AutoRetainer IPC.
-    /// </summary>
-    private static (int ilvl, int gathering, int perception) GetRetainerStats(string retainerName)
+    private static (int ilvl, int gathering, int perception) GetRetainerStats(string retainerName, bool isActiveRetainer)
     {
         int ilvl = 0, gathering = 0, perception = 0;
 
-        // Try to calculate from equipped gear first
-        try
+        // The local gear calculation only reflects whichever retainer is currently active -
+        // applying it to any other retainer would duplicate that retainer's stats onto this one.
+        if (isActiveRetainer)
         {
-            var (calculatedIlvl, calculatedGathering, calculatedPerception) = RetainerStatsHelper.CalculateRetainerStats();
-            if (calculatedIlvl.HasValue)
+            try
             {
-                return (calculatedIlvl.Value, calculatedGathering, calculatedPerception);
+                var (calculatedIlvl, calculatedGathering, calculatedPerception) = RetainerStatsHelper.CalculateRetainerStats();
+                if (calculatedIlvl.HasValue)
+                {
+                    return (calculatedIlvl.Value, calculatedGathering, calculatedPerception);
+                }
             }
-        }
-        catch (Exception ex)
-        {
-            Svc.Log.Debug($"[CrystalTerror] Failed to calculate retainer stats from gear: {ex.Message}");
+            catch (Exception ex)
+            {
+                Svc.Log.Debug($"[CrystalTerror] Failed to calculate retainer stats from gear: {ex.Message}");
+            }
         }
 
         // Fall back to AutoRetainer IPC
