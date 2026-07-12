@@ -88,6 +88,16 @@ public class Retainer
     /// <summary>Item counts for the retainer's inventory.</summary>
     public Inventory Inventory { get; set; } = new Inventory();
 
+    /// <summary>
+    /// True when this retainer's crystal counts were authoritatively read from the game during
+    /// import (the ItemFinderModule cache had an entry). Distinguishes a retainer that genuinely
+    /// holds zero crystals from one whose data simply wasn't available (AutoRetainer import, or a
+    /// retainer not currently cached). Only meaningful on a freshly imported snapshot at merge time;
+    /// not persisted.
+    /// </summary>
+    [Newtonsoft.Json.JsonIgnore]
+    public bool InventoryDataKnown { get; set; } = false;
+
     private StoredCharacter _ownerCharacter = default!;
     
     /// <summary>Reference to the character that owns this retainer. Required — never null.</summary>

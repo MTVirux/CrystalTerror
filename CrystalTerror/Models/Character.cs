@@ -34,6 +34,15 @@ public class StoredCharacter
     /// <summary>Inventory for this character.</summary>
     public required Inventory Inventory { get; set; }
 
+    /// <summary>
+    /// True when this character's crystal counts were authoritatively read from the game during
+    /// import. Distinguishes a genuinely-empty inventory from one whose data wasn't available
+    /// (e.g. an AutoRetainer import). Only meaningful on a freshly imported snapshot at merge time;
+    /// not persisted.
+    /// </summary>
+    [Newtonsoft.Json.JsonIgnore]
+    public bool InventoryDataKnown { get; set; } = false;
+
     /// <summary>If true, this character is hidden from the main window UI.</summary>
     public bool IsIgnored { get; set; } = false;
 

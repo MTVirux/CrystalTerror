@@ -141,6 +141,10 @@ public static class CharacterHelper
                     }
                 }
 
+                // Counts were read straight from the live crystal container, so an all-zero result
+                // here means the character genuinely has no crystals - not that data was unavailable.
+                sc.InventoryDataKnown = true;
+
                 try
                 {
                     var dict = sc.Inventory.ToDictionary();
@@ -296,6 +300,10 @@ public static class CharacterHelper
                     ret.Inventory.SetCount(elements[elementIndex], crystalTypes[typeIndex], val);
                 }
             }
+
+            // The cache had an entry for this retainer, so its counts are authoritative - an
+            // all-zero result means the retainer was emptied, not that data was unavailable.
+            ret.InventoryDataKnown = true;
         }
         catch (Exception ex)
         {
@@ -458,9 +466,11 @@ public static class CharacterHelper
             if (existingRetainer != null)
             {
                 PreserveNonZeroStats(existingRetainer, newRetainer);
-                
-                // Preserve existing inventory if new one is empty
-                if (newRetainer.Inventory == null || newRetainer.Inventory.IsEmpty())
+
+                // Preserve existing inventory only when the incoming snapshot lacks authoritative
+                // crystal data (AutoRetainer import, or a retainer not currently cached). A retainer
+                // that was authoritatively read as empty must overwrite so that emptying persists.
+                if (newRetainer.Inventory == null || (!newRetainer.InventoryDataKnown && newRetainer.Inventory.IsEmpty()))
                 {
                     newRetainer.Inventory = existingRetainer.Inventory ?? new Inventory();
                 }
@@ -474,9 +484,10 @@ public static class CharacterHelper
 
         existing.Retainers = sc.Retainers;
         RetainerHelper.SetOwnerForRetainers(existing);
-        
-        // Only update character inventory if incoming has actual data
-        if (sc.Inventory != null && !sc.Inventory.IsEmpty())
+
+        // Update character inventory when the incoming snapshot is authoritative (even if empty)
+        // or actually carries data; otherwise keep the existing counts.
+        if (sc.Inventory != null && (sc.InventoryDataKnown || !sc.Inventory.IsEmpty()))
         {
             existing.Inventory = sc.Inventory;
         }
@@ -484,7 +495,7 @@ public static class CharacterHelper
         {
             existing.Inventory = new Inventory();
         }
-        
+
         existing.LastUpdateUtc = sc.LastUpdateUtc;
         if (sc.ServiceAccount != 0) existing.ServiceAccount = sc.ServiceAccount;
     }
@@ -515,9 +526,10 @@ public static class CharacterHelper
                 match.Level = r.Level;
                 PreserveNonZeroStats(match, r);
                 
-                // Only update inventory if the incoming one has actual data
-                // This prevents AutoRetainer imports from wiping existing crystal counts
-                if (r.Inventory != null && !r.Inventory.IsEmpty())
+                // Update inventory when the incoming snapshot is authoritative (even if empty, so
+                // emptying persists) or actually carries data. This still prevents AutoRetainer
+                // imports - which never carry crystal data - from wiping existing crystal counts.
+                if (r.Inventory != null && (r.InventoryDataKnown || !r.Inventory.IsEmpty()))
                 {
                     match.Inventory = r.Inventory;
                 }
@@ -529,8 +541,9 @@ public static class CharacterHelper
         if (!string.IsNullOrEmpty(sc.World)) existing.World = sc.World;
         if (sc.HomeWorldId != 0) existing.HomeWorldId = sc.HomeWorldId;
 
-        // Only update character inventory if incoming has actual data
-        if (sc.Inventory != null && !sc.Inventory.IsEmpty())
+        // Update character inventory when the incoming snapshot is authoritative (even if empty)
+        // or actually carries data; otherwise keep the existing counts.
+        if (sc.Inventory != null && (sc.InventoryDataKnown || !sc.Inventory.IsEmpty()))
         {
             existing.Inventory = sc.Inventory;
         }
