@@ -15,9 +15,7 @@ public class AutomaticVenture : ConfigEntry
     private static readonly string[] PriorityOptions = { "Balanced", "Prefer Crystals", "Prefer Shards" };
     private static readonly string[] FallbackModeOptions = { "Assign Specific Venture", "Skip (Let AutoRetainer Decide)" };
     
-    // Cached ventures organized by category
-    private Dictionary<VentureListHelper.VentureCategory, List<VentureListHelper.VentureInfo>>? _venturesByCategory;
-    private string _ventureSearchFilter = "";
+    private readonly Dictionary<int, string> _ventureSearchFilters = new();
 
     public AutomaticVenture()
     {
@@ -215,7 +213,10 @@ public class AutomaticVenture : ConfigEntry
                 // Show venture selection if mode is SpecificVenture
                 if (Plugin.Config.AutoVentureFallbackMode == FallbackVentureMode.SpecificVenture)
                 {
-                    DrawVentureSelector();
+                    DrawVentureSelector("Miner", 16);
+                    DrawVentureSelector("Botanist", 17);
+                    if (Plugin.Config.AutoVentureFSHEnabled)
+                        DrawVentureSelector("Fisher", 18);
                 }
             })
 
@@ -309,19 +310,15 @@ public class AutomaticVenture : ConfigEntry
     /// <summary>
     /// Draw the venture selector with categories similar to AutoRetainer's Venture Planner.
     /// </summary>
-    private void DrawVentureSelector()
+    private void DrawVentureSelector(string label, int retainerJob)
     {
-        // Lazy load ventures by category
-        if (_venturesByCategory == null)
-        {
-            _venturesByCategory = VentureListHelper.GetVenturesByCategory();
-        }
+        var venturesByCategory = VentureListHelper.GetVenturesForJob(retainerJob);
 
         // Show current selection
-        var currentVentureId = Plugin.Config.AutoVentureFallbackVentureId;
+        var currentVentureId = Plugin.Config.GetFallbackVentureId(retainerJob);
         var currentVentureName = VentureListHelper.GetVentureName(currentVentureId);
-        
-        if (!ImGui.CollapsingHeader($"Fallback Venture: {currentVentureName}##FallbackVentureHeader"))
+
+        if (!ImGui.CollapsingHeader($"{label} Fallback: {currentVentureName}##FallbackVenture_{retainerJob}"))
         {
             return;
         }
@@ -329,11 +326,13 @@ public class AutomaticVenture : ConfigEntry
         ImGui.Indent();
 
         // Search filter
+        var search = _ventureSearchFilters.TryGetValue(retainerJob, out var existingSearch) ? existingSearch : string.Empty;
         ImGui.SetNextItemWidth(200);
-        ImGui.InputTextWithHint("##VentureSearch", "Filter ventures...", ref _ventureSearchFilter, 100);
+        ImGui.InputTextWithHint($"##VentureSearch_{retainerJob}", "Filter ventures...", ref search, 100);
+        _ventureSearchFilters[retainerJob] = search;
 
         // Venture selection in a scrollable child region
-        if (ImGui.BeginChild("##VentureList", new Vector2(0, 200), true))
+        if (ImGui.BeginChild($"##VentureList_{retainerJob}", new Vector2(0, 200), true))
         {
             // Define category order - Quick Exploration first, then Field, then gathering types
             var categoryOrder = new[]
@@ -348,39 +347,39 @@ public class AutomaticVenture : ConfigEntry
 
             foreach (var category in categoryOrder)
             {
-                if (!_venturesByCategory.TryGetValue(category, out var ventures) || ventures.Count == 0)
+                if (!venturesByCategory.TryGetValue(category, out var ventures) || ventures.Count == 0)
                     continue;
 
                 // Filter ventures by search
-                var filteredVentures = string.IsNullOrEmpty(_ventureSearchFilter)
+                var filteredVentures = string.IsNullOrEmpty(search)
                     ? ventures
-                    : ventures.Where(v => v.Name.Contains(_ventureSearchFilter, StringComparison.OrdinalIgnoreCase)).ToList();
+                    : ventures.Where(v => v.Name.Contains(search, StringComparison.OrdinalIgnoreCase)).ToList();
 
                 if (filteredVentures.Count == 0)
                     continue;
 
                 var categoryName = VentureListHelper.GetCategoryDisplayName(category);
-                
-                if (ImGui.CollapsingHeader($"{categoryName} ({filteredVentures.Count})##Category_{category}"))
+
+                if (ImGui.CollapsingHeader($"{categoryName} ({filteredVentures.Count})##Category_{category}_{retainerJob}"))
                 {
                     ImGui.Indent();
                     foreach (var venture in filteredVentures)
                     {
                         var isSelected = venture.Id == currentVentureId;
-                        var label = venture.Level > 0 
-                            ? $"[Lv{venture.Level}] {venture.Name}##Venture_{venture.Id}"
-                            : $"{venture.Name}##Venture_{venture.Id}";
-                        
-                        if (ImGui.Selectable(label, isSelected))
+                        var ventureLabel = venture.Level > 0
+                            ? $"[Lv{venture.Level}] {venture.Name}##Venture_{venture.Id}_{retainerJob}"
+                            : $"{venture.Name}##Venture_{venture.Id}_{retainerJob}";
+
+                        if (ImGui.Selectable(ventureLabel, isSelected))
                         {
-                            Plugin.Config.AutoVentureFallbackVentureId = venture.Id;
+                            Plugin.Config.SetFallbackVentureId(retainerJob, venture.Id);
                             ConfigHelper.Save(Plugin.Config);
                         }
-                        
+
                         if (ImGui.IsItemHovered())
                         {
-                            var duration = venture.MaxTimeMinutes >= 60 
-                                ? $"{venture.MaxTimeMinutes / 60}h" 
+                            var duration = venture.MaxTimeMinutes >= 60
+                                ? $"{venture.MaxTimeMinutes / 60}h"
                                 : $"{venture.MaxTimeMinutes}m";
                             ImGui.SetTooltip($"{venture.Name}\nID: {venture.Id}\nLevel: {venture.Level}\nDuration: {duration}");
                         }

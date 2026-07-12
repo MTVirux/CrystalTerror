@@ -50,6 +50,24 @@ internal static class ConfigHelper
                 Svc.Log.Warning($"[ConfigHelper] Failed to process characters on load: {ex.Message}");
             }
 
+            // v2: seed per-job fallback ventures from the legacy single fallback
+            try
+            {
+                if (cfg.Version < 2)
+                {
+                    var legacyFallback = cfg.AutoVentureFallbackVentureId;
+                    cfg.SetFallbackVentureId(16, legacyFallback);
+                    cfg.SetFallbackVentureId(17, legacyFallback);
+                    cfg.SetFallbackVentureId(18, legacyFallback);
+                    cfg.Version = 2;
+                    Svc.Log.Debug($"[ConfigHelper] Migrated fallback venture {legacyFallback} to per-job (config v2)");
+                }
+            }
+            catch (Exception ex)
+            {
+                Svc.Log.Warning($"[ConfigHelper] Failed to migrate per-job fallback ventures: {ex.Message}");
+            }
+
             return cfg;
         }
         catch (Exception ex)

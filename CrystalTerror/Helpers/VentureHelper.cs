@@ -65,7 +65,7 @@ public static class VentureHelper
     /// Determine the venture ID for the crystal/shard type with the lowest effective count.
     /// Uses global capacity calculations across character + all retainers.
     /// When all enabled types are at capacity/threshold, uses the fallback venture setting:
-    /// - SpecificVenture: Returns the venture ID configured in AutoVentureFallbackVentureId
+    /// - SpecificVenture: Returns the per-job fallback venture ID for the retainer's class
     /// - Skip: Returns null to let AutoRetainer handle venture assignment
     /// Returns null if retainer is ineligible (e.g., FSH disabled, non-gathering class).
     /// </summary>
@@ -184,9 +184,9 @@ public static class VentureHelper
                 return null;
             }
             
-            // Assign the configured fallback venture
-            var fallbackVentureId = config.AutoVentureFallbackVentureId;
-            log?.Information($"[VentureHelper] All enabled types are at capacity/threshold for {retainer.Name}, assigning fallback venture ID {fallbackVentureId}");
+            // Assign the configured fallback venture for this retainer's job
+            var fallbackVentureId = config.GetFallbackVentureId(retainer.Job);
+            log?.Information($"[VentureHelper] All enabled types are at capacity/threshold for {retainer.Name} (Job: {jobAbbr}), assigning fallback venture ID {fallbackVentureId}");
             return (VentureId)fallbackVentureId;
         }
 

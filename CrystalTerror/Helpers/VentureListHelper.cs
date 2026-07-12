@@ -92,6 +92,39 @@ public static class VentureListHelper
     }
 
     /// <summary>
+    /// Whether a venture can be assigned to a retainer of the given job.
+    /// True for Quick Exploration, class-agnostic ventures (ClassJobCategoryId 0),
+    /// or ventures matching the job's class (covers 1h gathering and class-specific Field Exploration).
+    /// </summary>
+    public static bool IsVentureAssignableToJob(VentureInfo venture, int retainerJob)
+    {
+        if (venture.Category == VentureCategory.QuickExploration)
+            return true;
+        if (venture.ClassJobCategoryId == 0)
+            return true;
+
+        var categoryId = retainerJob switch
+        {
+            16 => CategoryMIN,
+            17 => CategoryBTN,
+            18 => CategoryFSH,
+            _ => -1,
+        };
+        return categoryId != -1 && venture.ClassJobCategoryId == categoryId;
+    }
+
+    /// <summary>
+    /// Get ventures assignable to the given retainer job, grouped by category (job-appropriate + universal).
+    /// </summary>
+    public static Dictionary<VentureCategory, List<VentureInfo>> GetVenturesForJob(int retainerJob)
+    {
+        return GetAllVentures()
+            .Where(v => !string.IsNullOrEmpty(v.Name) && IsVentureAssignableToJob(v, retainerJob))
+            .GroupBy(v => v.Category)
+            .ToDictionary(g => g.Key, g => g.OrderBy(v => v.Level).ThenBy(v => v.Name).ToList());
+    }
+
+    /// <summary>
     /// Get the display name for a venture category.
     /// </summary>
     public static string GetCategoryDisplayName(VentureCategory category)

@@ -8,7 +8,7 @@ namespace CrystalTerror;
 public class Configuration : IPluginConfiguration
 {
     /// <inheritdoc />
-    public int Version { get; set; } = 1;
+    public int Version { get; set; } = 2;
 
     // ===== Data Storage =====
     
@@ -213,7 +213,7 @@ public class Configuration : IPluginConfiguration
 
     /// <summary>
     /// What to do when all enabled crystal/shard types are above threshold (full).
-    /// Default is SpecificVenture (assigns the venture specified by AutoVentureFallbackVentureId).
+    /// Default is SpecificVenture (assigns the per-job fallback venture for the retainer's class).
     /// Set to Skip to let AutoRetainer handle the venture.
     /// </summary>
     public FallbackVentureMode AutoVentureFallbackMode { get; set; } = FallbackVentureMode.SpecificVenture;
@@ -222,7 +222,11 @@ public class Configuration : IPluginConfiguration
     /// The venture ID to assign when crystals are full and AutoVentureFallbackMode is SpecificVenture.
     /// Default is 395 (Quick Exploration). Can be set to any valid RetainerTask row ID.
     /// </summary>
-    public uint AutoVentureFallbackVentureId { get; set; } = 395; // Quick Exploration
+    public uint AutoVentureFallbackVentureId { get; set; } = 395; // legacy single fallback (migrated to per-job in v2)
+
+    public uint AutoVentureFallbackVentureIdMiner { get; set; } = 395;
+    public uint AutoVentureFallbackVentureIdBotanist { get; set; } = 395;
+    public uint AutoVentureFallbackVentureIdFisher { get; set; } = 395;
 
     /// <summary>
     /// Per element×type venture settings. Key format: "Element_CrystalType" (e.g., "Fire_Crystal").
@@ -242,6 +246,24 @@ public class Configuration : IPluginConfiguration
             AutoVenturePerTypeSettings[key] = setting;
         }
         return setting;
+    }
+
+    public uint GetFallbackVentureId(int? job) => job switch
+    {
+        16 => AutoVentureFallbackVentureIdMiner,
+        17 => AutoVentureFallbackVentureIdBotanist,
+        18 => AutoVentureFallbackVentureIdFisher,
+        _ => AutoVentureFallbackVentureIdMiner,
+    };
+
+    public void SetFallbackVentureId(int? job, uint id)
+    {
+        switch (job)
+        {
+            case 16: AutoVentureFallbackVentureIdMiner = id; break;
+            case 17: AutoVentureFallbackVentureIdBotanist = id; break;
+            case 18: AutoVentureFallbackVentureIdFisher = id; break;
+        }
     }
 
     // ===== Window Settings =====
