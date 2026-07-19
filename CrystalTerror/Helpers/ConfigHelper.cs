@@ -24,6 +24,21 @@ internal static class ConfigHelper
     private const int MinSaveIntervalMs = 1000;
 
     /// <summary>
+    /// Serializes the background config writer state. Distinct from <see cref="_characterLock"/>
+    /// so the (potentially slow) disk write never blocks character-list mutations.
+    /// </summary>
+    private static readonly object _writerLock = new();
+
+    /// <summary>Latest config snapshot awaiting a background write (latest-wins coalescing).</summary>
+    private static Configuration? _pendingSnapshot;
+
+    /// <summary>Handle to the in-flight background writer task (for shutdown flushing).</summary>
+    private static Task _writerTask = Task.CompletedTask;
+
+    /// <summary>True while a background writer task is draining pending snapshots.</summary>
+    private static bool _writerRunning;
+
+    /// <summary>
     /// Loads the plugin configuration from Dalamud's config system.
     /// Returns a new Configuration instance if none exists or if loading fails.
     /// </summary>
@@ -170,11 +185,23 @@ internal static class ConfigHelper
                 
                 // Sync to config
                 config.Characters = new List<StoredCharacter>(characters);
-                
-                Svc.PluginInterface.SavePluginConfig(config);
                 _lastSaveTime = now;
-                
-                Svc.Log.Debug($"[ConfigHelper] SaveAndSync: Completed successfully with {characters.Count} characters");
+
+                if (force)
+                {
+                    // Durable synchronous write (used on shutdown). Flush the async writer first so
+                    // we don't race the background thread writing the same file.
+                    FlushPendingWrites();
+                    Svc.PluginInterface.SavePluginConfig(config);
+                    Svc.Log.Debug($"[ConfigHelper] SaveAndSync: forced synchronous save with {characters.Count} characters");
+                    return true;
+                }
+
+                // Hand the (potentially slow) disk write to a background writer so it never blocks
+                // the framework thread. Serialize an isolated snapshot under the lock so the writer
+                // can't race main-thread mutations of the character graph.
+                QueueBackgroundSave(CloneConfiguration(config));
+                Svc.Log.Debug($"[ConfigHelper] SaveAndSync: queued background save with {characters.Count} characters");
                 return true;
             }
             catch (Exception ex)
@@ -183,6 +210,78 @@ internal static class ConfigHelper
                 return false;
             }
         }
+    }
+
+    /// <summary>
+    /// Deep-clones a configuration via JSON round-trip so the background writer serializes a stable
+    /// snapshot. Safe because the character graph's only cyclic reference (Retainer.OwnerCharacter)
+    /// is [JsonIgnore], so the clone serializes identically to the live object.
+    /// </summary>
+    private static Configuration CloneConfiguration(Configuration config)
+    {
+        var json = Newtonsoft.Json.JsonConvert.SerializeObject(config);
+        return Newtonsoft.Json.JsonConvert.DeserializeObject<Configuration>(json) ?? config;
+    }
+
+    /// <summary>
+    /// Queues a snapshot for background writing. Latest-wins: rapid saves coalesce to the newest
+    /// snapshot, and writes never overlap (a single writer task drains the queue).
+    /// </summary>
+    private static void QueueBackgroundSave(Configuration snapshot)
+    {
+        lock (_writerLock)
+        {
+            _pendingSnapshot = snapshot;
+            if (!_writerRunning)
+            {
+                _writerRunning = true;
+                _writerTask = Task.Run(DrainSaveQueue);
+            }
+        }
+    }
+
+    private static void DrainSaveQueue()
+    {
+        while (true)
+        {
+            Configuration? toWrite;
+            lock (_writerLock)
+            {
+                toWrite = _pendingSnapshot;
+                _pendingSnapshot = null;
+                if (toWrite == null)
+                {
+                    _writerRunning = false;
+                    return;
+                }
+            }
+
+            try
+            {
+                Svc.PluginInterface.SavePluginConfig(toWrite);
+                Svc.Log.Debug("[ConfigHelper] Background config save completed");
+            }
+            catch (Exception ex)
+            {
+                Svc.Log.Error($"[ConfigHelper] Background save failed: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Cancels any queued snapshot and waits (bounded) for an in-flight background write to finish,
+    /// so a forced synchronous save can take over the file without racing the writer thread.
+    /// </summary>
+    private static void FlushPendingWrites()
+    {
+        Task task;
+        lock (_writerLock)
+        {
+            _pendingSnapshot = null;
+            task = _writerTask;
+        }
+
+        try { task.Wait(TimeSpan.FromSeconds(5)); } catch { }
     }
 
     /// <summary>
