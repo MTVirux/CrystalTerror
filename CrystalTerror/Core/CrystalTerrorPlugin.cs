@@ -30,8 +30,8 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
     private readonly IAddonLifecycle addonLifecycle;
     private readonly ICondition condition;
     private ulong lastLocalContentId;
-    private string lastPlayerKey = string.Empty;
-    // Lock for atomically updating lastPlayerKey to prevent duplicate imports
+    private bool loggedOut;
+    // Lock for atomically updating character-change tracking to prevent duplicate imports
     private readonly object _playerKeyLock = new();
     // Timestamp of last framework import for additional throttling
     private DateTime lastFrameworkImport = DateTime.MinValue;
@@ -275,51 +275,52 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
                 return;
             try
             {
-                // Use ECommons Player for reliable player state detection
+                // Detect character change by ContentId only. The local GameObjectId changes on every
+                // territory transition, so keying on it forced a redundant import + config write on
+                // each zone change; the CID is stable per character and only changes on an actual switch.
                 var contentId = Player.Available ? Player.CID : 0;
-                var localObjId = Player.Object?.GameObjectId ?? 0u;
-                var currentKey = $"{contentId}:{localObjId}";
 
-                // Atomically check and update player key to prevent duplicate imports
                 bool shouldImport = false;
                 lock (_playerKeyLock)
                 {
-                    if (contentId != 0 && currentKey != this.lastPlayerKey)
+                    if (contentId != 0)
                     {
-                        // Additional time-based throttle to prevent rapid imports during character cycling
-                        var now = DateTime.UtcNow;
-                        if ((now - this.lastFrameworkImport).TotalSeconds >= FrameworkImportThrottleSeconds)
+                        if (contentId != this.lastLocalContentId)
                         {
-                            shouldImport = true;
-                            this.lastLocalContentId = contentId;
-                            this.lastPlayerKey = currentKey;
-                            this.lastFrameworkImport = now;
-                            this.pluginLog.Information($"[CrystalTerror] Character change detected: {currentKey}");
+                            // Additional time-based throttle to prevent rapid imports during character cycling
+                            var now = DateTime.UtcNow;
+                            if ((now - this.lastFrameworkImport).TotalSeconds >= FrameworkImportThrottleSeconds)
+                            {
+                                shouldImport = true;
+                                this.lastLocalContentId = contentId;
+                                this.lastFrameworkImport = now;
+                                this.pluginLog.Information($"[CrystalTerror] Character change detected: CID={contentId:X16}");
+                            }
+                            else
+                            {
+                                this.pluginLog.Debug($"[CrystalTerror] Framework import throttled (last import {(now - this.lastFrameworkImport).TotalSeconds:F1}s ago)");
+                            }
                         }
-                        else
-                        {
-                            this.pluginLog.Debug($"[CrystalTerror] Framework import throttled (last import {(now - this.lastFrameworkImport).TotalSeconds:F1}s ago)");
-                        }
+
+                        this.loggedOut = false;
                     }
-                    else if (contentId == 0 && this.lastLocalContentId != 0)
+                    else if (this.lastLocalContentId != 0 && !this.loggedOut)
                     {
-                        // Logged out, reset tracking id
-                        this.lastLocalContentId = 0;
-                        this.lastPlayerKey = string.Empty;
+                        // Player unavailable (logout, or a brief zone-transition blip). Refresh the UI
+                        // once, but keep lastLocalContentId so re-appearing as the SAME character does
+                        // not trigger a redundant re-import.
+                        this.loggedOut = true;
                         this.mainWindow.InvalidateSortCache();
-                        this.pluginLog.Information("[CrystalTerror] Player logged out, reset tracking");
+                        this.pluginLog.Debug("[CrystalTerror] Player unavailable (logout or zone transition)");
                     }
                 }
 
                 if (shouldImport)
                 {
                     // Character changed (or first login) — import current character automatically
-                    var sc = CharacterHelper.ImportCurrentCharacter();
+                    var sc = CharacterHelper.ImportMergeSaveTimed("Framework", this.Characters, this.Config, CharacterHelper.MergePolicy.Merge);
                     if (sc != null)
                     {
-                        this.pluginLog.Debug($"[CrystalTerror] Importing character: {sc.Name}@{sc.World} (CID={sc.ContentId:X16})");
-                        CharacterHelper.MergeInto(this.Characters, new[] { sc }, CharacterHelper.MergePolicy.Merge);
-                        ConfigHelper.SaveAndSync(this.Config, this.Characters);
                         this.mainWindow.InvalidateSortCache();
                         this.pluginLog.Information($"[CrystalTerror] Character imported successfully: {sc.Name}@{sc.World}");
                     }
