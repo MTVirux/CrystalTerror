@@ -88,7 +88,7 @@ public static class InventoryHelper
 
             lastUpdate = now;
 
-            CharacterHelper.ImportCurrentCharacterAndSave(plugin.Characters, plugin.Config);
+            CharacterHelper.ImportCurrentCharacterAndSave(plugin.Characters, plugin.Config, source: "Inventory");
         }
         catch (Exception ex)
         {

@@ -112,16 +112,10 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
                 try
                 {
                     var current = this.playerState.ContentId;
-                    if (current != 0 && current != this.lastLocalContentId)
+                    if (current != 0 && current != this.lastLocalContentId && this.Config != null)
                     {
                         // character changed (or first login) — import current character automatically
-                        var sc = CharacterHelper.ImportCurrentCharacter();
-                        if (sc != null && this.Config != null)
-                        {
-                            CharacterHelper.MergeInto(this.Characters, new[] { sc }, CharacterHelper.MergePolicy.Merge);
-                            ConfigHelper.SaveAndSync(this.Config, this.Characters);
-                        }
-
+                        CharacterHelper.ImportMergeSaveTimed("Startup", this.Characters, this.Config, CharacterHelper.MergePolicy.Merge);
                         this.lastLocalContentId = current;
                     }
                     else if (current == 0)
@@ -384,14 +378,10 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
                     return;
                 
                 this.pluginLog.Debug($"[CrystalTerror] OnRetainerInventoryClose triggered for {Player.Name}");
-                
-                var sc = CharacterHelper.ImportCurrentCharacter();
+
+                var sc = CharacterHelper.ImportMergeSaveTimed("RetainerClose", this.Characters, this.Config, CharacterHelper.MergePolicy.Overwrite);
                 if (sc != null)
-                {
-                    CharacterHelper.MergeInto(this.Characters, new[] { sc }, CharacterHelper.MergePolicy.Overwrite);
-                    ConfigHelper.SaveAndSync(this.Config, this.Characters);
                     this.pluginLog.Debug($"[CrystalTerror] Retainer inventory update saved for {sc.Name}@{sc.World}");
-                }
             }
             catch (Exception ex)
             {
@@ -421,14 +411,10 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
                     return;
                 
                 this.pluginLog.Debug($"[CrystalTerror] OnSelectStringClose triggered (summoning bell) for {Player.Name}");
-                
-                var sc = CharacterHelper.ImportCurrentCharacter();
+
+                var sc = CharacterHelper.ImportMergeSaveTimed("SelectStringClose", this.Characters, this.Config, CharacterHelper.MergePolicy.Overwrite);
                 if (sc != null)
-                {
-                    CharacterHelper.MergeInto(this.Characters, new[] { sc }, CharacterHelper.MergePolicy.Overwrite);
-                    ConfigHelper.SaveAndSync(this.Config, this.Characters);
                     this.pluginLog.Debug($"[CrystalTerror] Retainer menu close update saved for {sc.Name}@{sc.World}");
-                }
             }
             catch (Exception ex)
             {

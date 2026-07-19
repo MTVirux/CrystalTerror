@@ -22,8 +22,10 @@ public static class CharacterHelper
     /// </summary>
     public static StoredCharacter? ImportCurrentCharacter()
     {
+        PerfDiagnostics.BeginImport();
+
         // Use ECommons Player.Available and Player.CID for reliable login state detection
-        if (!Player.Available || Player.CID == 0) 
+        if (!Player.Available || Player.CID == 0)
             return null;
 
         var playerObject = Player.Object;
@@ -78,15 +80,38 @@ public static class CharacterHelper
     /// <param name="config">The configuration to save.</param>
     /// <param name="policy">The merge policy to use (defaults to Overwrite).</param>
     /// <returns>True if a character was successfully imported and saved.</returns>
-    public static bool ImportCurrentCharacterAndSave(List<StoredCharacter> characters, Configuration config, MergePolicy policy = MergePolicy.Overwrite)
+    public static bool ImportCurrentCharacterAndSave(List<StoredCharacter> characters, Configuration config, MergePolicy policy = MergePolicy.Overwrite, string source = "Manual")
     {
-        var character = ImportCurrentCharacter();
-        if (character == null)
-            return false;
+        return ImportMergeSaveTimed(source, characters, config, policy) != null;
+    }
 
-        MergeInto(characters, new[] { character }, policy);
-        ConfigHelper.SaveAndSync(config, characters);
-        return true;
+    /// <summary>
+    /// Imports the current character, merges, and saves - timing each stage and recording a
+    /// diagnostics sample (DEBUG builds only) tagged by <paramref name="source"/>.
+    /// Returns the imported character, or null if the player was unavailable.
+    /// </summary>
+    public static StoredCharacter? ImportMergeSaveTimed(string source, List<StoredCharacter> characters, Configuration config, MergePolicy policy)
+    {
+        var swImport = System.Diagnostics.Stopwatch.StartNew();
+        var sc = ImportCurrentCharacter();
+        swImport.Stop();
+
+        double mergeMs = 0, saveMs = 0;
+        if (sc != null)
+        {
+            var swMerge = System.Diagnostics.Stopwatch.StartNew();
+            MergeInto(characters, new[] { sc }, policy);
+            swMerge.Stop();
+            mergeMs = swMerge.Elapsed.TotalMilliseconds;
+
+            var swSave = System.Diagnostics.Stopwatch.StartNew();
+            ConfigHelper.SaveAndSync(config, characters);
+            swSave.Stop();
+            saveMs = swSave.Elapsed.TotalMilliseconds;
+        }
+
+        PerfDiagnostics.RecordImport(source, swImport.Elapsed.TotalMilliseconds, mergeMs, saveMs);
+        return sc;
     }
 
     /// <summary>
@@ -165,6 +190,10 @@ public static class CharacterHelper
     /// </summary>
     private static void PopulateRetainers(StoredCharacter sc)
     {
+        // Timing handed to PerfDiagnostics for the Debug config tab (DEBUG builds only).
+        var swTotal = System.Diagnostics.Stopwatch.StartNew();
+        double statsIpcMs = 0;
+        int retainerCount = 0;
         try
         {
             unsafe
@@ -191,7 +220,11 @@ public static class CharacterHelper
                     // Get retainer stats (iLvl, Gathering, Perception).
                     // Only the currently active retainer's equipped gear is actually in memory.
                     bool isActiveRetainer = activeRetainerId != 0 && rptr->RetainerId == activeRetainerId;
+                    var swStats = System.Diagnostics.Stopwatch.StartNew();
                     var (ilvl, gathering, perception) = GetRetainerStats(rname, isActiveRetainer);
+                    swStats.Stop();
+                    statsIpcMs += swStats.Elapsed.TotalMilliseconds;
+                    retainerCount++;
 
                     // Get venture data from client struct
                     uint ventureId = rptr->VentureId;
@@ -221,6 +254,9 @@ public static class CharacterHelper
         {
             Svc.Log.Debug($"[CrystalTerror] Failed to read retainers: {ex.Message}");
         }
+
+        swTotal.Stop();
+        PerfDiagnostics.SetRetainerTiming(retainerCount, swTotal.Elapsed.TotalMilliseconds, statsIpcMs);
     }
 
     /// <summary>

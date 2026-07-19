@@ -27,6 +27,9 @@ public class ConfigWindow : Window, IDisposable
         new WarningThresholds(),
         new AutomaticVenture(),
         new DataManagement(),
+#if DEBUG
+        new DebugDiagnostics(),
+#endif
     ];
 
     public ConfigWindow(CrystalTerrorPlugin plugin)

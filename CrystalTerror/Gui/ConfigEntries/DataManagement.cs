@@ -19,13 +19,9 @@ public class DataManagement : ConfigEntry
             {
                 if (ImGui.Button("Force Import Current Character"))
                 {
-                    var sc = CharacterHelper.ImportCurrentCharacter();
+                    var sc = CharacterHelper.ImportMergeSaveTimed("Manual", Plugin.Characters, Plugin.Config, CharacterHelper.MergePolicy.Merge);
                     if (sc != null)
-                    {
-                        CharacterHelper.MergeInto(Plugin.Characters, new[] { sc }, CharacterHelper.MergePolicy.Merge);
-                        ConfigHelper.SaveAndSync(Plugin.Config, Plugin.Characters);
                         Plugin.InvalidateSortCache();
-                    }
                 }
 
                 if (ImGui.Button("Import From AutoRetainer"))
