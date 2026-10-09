@@ -219,6 +219,8 @@ public static class AutoRetainerHelper
                 return;
             }
 
+            retainer.Level = RetainerLevelingHelper.GetLiveLevel(retainerName) ?? retainer.Level;
+
             log.Debug($"[CrystalTerror] {retainer.Name}: Level={retainer.Level}, Gathering={retainer.Gathering}, Job={ClassJobExtensions.GetAbbreviation(retainer.Job)}");
 
             // Check per-character auto-venture toggle
@@ -234,17 +236,17 @@ public static class AutoRetainerHelper
                 return;
             }
 
-            // Use the new global capacity-based venture determination
-            var ventureId = VentureHelper.DetermineLowestCrystalVenture(currentChar, retainer, config, log);
-            
+            var ventureId = VentureHelper.DetermineVenture(currentChar, retainer, config, log);
+
             if (ventureId.HasValue)
             {
-                log.Information($"[CrystalTerror] ✓ Overriding venture for {retainer.Name} with {VentureHelper.GetVentureName(ventureId.Value)} (ID: {(uint)ventureId.Value})");
+                var venture = VentureListHelper.GetVenture((uint)ventureId.Value);
+                log.Information($"[CrystalTerror] ✓ Overriding venture for {retainer.Name} with {venture?.Name ?? VentureHelper.GetVentureName(ventureId.Value)} (ID: {(uint)ventureId.Value})");
                 autoRetainerSetVenture.InvokeAction((uint)ventureId.Value);
 
                 // Update local retainer state for immediate re-calculation accuracy
                 retainer.CurrentVentureId = (uint)ventureId.Value;
-                retainer.VentureEndsAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 3600; // 1-hour venture
+                retainer.VentureEndsAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + (venture?.MaxTimeMinutes ?? 60) * 60;
             }
             else
             {

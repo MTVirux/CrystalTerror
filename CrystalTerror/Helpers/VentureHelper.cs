@@ -62,19 +62,11 @@ public static class VentureHelper
     }
 
     /// <summary>
-    /// Determine the venture ID for the crystal/shard type with the lowest effective count.
-    /// Uses global capacity calculations across character + all retainers.
-    /// When all enabled types are at capacity/threshold, uses the fallback venture setting:
-    /// - SpecificVenture: Returns the per-job fallback venture ID for the retainer's class
-    /// - Skip: Returns null to let AutoRetainer handle venture assignment
-    /// Returns null if retainer is ineligible (e.g., FSH disabled, non-gathering class).
+    /// Determine the venture to assign when AutoRetainer sends a retainer out.
+    /// Applies the matching leveling tier when leveling is enabled, otherwise the crystal logic.
+    /// Returns null to leave the venture choice to AutoRetainer.
     /// </summary>
-    /// <param name="character">The character who owns this retainer (for global counts).</param>
-    /// <param name="retainer">The retainer to assign a venture to.</param>
-    /// <param name="config">Configuration for venture settings.</param>
-    /// <param name="log">Optional logger for detailed output.</param>
-    /// <returns>VentureId for optimal venture, fallback venture if all full, or null if ineligible/skip.</returns>
-    public static VentureId? DetermineLowestCrystalVenture(StoredCharacter character, Retainer retainer, Configuration config, IPluginLog? log = null)
+    public static VentureId? DetermineVenture(StoredCharacter character, Retainer retainer, Configuration config, IPluginLog? log = null)
     {
         if (character == null) throw new ArgumentNullException(nameof(character));
         if (retainer == null) throw new ArgumentNullException(nameof(retainer));
@@ -83,17 +75,28 @@ public static class VentureHelper
         var jobAbbr = ClassJobExtensions.GetAbbreviation(retainer.Job);
         log?.Debug($"[VentureHelper] Analyzing venture for {retainer.Name} (Job: {jobAbbr}, Level: {retainer.Level}, Gathering: {retainer.Gathering})");
 
-        // Check if retainer is a gathering class
-        if (!IsGatheringRetainer(retainer))
+        var tier = config.AutoVentureLevelingEnabled
+            ? RetainerLevelingHelper.FindTier(config.AutoVentureLevelingTiers, retainer.Level)
+            : null;
+        var action = tier?.Action ?? LevelingAction.CrystalLogic;
+        if (tier != null)
+            log?.Debug($"[VentureHelper] {retainer.Name} (Lv{retainer.Level}) matched leveling tier <= {tier.MaxLevel}: {tier.Action}");
+
+        if (action == LevelingAction.CrystalLogic && !IsGatheringRetainer(retainer))
         {
             log?.Debug($"[VentureHelper] {retainer.Name} is not a gathering retainer (Job: {jobAbbr}), skipping");
             return null;
         }
 
-        // Check FSH eligibility
         if (IsFisher(retainer) && !config.AutoVentureFSHEnabled)
         {
             log?.Debug($"[VentureHelper] {retainer.Name} is FSH and FSH is disabled, skipping");
+            return null;
+        }
+
+        if (action == LevelingAction.Skip)
+        {
+            log?.Debug($"[VentureHelper] Leveling tier says skip for {retainer.Name}");
             return null;
         }
 
@@ -108,6 +111,39 @@ public static class VentureHelper
             }
             log?.Debug($"[VentureHelper] Venture credits check passed: {currentCredits} >= {config.AutoVentureCreditThreshold}");
         }
+
+        return action switch
+        {
+            LevelingAction.QuickExploration => VentureId.QuickExploration,
+            LevelingAction.SpecificVenture => GetLevelingVenture(tier!, retainer, log),
+            _ => SelectCrystalVenture(character, retainer, config, log),
+        };
+    }
+
+    private static VentureId? GetLevelingVenture(LevelingTier tier, Retainer retainer, IPluginLog? log)
+    {
+        var ventureId = tier.GetVentureId(retainer.Job);
+        var venture = VentureListHelper.GetVenture(ventureId);
+        if (venture != null && venture.Level > retainer.Level)
+        {
+            log?.Warning($"[VentureHelper] {venture.Name} needs Lv{venture.Level} but {retainer.Name} is Lv{retainer.Level}, not overriding");
+            return null;
+        }
+
+        log?.Information($"[VentureHelper] Leveling {retainer.Name} (Lv{retainer.Level}) with {venture?.Name ?? ventureId.ToString()}");
+        return (VentureId)ventureId;
+    }
+
+    /// <summary>
+    /// Determine the venture ID for the crystal/shard type with the lowest effective count.
+    /// Uses global capacity calculations across character + all retainers.
+    /// When all enabled types are at capacity/threshold, uses the fallback venture setting:
+    /// - SpecificVenture: Returns the per-job fallback venture ID for the retainer's class
+    /// - Skip: Returns null to let AutoRetainer handle venture assignment
+    /// </summary>
+    private static VentureId? SelectCrystalVenture(StoredCharacter character, Retainer retainer, Configuration config, IPluginLog? log)
+    {
+        var jobAbbr = ClassJobExtensions.GetAbbreviation(retainer.Job);
 
         // Calculate global capacity metrics
         var effectiveCounts = VentureCapacityCalculator.CalculateEffectiveCounts(character, config.AutoVentureRewardAmount);
@@ -215,24 +251,6 @@ public static class VentureHelper
             VenturePriority.PreferShards => type == CrystalType.Shard ? 0 : 1,
             _ => 0 // Balanced - no preference
         };
-    }
-
-    /// <summary>
-    /// Legacy method for backward compatibility. Uses retainer-only counting.
-    /// Consider using the overload that takes StoredCharacter for global counts.
-    /// </summary>
-    [Obsolete("Use DetermineLowestCrystalVenture(StoredCharacter, Retainer, Configuration, IPluginLog?) for global capacity calculations")]
-    public static VentureId? DetermineLowestCrystalVenture(Retainer retainer, Configuration config, IPluginLog? log = null)
-    {
-        // If we don't have the owner character, we can't do global calculations
-        // Fall back to using the retainer's owner if available
-        if (retainer?.OwnerCharacter != null)
-        {
-            return DetermineLowestCrystalVenture(retainer.OwnerCharacter, retainer, config, log);
-        }
-
-        log?.Warning($"[VentureHelper] No owner character for {retainer?.Name}, cannot perform global capacity calculation");
-        return null;
     }
 
     /// <summary>
