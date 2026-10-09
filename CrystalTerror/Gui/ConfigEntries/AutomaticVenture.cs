@@ -1,5 +1,6 @@
 namespace CrystalTerror.Gui.ConfigEntries;
 
+using CrystalTerror.Gui.Common;
 using CrystalTerror.Helpers;
 using NightmareUI.PrimaryUI;
 using System.Numerics;
@@ -14,8 +15,6 @@ public class AutomaticVenture : ConfigEntry
 
     private static readonly string[] PriorityOptions = { "Balanced", "Prefer Crystals", "Prefer Shards" };
     private static readonly string[] FallbackModeOptions = { "Assign Specific Venture", "Skip (Let AutoRetainer Decide)" };
-    
-    private readonly Dictionary<int, string> _ventureSearchFilters = new();
 
     public AutomaticVenture()
     {
@@ -231,6 +230,16 @@ public class AutomaticVenture : ConfigEntry
                 }
             })
 
+            .Widget(() =>
+            {
+                if (ImGui.CollapsingHeader("Retainer Leveling"))
+                {
+                    ImGui.Indent();
+                    RetainerLevelingSection.Draw(Plugin.Config);
+                    ImGui.Unindent();
+                }
+            })
+
             .Unindent()
             .EndIf();
     }
@@ -307,88 +316,20 @@ public class AutomaticVenture : ConfigEntry
         }
     }
 
-    /// <summary>
-    /// Draw the venture selector with categories similar to AutoRetainer's Venture Planner.
-    /// </summary>
     private void DrawVentureSelector(string label, int retainerJob)
     {
-        var venturesByCategory = VentureListHelper.GetVenturesForJob(retainerJob);
-
-        // Show current selection
         var currentVentureId = Plugin.Config.GetFallbackVentureId(retainerJob);
         var currentVentureName = VentureListHelper.GetVentureName(currentVentureId);
 
         if (!ImGui.CollapsingHeader($"{label} Fallback: {currentVentureName}##FallbackVenture_{retainerJob}"))
-        {
             return;
-        }
 
         ImGui.Indent();
-
-        // Search filter
-        var search = _ventureSearchFilters.TryGetValue(retainerJob, out var existingSearch) ? existingSearch : string.Empty;
-        ImGui.SetNextItemWidth(200);
-        ImGui.InputTextWithHint($"##VentureSearch_{retainerJob}", "Filter ventures...", ref search, 100);
-        _ventureSearchFilters[retainerJob] = search;
-
-        // Venture selection in a scrollable child region
-        if (ImGui.BeginChild($"##VentureList_{retainerJob}", new Vector2(0, 200), true))
+        if (VenturePicker.Draw($"Fallback_{retainerJob}", retainerJob, ref currentVentureId))
         {
-            // Define category order - Quick Exploration first, then Field, then gathering types
-            var categoryOrder = new[]
-            {
-                VentureListHelper.VentureCategory.QuickExploration,
-                VentureListHelper.VentureCategory.FieldExploration,
-                VentureListHelper.VentureCategory.Mining,
-                VentureListHelper.VentureCategory.Botany,
-                VentureListHelper.VentureCategory.Fishing,
-                VentureListHelper.VentureCategory.Hunting,
-            };
-
-            foreach (var category in categoryOrder)
-            {
-                if (!venturesByCategory.TryGetValue(category, out var ventures) || ventures.Count == 0)
-                    continue;
-
-                // Filter ventures by search
-                var filteredVentures = string.IsNullOrEmpty(search)
-                    ? ventures
-                    : ventures.Where(v => v.Name.Contains(search, StringComparison.OrdinalIgnoreCase)).ToList();
-
-                if (filteredVentures.Count == 0)
-                    continue;
-
-                var categoryName = VentureListHelper.GetCategoryDisplayName(category);
-
-                if (ImGui.CollapsingHeader($"{categoryName} ({filteredVentures.Count})##Category_{category}_{retainerJob}"))
-                {
-                    ImGui.Indent();
-                    foreach (var venture in filteredVentures)
-                    {
-                        var isSelected = venture.Id == currentVentureId;
-                        var ventureLabel = venture.Level > 0
-                            ? $"[Lv{venture.Level}] {venture.Name}##Venture_{venture.Id}_{retainerJob}"
-                            : $"{venture.Name}##Venture_{venture.Id}_{retainerJob}";
-
-                        if (ImGui.Selectable(ventureLabel, isSelected))
-                        {
-                            Plugin.Config.SetFallbackVentureId(retainerJob, venture.Id);
-                            ConfigHelper.Save(Plugin.Config);
-                        }
-
-                        if (ImGui.IsItemHovered())
-                        {
-                            var duration = venture.MaxTimeMinutes >= 60
-                                ? $"{venture.MaxTimeMinutes / 60}h"
-                                : $"{venture.MaxTimeMinutes}m";
-                            ImGui.SetTooltip($"{venture.Name}\nID: {venture.Id}\nLevel: {venture.Level}\nDuration: {duration}");
-                        }
-                    }
-                    ImGui.Unindent();
-                }
-            }
+            Plugin.Config.SetFallbackVentureId(retainerJob, currentVentureId);
+            ConfigHelper.Save(Plugin.Config);
         }
-        ImGui.EndChild();
         ImGui.Unindent();
     }
 }
