@@ -41,6 +41,7 @@ public static unsafe class RetainerVentureAssigner
     private static readonly uint[] QuickExplorationRows = [402];
     private static readonly uint[] FieldExplorationRows = [196, 198, 200, 202];
     private static readonly uint[] HourVentureRows = [195, 197, 199, 201];
+    private static readonly uint[] AllCategoryRows = [.. QuickExplorationRows, .. FieldExplorationRows, .. HourVentureRows];
 
     private static readonly string[] VentureWindows = ["RetainerTaskAsk", "RetainerTaskSupply", "RetainerTaskList"];
 
@@ -96,6 +97,7 @@ public static unsafe class RetainerVentureAssigner
 
         var assignTexts = GetTexts(AssignVentureRows, AddonText);
         var categoryTexts = GetTexts(GetCategoryRows(venture.Category), BellText);
+        var anyCategoryTexts = GetTexts(AllCategoryRows, BellText);
         var quitTexts = GetTexts(QuitRows, AddonText);
         if (assignTexts.Length == 0 || categoryTexts.Length == 0)
             return "Could not read the retainer menu texts from the game data";
@@ -103,8 +105,9 @@ public static unsafe class RetainerVentureAssigner
         Svc.Log.Debug($"{LogPrefix} Assigning {venture.Name} ({ventureId})");
         taskManager ??= new TaskManager();
 
-        EnqueueStep("SelectAssignVenture", () => SelectMenuEntry(assignTexts));
-        EnqueueStep("SelectCategory", () => SelectMenuEntry(categoryTexts));
+        var categoryWindow = GetWindowAfterCategory(venture.Category);
+        EnqueueStep("SelectAssignVenture", () => SelectMenuEntry(assignTexts, () => FindMenuEntry(anyCategoryTexts) != null));
+        EnqueueStep("SelectCategory", () => SelectMenuEntry(categoryTexts, () => IsOpen(categoryWindow)));
         if (venture.Category == VentureCategory.FieldExploration)
             EnqueueStep("PickFromTaskList", () => PickFromTaskList(ventureId));
         else if (venture.Category != VentureCategory.QuickExploration)
@@ -205,19 +208,20 @@ public static unsafe class RetainerVentureAssigner
         }
     }
 
-    private static bool SelectMenuEntry(string[] texts)
+    // Done once the menu has moved on. Clicks get dropped now and then, so the entry is clicked again while it is still showing.
+    private static bool SelectMenuEntry(string[] texts, Func<bool> movedOn)
     {
-        AddonMaster.SelectString.Entry? entry = null;
-        if (TryGetAddonByName<AddonSelectString>("SelectString", out var addon) && IsAddonReady(&addon->AtkUnitBase))
-            entry = FindEntry(addon, texts);
+        if (movedOn())
+            return true;
 
-        var settled = Settled(entry != null, MenuSettleMs);
-        if (!settled || entry is not { } picked)
+        var entry = FindMenuEntry(texts);
+        if (!Settled(entry != null, MenuSettleMs) || !RetryDue() || entry is not { } picked)
             return false;
 
-        Svc.Log.Debug($"{LogPrefix} Selecting \"{picked.Text}\"");
+        Svc.Log.Debug($"{LogPrefix} {(lastActionAt == 0 ? "Selecting" : "Selecting again")} \"{picked.Text}\"");
+        lastActionAt = Environment.TickCount64;
         picked.Select();
-        return true;
+        return false;
     }
 
     private static bool PickFromTaskSupply(uint ventureId, int ventureLevel)
@@ -236,7 +240,11 @@ public static unsafe class RetainerVentureAssigner
         var count = Math.Min((int)addon->AtkValues[SupplyVentureCountIndex].UInt, SupplyVentureCountIndex - SupplyFirstVentureIndex);
         for (var i = 0; i < count; i++)
         {
-            var id = (uint*)addon->AtkValues[SupplyFirstVentureIndex + i].Pointer;
+            var value = addon->AtkValues[SupplyFirstVentureIndex + i];
+            if ((value.Type & AtkValueType.TypeMask) != AtkValueType.Pointer)
+                continue;
+
+            var id = (uint*)value.Pointer;
             if (id != null && *id == ventureId)
             {
                 Svc.Log.Debug($"{LogPrefix} Picking list entry {i}");
@@ -325,7 +333,7 @@ public static unsafe class RetainerVentureAssigner
             if (closed)
                 return true;
 
-            var categoryTexts = GetTexts([.. QuickExplorationRows, .. FieldExplorationRows, .. HourVentureRows], BellText);
+            var categoryTexts = GetTexts(AllCategoryRows, BellText);
             if (TryGetAddonByName<AddonSelectString>("SelectString", out var menu)
                 && IsAddonReady(&menu->AtkUnitBase)
                 && FindEntry(menu, categoryTexts) != null)
@@ -364,6 +372,13 @@ public static unsafe class RetainerVentureAssigner
     private static bool IsOpen(string addonName)
         => TryGetAddonByName<AtkUnitBase>(addonName, out var addon) && addon->IsVisible;
 
+    private static AddonMaster.SelectString.Entry? FindMenuEntry(string[] texts)
+    {
+        if (TryGetAddonByName<AddonSelectString>("SelectString", out var addon) && IsAddonReady(&addon->AtkUnitBase))
+            return FindEntry(addon, texts);
+        return null;
+    }
+
     private static AddonMaster.SelectString.Entry? FindEntry(AddonSelectString* addon, string[] texts)
     {
         foreach (var entry in new AddonMaster.SelectString(addon).Entries)
@@ -380,6 +395,13 @@ public static unsafe class RetainerVentureAssigner
         VentureCategory.QuickExploration => QuickExplorationRows,
         VentureCategory.FieldExploration => FieldExplorationRows,
         _ => HourVentureRows,
+    };
+
+    private static string GetWindowAfterCategory(VentureCategory category) => category switch
+    {
+        VentureCategory.QuickExploration => "RetainerTaskAsk",
+        VentureCategory.FieldExploration => "RetainerTaskList",
+        _ => "RetainerTaskSupply",
     };
 
     private static string[] GetTexts(uint[] rows, Func<uint, string> read)
