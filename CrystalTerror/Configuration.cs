@@ -234,6 +234,11 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public Dictionary<string, PerTypeVentureSetting> AutoVenturePerTypeSettings { get; set; } = new();
 
+    public bool AutoVentureLevelingEnabled { get; set; } = false;
+
+    // Must default to empty: Newtonsoft appends to a pre-filled list on load, duplicating rows.
+    public List<LevelingTier> AutoVentureLevelingTiers { get; set; } = new();
+
     /// <summary>
     /// Get or create the per-type setting for a specific element and crystal type.
     /// </summary>

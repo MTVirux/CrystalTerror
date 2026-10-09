@@ -69,15 +69,14 @@ public static class VentureListHelper
         }
     }
 
+    public static VentureInfo? GetVenture(uint ventureId)
+        => GetAllVentures().FirstOrDefault(v => v.Id == ventureId);
+
     /// <summary>
     /// Get the name of a venture by its ID.
     /// </summary>
     public static string GetVentureName(uint ventureId)
-    {
-        var ventures = GetAllVentures();
-        var venture = ventures.FirstOrDefault(v => v.Id == ventureId);
-        return venture?.Name ?? $"Unknown ({ventureId})";
-    }
+        => GetVenture(ventureId)?.Name ?? $"Unknown ({ventureId})";
 
     /// <summary>
     /// Get ventures grouped by category for display in UI.
@@ -95,6 +94,7 @@ public static class VentureListHelper
     /// Whether a venture can be assigned to a retainer of the given job.
     /// True for Quick Exploration, class-agnostic ventures (ClassJobCategoryId 0),
     /// or ventures matching the job's class (covers 1h gathering and class-specific Field Exploration).
+    /// Any non-gathering job (including 0) is treated as combat.
     /// </summary>
     public static bool IsVentureAssignableToJob(VentureInfo venture, int retainerJob)
     {
@@ -108,9 +108,9 @@ public static class VentureListHelper
             16 => CategoryMIN,
             17 => CategoryBTN,
             18 => CategoryFSH,
-            _ => -1,
+            _ => CategoryDoW,
         };
-        return categoryId != -1 && venture.ClassJobCategoryId == categoryId;
+        return venture.ClassJobCategoryId == categoryId;
     }
 
     /// <summary>
