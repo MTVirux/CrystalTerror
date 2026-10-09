@@ -6,7 +6,10 @@ public static class RetainerLevelingHelper
 {
     public const int MaxRetainerLevel = 100;
 
-    public readonly record struct ActiveRetainer(string Name, int Level, uint VentureId);
+    public readonly record struct ActiveRetainer(string Name, int Level, uint VentureId, uint VentureComplete)
+    {
+        public bool HasRunningVenture => VentureId != 0 && VentureComplete > DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+    }
 
     public static LevelingTier? FindTier(IEnumerable<LevelingTier> tiers, int level)
         => tiers.OrderBy(t => t.MaxLevel).FirstOrDefault(t => level <= t.MaxLevel);
@@ -22,7 +25,7 @@ public static class RetainerLevelingHelper
         if (active == null || active->RetainerId == 0)
             return null;
 
-        return new ActiveRetainer(active->NameString, active->Level, active->VentureId);
+        return new ActiveRetainer(active->NameString, active->Level, active->VentureId, active->VentureComplete);
     }
 
     public static unsafe uint? GetListVentureId(string retainerName)

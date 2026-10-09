@@ -202,7 +202,8 @@ public sealed class LevelingTakeover : IDisposable
                 return;
             }
 
-            if (active.Value.VentureId != 0)
+            // The collected venture's id can linger for a moment, so only a venture still running means one was already assigned.
+            if (active.Value.HasRunningVenture)
             {
                 Svc.Log.Information($"[LevelingTakeover] {arm.RetainerName} already has {VentureListHelper.GetVentureName(active.Value.VentureId)}, not assigning a venture");
                 this.FinishPostprocess(id);
