@@ -25,13 +25,15 @@ public static class RetainerLevelingSection
         {
             ImGui.SetTooltip("Pick ventures based on retainer level.\n" +
                 "Tiers are checked from the lowest level up - the first tier at or above the retainer's level is used.\n" +
-                "Retainers above every tier use the normal crystal logic.");
+                "Retainers above every tier use the normal crystal logic.\n" +
+                "For retainers inside a tier, the next venture is picked after the finished one is collected, using the new level.");
         }
 
         if (!config.AutoVentureLevelingEnabled)
             return;
 
-        ImGui.TextWrapped("The first tier at or above a retainer's level is used. Retainers above every tier use the normal crystal logic.");
+        ImGui.TextWrapped("The first tier at or above a retainer's level is used. Retainers above every tier use the normal crystal logic. " +
+            "Inside a tier, the next venture is picked after the finished one is collected, so level-ups count right away.");
 
         var tiers = config.AutoVentureLevelingTiers;
         int? removeIndex = null;

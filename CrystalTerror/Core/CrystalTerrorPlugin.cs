@@ -49,6 +49,7 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
     // AutoRetainer IPC for setting ventures
     private Dalamud.Plugin.Ipc.ICallGateSubscriber<uint, object>? autoRetainerSetVenture;
     private Dalamud.Plugin.Ipc.ICallGateSubscriber<string, object>? autoRetainerOnSendToVenture;
+    private LevelingTakeover? levelingTakeover;
 
     // In-memory list of imported/stored characters for the UI.
     public List<StoredCharacter> Characters { get; } = new();
@@ -147,6 +148,7 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
                 // Initialize AutoRetainer IPC for setting ventures
                 try
                 {
+                    this.levelingTakeover = new LevelingTakeover(this.Config!);
                     this.autoRetainerSetVenture = this.PluginInterface.GetIpcSubscriber<uint, object>("AutoRetainer.SetVenture");
                     this.autoRetainerOnSendToVenture = this.PluginInterface.GetIpcSubscriber<string, object>("AutoRetainer.OnSendRetainerToVenture");
                     
@@ -234,6 +236,9 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
                 catch
                 {
                 }
+
+                // Must run before ECommons is disposed
+                this.levelingTakeover?.Dispose();
 
                 // Unregister addon lifecycle listeners
                 try
@@ -347,9 +352,12 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
         private const double StatsUpdateThrottleSeconds = 2.0;
 
         private void OnRetainerListSetup(AddonEvent type, AddonArgs args)
-            => AutoRetainerHelper.HandleRetainerListSetup(
+        {
+            this.levelingTakeover?.ReleaseStale();
+            AutoRetainerHelper.HandleRetainerListSetup(
                 this.Characters,
                 this.Config);
+        }
 
         private void OnRetainerSendToVenture(string retainerName)
             => AutoRetainerHelper.HandleRetainerSendToVenture(
@@ -357,6 +365,7 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
                 this.Config,
                 this.autoRetainerSetVenture,
                 this.Characters,
+                this.levelingTakeover,
                 this.pluginLog);
 
         private DateTime lastRetainerInventoryUpdate = DateTime.MinValue;

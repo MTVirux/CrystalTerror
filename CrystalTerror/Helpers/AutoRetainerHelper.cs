@@ -176,6 +176,7 @@ public static class AutoRetainerHelper
         Configuration config,
         Dalamud.Plugin.Ipc.ICallGateSubscriber<uint, object>? autoRetainerSetVenture,
         List<StoredCharacter> characters,
+        LevelingTakeover? takeover,
         Dalamud.Plugin.Services.IPluginLog log)
     {
         try
@@ -185,6 +186,9 @@ public static class AutoRetainerHelper
                 log.Debug($"[CrystalTerror] Venture processing already in progress, ignoring duplicate trigger for {retainerName}");
                 return;
             }
+
+            // AutoRetainer reads the planner right after this hook, so a stale forced plan must go now.
+            takeover?.ReleaseStale();
 
             if (!config.AutoVentureEnabled || autoRetainerSetVenture == null)
                 return;
@@ -219,8 +223,6 @@ public static class AutoRetainerHelper
                 return;
             }
 
-            retainer.Level = RetainerLevelingHelper.GetLiveLevel(retainerName) ?? retainer.Level;
-
             log.Debug($"[CrystalTerror] {retainer.Name}: Level={retainer.Level}, Gathering={retainer.Gathering}, Job={ClassJobExtensions.GetAbbreviation(retainer.Job)}");
 
             // Check per-character auto-venture toggle
@@ -233,6 +235,12 @@ public static class AutoRetainerHelper
             if (!retainer.EnableAutoVenture)
             {
                 log.Debug($"[CrystalTerror] ✗ Skipping {retainer.Name} - Auto venture disabled for this retainer");
+                return;
+            }
+
+            if (takeover?.TryArm(currentChar, retainer) == true)
+            {
+                log.Information($"[CrystalTerror] ✓ {retainer.Name} is leveling (Lv{retainer.Level}), venture will be picked after collection");
                 return;
             }
 

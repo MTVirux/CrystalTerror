@@ -23,4 +23,23 @@ public static class RetainerLevelingHelper
 
         return active->Level;
     }
+
+    public static unsafe uint? GetListVentureId(string retainerName)
+    {
+        var mgr = RetainerManager.Instance();
+        if (mgr == null)
+            return null;
+
+        for (uint i = 0; i < 10; i++)
+        {
+            var retainer = mgr->GetRetainerBySortedIndex(i);
+            if (retainer == null || retainer->RetainerId == 0)
+                continue;
+
+            if (string.Equals(retainer->NameString, retainerName, StringComparison.OrdinalIgnoreCase))
+                return retainer->VentureId;
+        }
+
+        return null;
+    }
 }
