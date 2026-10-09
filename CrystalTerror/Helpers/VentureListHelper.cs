@@ -40,7 +40,8 @@ public static class VentureListHelper
         int MaxTimeMinutes, 
         bool IsRandom,
         VentureCategory Category,
-        int ClassJobCategoryId);
+        int ClassJobCategoryId,
+        uint ItemId);
 
     /// <summary>
     /// Get all available ventures from the RetainerTask Excel sheet.
@@ -103,15 +104,37 @@ public static class VentureListHelper
         if (venture.ClassJobCategoryId == 0)
             return true;
 
-        var categoryId = retainerJob switch
-        {
-            16 => CategoryMIN,
-            17 => CategoryBTN,
-            18 => CategoryFSH,
-            _ => CategoryDoW,
-        };
-        return venture.ClassJobCategoryId == categoryId;
+        return venture.ClassJobCategoryId == GetJobCategory(retainerJob);
     }
+
+    /// <summary>
+    /// The game has one venture per job for the same item (e.g. the crystal ventures are MIN-only rows).
+    /// Returns the venture for the same item that the given job can take, or the input when there is none.
+    /// </summary>
+    public static uint AdjustForJob(uint ventureId, int? job)
+    {
+        if (job == null)
+            return ventureId;
+
+        var venture = GetVenture(ventureId);
+        if (venture == null || venture.ItemId == 0)
+            return ventureId;
+
+        var categoryId = GetJobCategory(job.Value);
+        if (venture.ClassJobCategoryId == categoryId)
+            return ventureId;
+
+        return GetAllVentures()
+            .FirstOrDefault(v => v.ItemId == venture.ItemId && v.ClassJobCategoryId == categoryId)?.Id ?? ventureId;
+    }
+
+    private static int GetJobCategory(int retainerJob) => retainerJob switch
+    {
+        16 => CategoryMIN,
+        17 => CategoryBTN,
+        18 => CategoryFSH,
+        _ => CategoryDoW,
+    };
 
     /// <summary>
     /// Get ventures assignable to the given retainer job, grouped by category (job-appropriate + universal).
@@ -192,6 +215,7 @@ public static class VentureListHelper
                     continue;
 
                 string name;
+                uint itemId = 0;
                 bool isRandom = task.IsRandom;
 
                 if (isRandom)
@@ -206,6 +230,7 @@ public static class VentureListHelper
                     var normalTask = retainerTaskNormalSheet?.GetRowOrDefault(task.Task.RowId);
                     var item = normalTask?.Item.ValueNullable;
                     name = item?.Name.ExtractText() ?? string.Empty;
+                    itemId = item?.RowId ?? 0;
                 }
 
                 if (!string.IsNullOrEmpty(name))
@@ -218,7 +243,8 @@ public static class VentureListHelper
                         task.MaxTimemin,
                         isRandom,
                         category,
-                        (int)task.ClassJobCategory.RowId
+                        (int)task.ClassJobCategory.RowId,
+                        itemId
                     ));
                 }
             }

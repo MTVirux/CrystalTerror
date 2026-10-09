@@ -4,11 +4,15 @@ namespace CrystalTerror.Helpers;
 
 public static class RetainerLevelingHelper
 {
+    public const int MaxRetainerLevel = 100;
+
+    public readonly record struct ActiveRetainer(string Name, int Level, uint VentureId);
+
     public static LevelingTier? FindTier(IEnumerable<LevelingTier> tiers, int level)
         => tiers.OrderBy(t => t.MaxLevel).FirstOrDefault(t => level <= t.MaxLevel);
 
-    // The stored level can lag one level behind right after a venture is collected.
-    public static unsafe int? GetLiveLevel(string retainerName)
+    // The retainer whose menu is open. Its level is current, while the stored level can lag one level behind right after a venture is collected.
+    public static unsafe ActiveRetainer? GetActiveRetainer()
     {
         var mgr = RetainerManager.Instance();
         if (mgr == null)
@@ -18,10 +22,7 @@ public static class RetainerLevelingHelper
         if (active == null || active->RetainerId == 0)
             return null;
 
-        if (!string.Equals(active->NameString, retainerName, StringComparison.OrdinalIgnoreCase))
-            return null;
-
-        return active->Level;
+        return new ActiveRetainer(active->NameString, active->Level, active->VentureId);
     }
 
     public static unsafe uint? GetListVentureId(string retainerName)

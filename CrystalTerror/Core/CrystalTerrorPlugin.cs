@@ -237,6 +237,14 @@ public class CrystalTerrorPlugin : IDalamudPlugin, IDisposable
                 {
                 }
 
+                try
+                {
+                    this.autoRetainerOnSendToVenture?.Unsubscribe(this.OnRetainerSendToVenture);
+                }
+                catch
+                {
+                }
+
                 // Must run before ECommons is disposed
                 this.levelingTakeover?.Dispose();
 

@@ -57,7 +57,8 @@ public static class AutoRetainerPlannerBridge
     private static readonly Dictionary<(ulong Cid, string Name), Backup> Backups = [];
     private static PlannerFields? cachedFields;
 
-    // Makes AutoRetainer only collect (not reassign) this retainer's venture on its current visit. False if AR's planner data couldn't be changed.
+    // Makes AutoRetainer only collect (not reassign) this retainer's venture on its current visit.
+    // False, with nothing changed, if the retainer has its own active AR venture plan or AR's planner data couldn't be changed.
     public static bool ForceCollectOnly(ulong cid, string retainerName, uint currentVentureId)
     {
         lock (Backups)
@@ -70,6 +71,12 @@ public static class AutoRetainerPlannerBridge
                 var data = fields.Fetch(cid, retainerName);
                 if (data == null || !ReferenceEquals(data, fields.Fetch(cid, retainerName)))
                     throw new InvalidOperationException("AutoRetainer did not return its live retainer data");
+
+                if (IsPlannerActive(fields, data))
+                {
+                    Svc.Log.Debug($"[CrystalTerror] {retainerName} follows its AutoRetainer venture plan, not forcing collect-only");
+                    return false;
+                }
 
                 Backups.TryAdd((cid, retainerName), new Backup(
                     data,
@@ -117,6 +124,11 @@ public static class AutoRetainerPlannerBridge
             Backups.Clear();
         }
     }
+
+    private static bool IsPlannerActive(PlannerFields fields, object data)
+        => (bool)fields.EnablePlanner.GetValue(data)!
+           && fields.VenturePlan.GetValue(data) is { } plan
+           && fields.PlanList.GetValue(plan) is IList { Count: > 0 };
 
     private static void Apply(Backup backup, string retainerName)
     {

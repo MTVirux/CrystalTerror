@@ -21,6 +21,7 @@ public sealed class LevelingTakeover : IDisposable
     // AutoRetainer waits forever until FinishPostprocessRequest is called while this is set.
     private bool postprocessActive;
     private int postprocessId;
+    private bool disposed;
 
     public LevelingTakeover(Configuration config)
     {
@@ -54,12 +55,18 @@ public sealed class LevelingTakeover : IDisposable
     /// </summary>
     public bool TryArm(StoredCharacter character, Retainer retainer)
     {
+        if (this.disposed)
+            return false;
+
         // AutoRetainer only fires the send-to-venture hook while idle, so anything still armed is stale.
         this.ReleaseStale();
 
         try
         {
             if (!this.CanTakeOver || !this.config.AutoVentureLevelingEnabled)
+                return false;
+
+            if (retainer.Level >= RetainerLevelingHelper.MaxRetainerLevel)
                 return false;
 
             if (RetainerLevelingHelper.FindTier(this.config.AutoVentureLevelingTiers, retainer.Level) == null)
@@ -75,7 +82,7 @@ public sealed class LevelingTakeover : IDisposable
             var cid = Player.CID;
             if (!ForceCollectOnly(cid, retainer.Name, ventureId))
             {
-                Svc.Log.Warning($"[LevelingTakeover] Could not take over {retainer.Name}, using the normal venture override");
+                Svc.Log.Debug($"[LevelingTakeover] Not taking over {retainer.Name}, using the normal venture override");
                 return false;
             }
 
@@ -94,15 +101,18 @@ public sealed class LevelingTakeover : IDisposable
     /// </summary>
     public void ReleaseStale()
     {
-        if (this.armed == null && !this.postprocessActive)
-            return;
+        if (this.armed != null || this.postprocessActive)
+            Svc.Log.Debug($"[LevelingTakeover] Releasing stale takeover for {this.armed?.RetainerName ?? "in-flight postprocess"}");
 
-        Svc.Log.Debug($"[LevelingTakeover] Releasing stale takeover for {this.armed?.RetainerName ?? "in-flight postprocess"}");
         this.ReleaseAll();
     }
 
     public void Dispose()
     {
+        if (this.disposed)
+            return;
+
+        this.disposed = true;
         try { this.onAdditionalTask?.Unsubscribe(this.OnRetainerAdditionalTask); } catch { }
         try { this.onReadyForPostprocess?.Unsubscribe(this.OnRetainerReadyForPostprocess); } catch { }
 
@@ -112,10 +122,14 @@ public sealed class LevelingTakeover : IDisposable
     private void ReleaseAll()
     {
         this.armed = null;
+        // Cleared before aborting so the aborted assignment's callback doesn't start a fallback attempt.
+        var wasActive = this.postprocessActive;
+        this.postprocessActive = false;
 
         try
         {
-            RetainerVentureAssigner.Abort();
+            if (RetainerVentureAssigner.IsBusy)
+                RetainerVentureAssigner.Abort();
         }
         catch (Exception ex)
         {
@@ -131,12 +145,13 @@ public sealed class LevelingTakeover : IDisposable
             Svc.Log.Warning($"[LevelingTakeover] Restoring AutoRetainer planners failed: {ex.Message}");
         }
 
-        this.FinishPostprocess(this.postprocessId);
+        if (wasActive)
+            this.InvokeFinishPostprocess();
     }
 
     private void OnRetainerAdditionalTask(string retainerName)
     {
-        if (this.armed == null || !NameEquals(this.armed.RetainerName, retainerName))
+        if (this.disposed || this.armed == null || !NameEquals(this.armed.RetainerName, retainerName))
             return;
 
         try
@@ -153,7 +168,7 @@ public sealed class LevelingTakeover : IDisposable
 
     private void OnRetainerReadyForPostprocess(string pluginName, string retainerName)
     {
-        if (pluginName != Svc.PluginInterface.InternalName)
+        if (this.disposed || pluginName != Svc.PluginInterface.InternalName)
             return;
 
         var id = ++this.postprocessId;
@@ -163,7 +178,7 @@ public sealed class LevelingTakeover : IDisposable
 
         try
         {
-            if (arm == null || !NameEquals(arm.RetainerName, retainerName))
+            if (arm == null)
             {
                 Svc.Log.Debug($"[LevelingTakeover] Nothing armed for {retainerName}, finishing postprocess");
                 this.FinishPostprocess(id);
@@ -172,8 +187,31 @@ public sealed class LevelingTakeover : IDisposable
 
             RestorePlanner(arm);
 
+            if (!NameEquals(arm.RetainerName, retainerName))
+            {
+                Svc.Log.Debug($"[LevelingTakeover] {arm.RetainerName} was armed but {retainerName} is being postprocessed, finishing postprocess");
+                this.FinishPostprocess(id);
+                return;
+            }
+
+            var active = RetainerLevelingHelper.GetActiveRetainer();
+            if (active == null || !NameEquals(active.Value.Name, arm.RetainerName))
+            {
+                Svc.Log.Warning($"[LevelingTakeover] {arm.RetainerName} is not the selected retainer, not assigning a venture");
+                this.FinishPostprocess(id);
+                return;
+            }
+
+            if (active.Value.VentureId != 0)
+            {
+                Svc.Log.Information($"[LevelingTakeover] {arm.RetainerName} already has {VentureListHelper.GetVentureName(active.Value.VentureId)}, not assigning a venture");
+                this.FinishPostprocess(id);
+                return;
+            }
+
             var retainer = FindRetainer(arm);
-            var ventureId = this.PickVenture(arm, retainer);
+            var job = retainer?.Job ?? arm.Job;
+            var candidates = this.PickVentures(arm, retainer, active.Value.Level, job);
 
             if (RetainerVentureAssigner.IsBusy)
             {
@@ -181,69 +219,98 @@ public sealed class LevelingTakeover : IDisposable
                 RetainerVentureAssigner.Abort();
             }
 
-            Svc.Log.Information($"[LevelingTakeover] Assigning {VentureListHelper.GetVentureName(ventureId)} (ID: {ventureId}) to {arm.RetainerName}");
-            RetainerVentureAssigner.Enqueue(ventureId, retainer?.Job ?? arm.Job, ok => this.OnAssignComplete(id, arm, ventureId, ok));
+            this.AssignNext(id, arm, job, candidates);
         }
         catch (Exception ex)
         {
             Svc.Log.Error($"[LevelingTakeover] Postprocess for {retainerName} failed: {ex.Message}");
-            try { RetainerVentureAssigner.Abort(); } catch { }
             this.FinishPostprocess(id);
+            try { RetainerVentureAssigner.Abort(); } catch { }
         }
     }
 
-    private uint PickVenture(ArmedRetainer arm, Retainer? retainer)
+    // In order: the venture for the new level, what AutoRetainer would have reassigned, Quick Exploration.
+    private Queue<uint> PickVentures(ArmedRetainer arm, Retainer? retainer, int liveLevel, int? job)
     {
-        var fallback = arm.PreviousVentureId != 0 ? arm.PreviousVentureId : (uint)VentureId.QuickExploration;
-        if (retainer == null)
-            return fallback;
+        uint? picked = null;
+        if (retainer != null)
+        {
+            if (liveLevel != retainer.Level)
+                Svc.Log.Information($"[LevelingTakeover] {retainer.Name} is now Lv{liveLevel} (was Lv{retainer.Level})");
+            retainer.Level = liveLevel;
 
-        var liveLevel = RetainerLevelingHelper.GetLiveLevel(arm.RetainerName);
-        if (liveLevel.HasValue && liveLevel.Value != retainer.Level)
-            Svc.Log.Information($"[LevelingTakeover] {retainer.Name} is now Lv{liveLevel.Value} (was Lv{retainer.Level})");
-        retainer.Level = liveLevel ?? retainer.Level;
+            picked = (uint?)VentureHelper.DetermineVenture(arm.Character, retainer, this.config, Svc.Log);
+        }
 
-        var picked = VentureHelper.DetermineVenture(arm.Character, retainer, this.config, Svc.Log);
-        return picked.HasValue ? (uint)picked.Value : fallback;
+        var ventureIds = new[] { picked ?? 0, arm.PreviousVentureId, (uint)VentureId.QuickExploration }
+            .Where(v => v != 0)
+            .Select(v => VentureListHelper.AdjustForJob(v, job))
+            .Distinct();
+        return new Queue<uint>(ventureIds);
     }
 
-    private void OnAssignComplete(int id, ArmedRetainer arm, uint ventureId, bool ok)
+    private void AssignNext(int id, ArmedRetainer arm, int? job, Queue<uint> candidates)
     {
+        var ventureId = candidates.Dequeue();
+        Svc.Log.Information($"[LevelingTakeover] Assigning {VentureListHelper.GetVentureName(ventureId)} (ID: {ventureId}) to {arm.RetainerName}");
+        RetainerVentureAssigner.Enqueue(ventureId, job, ok => this.OnAssignComplete(id, arm, job, candidates, ventureId, ok));
+    }
+
+    private void OnAssignComplete(int id, ArmedRetainer arm, int? job, Queue<uint> candidates, uint ventureId, bool ok)
+    {
+        // Released while assigning; the release already finished the postprocess.
+        if (!this.IsCurrentPostprocess(id))
+            return;
+
         try
         {
-            if (!ok)
+            if (!ok && candidates.Count > 0)
             {
-                Svc.Log.Warning($"[LevelingTakeover] Could not assign a venture to {arm.RetainerName}");
+                Svc.Log.Warning($"[LevelingTakeover] Could not assign {VentureListHelper.GetVentureName(ventureId)} to {arm.RetainerName}, trying the next venture");
+                this.AssignNext(id, arm, job, candidates);
                 return;
             }
 
-            var venture = VentureListHelper.GetVenture(ventureId);
-            var retainer = FindRetainer(arm);
-            if (retainer != null)
-            {
-                retainer.CurrentVentureId = ventureId;
-                retainer.VentureEndsAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + (venture?.MaxTimeMinutes ?? 60) * 60;
-            }
-
-            Svc.Log.Information($"[LevelingTakeover] ✓ Assigned {venture?.Name ?? ventureId.ToString()} to {arm.RetainerName}");
+            if (ok)
+                RecordAssignment(arm, ventureId);
+            else
+                Svc.Log.Warning($"[LevelingTakeover] Could not assign a venture to {arm.RetainerName}");
         }
         catch (Exception ex)
         {
-            Svc.Log.Error($"[LevelingTakeover] Updating {arm.RetainerName} after assignment failed: {ex.Message}");
+            Svc.Log.Error($"[LevelingTakeover] Handling the assignment for {arm.RetainerName} failed: {ex.Message}");
         }
-        finally
-        {
-            this.FinishPostprocess(id);
-        }
+
+        this.FinishPostprocess(id);
     }
+
+    private static void RecordAssignment(ArmedRetainer arm, uint ventureId)
+    {
+        var venture = VentureListHelper.GetVenture(ventureId);
+        var retainer = FindRetainer(arm);
+        if (retainer != null)
+        {
+            retainer.CurrentVentureId = ventureId;
+            retainer.VentureEndsAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + (venture?.MaxTimeMinutes ?? 60) * 60;
+        }
+
+        Svc.Log.Information($"[LevelingTakeover] ✓ Assigned {venture?.Name ?? ventureId.ToString()} to {arm.RetainerName}");
+    }
+
+    private bool IsCurrentPostprocess(int id) => this.postprocessActive && id == this.postprocessId;
 
     // Guarded by id so a late callback from an older request can't release a newer one.
     private void FinishPostprocess(int id)
     {
-        if (!this.postprocessActive || id != this.postprocessId)
+        if (!this.IsCurrentPostprocess(id))
             return;
 
         this.postprocessActive = false;
+        this.InvokeFinishPostprocess();
+    }
+
+    private void InvokeFinishPostprocess()
+    {
         try
         {
             this.finishPostprocess?.InvokeAction();
