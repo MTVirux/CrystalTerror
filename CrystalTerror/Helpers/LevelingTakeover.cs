@@ -231,33 +231,39 @@ public sealed class LevelingTakeover : IDisposable
     }
 
     // In order: the venture for the new level, what AutoRetainer would have reassigned, Quick Exploration.
-    private Queue<uint> PickVentures(ArmedRetainer arm, Retainer? retainer, int liveLevel, int? job)
+    private Queue<(uint Id, string Detail)> PickVentures(ArmedRetainer arm, Retainer? retainer, int liveLevel, int? job)
     {
-        uint? picked = null;
+        VentureDecision? picked = null;
         if (retainer != null)
         {
             if (liveLevel != retainer.Level)
                 Svc.Log.Information($"[LevelingTakeover] {retainer.Name} is now Lv{liveLevel} (was Lv{retainer.Level})");
             retainer.Level = liveLevel;
 
-            picked = (uint?)VentureHelper.DetermineVenture(arm.Character, retainer, this.config, Svc.Log);
+            picked = VentureHelper.DetermineVenture(arm.Character, retainer, this.config, Svc.Log);
         }
 
-        var ventureIds = new[] { picked ?? 0, arm.PreviousVentureId, (uint)VentureId.QuickExploration }
-            .Where(v => v != 0)
-            .Select(v => VentureListHelper.AdjustForJob(v, job))
-            .Distinct();
-        return new Queue<uint>(ventureIds);
+        var candidates = new (uint Id, string Detail)[]
+        {
+            (picked == null ? 0 : (uint)picked.Id, picked?.Detail ?? string.Empty),
+            (arm.PreviousVentureId, "previous venture"),
+            ((uint)VentureId.QuickExploration, "Quick Exploration fallback"),
+        };
+        var ventures = candidates
+            .Where(c => c.Id != 0)
+            .Select(c => (Id: VentureListHelper.AdjustForJob(c.Id, job), Detail: $"Lv{liveLevel}, {c.Detail}"))
+            .DistinctBy(c => c.Id);
+        return new Queue<(uint Id, string Detail)>(ventures);
     }
 
-    private void AssignNext(int id, ArmedRetainer arm, int? job, Queue<uint> candidates)
+    private void AssignNext(int id, ArmedRetainer arm, int? job, Queue<(uint Id, string Detail)> candidates)
     {
-        var ventureId = candidates.Dequeue();
-        Svc.Log.Information($"[LevelingTakeover] Assigning {VentureListHelper.GetVentureName(ventureId)} (ID: {ventureId}) to {arm.RetainerName}");
-        RetainerVentureAssigner.Enqueue(ventureId, job, ok => this.OnAssignComplete(id, arm, job, candidates, ventureId, ok));
+        var candidate = candidates.Dequeue();
+        Svc.Log.Information($"[LevelingTakeover] Assigning {VentureListHelper.GetVentureName(candidate.Id)} (ID: {candidate.Id}) to {arm.RetainerName}");
+        RetainerVentureAssigner.Enqueue(candidate.Id, job, ok => this.OnAssignComplete(id, arm, job, candidates, candidate, ok));
     }
 
-    private void OnAssignComplete(int id, ArmedRetainer arm, int? job, Queue<uint> candidates, uint ventureId, bool ok)
+    private void OnAssignComplete(int id, ArmedRetainer arm, int? job, Queue<(uint Id, string Detail)> candidates, (uint Id, string Detail) candidate, bool ok)
     {
         // Released while assigning; the release already finished the postprocess.
         if (!this.IsCurrentPostprocess(id))
@@ -267,13 +273,16 @@ public sealed class LevelingTakeover : IDisposable
         {
             if (!ok && candidates.Count > 0)
             {
-                Svc.Log.Warning($"[LevelingTakeover] Could not assign {VentureListHelper.GetVentureName(ventureId)} to {arm.RetainerName}, trying the next venture");
+                Svc.Log.Warning($"[LevelingTakeover] Could not assign {VentureListHelper.GetVentureName(candidate.Id)} to {arm.RetainerName}, trying the next venture");
                 this.AssignNext(id, arm, job, candidates);
                 return;
             }
 
             if (ok)
-                RecordAssignment(arm, ventureId);
+            {
+                RecordAssignment(arm, candidate.Id);
+                VentureHelper.PrintOverrideToChat(this.config, arm.RetainerName, candidate.Id, "Leveling after collection", candidate.Detail);
+            }
             else
                 Svc.Log.Warning($"[LevelingTakeover] Could not assign a venture to {arm.RetainerName}");
         }

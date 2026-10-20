@@ -2,6 +2,8 @@ using Dalamud.Plugin.Services;
 
 namespace CrystalTerror.Helpers;
 
+public sealed record VentureDecision(VentureId Id, string Source, string Detail);
+
 /// <summary>
 /// Helper utilities for determining optimal ventures based on crystal/shard inventory.
 /// Uses global capacity calculations to maximize storage across character + all retainers.
@@ -66,7 +68,7 @@ public static class VentureHelper
     /// Applies the matching leveling tier when leveling is enabled, otherwise the crystal logic.
     /// Returns null to leave the venture choice to AutoRetainer.
     /// </summary>
-    public static VentureId? DetermineVenture(StoredCharacter character, Retainer retainer, Configuration config, IPluginLog? log = null)
+    public static VentureDecision? DetermineVenture(StoredCharacter character, Retainer retainer, Configuration config, IPluginLog? log = null)
     {
         if (character == null) throw new ArgumentNullException(nameof(character));
         if (retainer == null) throw new ArgumentNullException(nameof(retainer));
@@ -107,20 +109,35 @@ public static class VentureHelper
             if (currentCredits < config.AutoVentureCreditThreshold)
             {
                 log?.Information($"[VentureHelper] Venture credits ({currentCredits}) below threshold ({config.AutoVentureCreditThreshold}), assigning Quick Exploration for {retainer.Name}");
-                return VentureId.QuickExploration;
+                return new VentureDecision(VentureId.QuickExploration, "Auto Venture", "low venture credits");
             }
             log?.Debug($"[VentureHelper] Venture credits check passed: {currentCredits} >= {config.AutoVentureCreditThreshold}");
         }
 
         return action switch
         {
-            LevelingAction.QuickExploration => VentureId.QuickExploration,
+            LevelingAction.QuickExploration => new VentureDecision(VentureId.QuickExploration, "Leveling", $"tier up to Lv{tier!.MaxLevel}"),
             LevelingAction.SpecificVenture => GetLevelingVenture(tier!, retainer, log),
             _ => SelectCrystalVenture(character, retainer, config, log),
         };
     }
 
-    private static VentureId? GetLevelingVenture(LevelingTier tier, Retainer retainer, IPluginLog? log)
+    public static void PrintOverrideToChat(Configuration config, string retainerName, uint ventureId, string source, string detail)
+    {
+        if (!config.AutoVenturePrintToChat)
+            return;
+
+        try
+        {
+            Svc.Chat.Print($"{retainerName} -> {VentureListHelper.GetVentureName(ventureId)} [{source}: {detail}]", "CrystalTerror");
+        }
+        catch (Exception ex)
+        {
+            Svc.Log.Debug($"[CrystalTerror] Could not print venture override to chat: {ex.Message}");
+        }
+    }
+
+    private static VentureDecision? GetLevelingVenture(LevelingTier tier, Retainer retainer, IPluginLog? log)
     {
         var ventureId = tier.GetVentureId(retainer.Job);
         var venture = VentureListHelper.GetVenture(ventureId);
@@ -131,7 +148,7 @@ public static class VentureHelper
         }
 
         log?.Information($"[VentureHelper] Leveling {retainer.Name} (Lv{retainer.Level}) with {venture?.Name ?? ventureId.ToString()}");
-        return (VentureId)ventureId;
+        return new VentureDecision((VentureId)ventureId, "Leveling", $"tier up to Lv{tier.MaxLevel}");
     }
 
     /// <summary>
@@ -141,7 +158,7 @@ public static class VentureHelper
     /// - SpecificVenture: Returns the per-job fallback venture ID for the retainer's class
     /// - Skip: Returns null to let AutoRetainer handle venture assignment
     /// </summary>
-    private static VentureId? SelectCrystalVenture(StoredCharacter character, Retainer retainer, Configuration config, IPluginLog? log)
+    private static VentureDecision? SelectCrystalVenture(StoredCharacter character, Retainer retainer, Configuration config, IPluginLog? log)
     {
         var jobAbbr = ClassJobExtensions.GetAbbreviation(retainer.Job);
 
@@ -223,7 +240,7 @@ public static class VentureHelper
             // Assign the configured fallback venture for this retainer's job
             var fallbackVentureId = config.GetFallbackVentureId(retainer.Job);
             log?.Information($"[VentureHelper] All enabled types are at capacity/threshold for {retainer.Name} (Job: {jobAbbr}), assigning fallback venture ID {fallbackVentureId}");
-            return (VentureId)fallbackVentureId;
+            return new VentureDecision((VentureId)fallbackVentureId, "Auto Venture", "crystals full");
         }
 
         // Sort by effective count (lowest first), then apply priority tiebreaker
@@ -236,7 +253,7 @@ public static class VentureHelper
         var selected = sorted.First();
         log?.Information($"[VentureHelper] Selected {selected.element} {selected.type} for {retainer.Name} (effective: {selected.effectiveCount}, venture: {GetVentureName(selected.ventureId)})");
         
-        return selected.ventureId;
+        return new VentureDecision(selected.ventureId, "Auto Venture", "lowest stock");
     }
 
     /// <summary>

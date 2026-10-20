@@ -244,16 +244,18 @@ public static class AutoRetainerHelper
                 return;
             }
 
-            var ventureId = VentureHelper.DetermineVenture(currentChar, retainer, config, log);
+            var decision = VentureHelper.DetermineVenture(currentChar, retainer, config, log);
 
-            if (ventureId.HasValue)
+            if (decision != null)
             {
-                var venture = VentureListHelper.GetVenture((uint)ventureId.Value);
-                log.Information($"[CrystalTerror] ✓ Overriding venture for {retainer.Name} with {venture?.Name ?? VentureHelper.GetVentureName(ventureId.Value)} (ID: {(uint)ventureId.Value})");
-                autoRetainerSetVenture.InvokeAction((uint)ventureId.Value);
+                var ventureId = (uint)decision.Id;
+                var venture = VentureListHelper.GetVenture(ventureId);
+                log.Information($"[CrystalTerror] ✓ Overriding venture for {retainer.Name} with {venture?.Name ?? VentureHelper.GetVentureName(decision.Id)} (ID: {ventureId})");
+                autoRetainerSetVenture.InvokeAction(ventureId);
+                VentureHelper.PrintOverrideToChat(config, retainer.Name, ventureId, decision.Source, decision.Detail);
 
                 // Update local retainer state for immediate re-calculation accuracy
-                retainer.CurrentVentureId = (uint)ventureId.Value;
+                retainer.CurrentVentureId = ventureId;
                 retainer.VentureEndsAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + (venture?.MaxTimeMinutes ?? 60) * 60;
             }
             else

@@ -198,6 +198,8 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public bool AutoVentureFSHEnabled { get; set; } = false;
 
+    public bool AutoVenturePrintToChat { get; set; } = true;
+
     /// <summary>
     /// Whether to check venture credit count before assigning crystal ventures.
     /// If true and credits are below threshold, Quick Exploration is assigned instead.

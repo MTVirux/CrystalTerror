@@ -36,7 +36,20 @@ public class AutomaticVenture : ConfigEntry
 
             .If(() => Plugin.Config.AutoVentureEnabled)
             .Indent()
-            
+            .Widget("Print Venture Overrides to Chat", (x) =>
+            {
+                var val = Plugin.Config.AutoVenturePrintToChat;
+                if (ImGui.Checkbox(x, ref val))
+                {
+                    Plugin.Config.AutoVenturePrintToChat = val;
+                    ConfigHelper.Save(Plugin.Config);
+                }
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.SetTooltip("Print a chat message whenever a retainer's venture is overridden, including which feature picked it and why.");
+                }
+            })
+
             // === Crystal Type Toggles ===
             .TextWrapped("Crystal Types:")
             .Widget("Include Shards", (x) =>
