@@ -128,8 +128,9 @@ public class GeneralSettings : ConfigEntry
                 if (ImGui.ColorEdit4(x, ref color, ImGuiColorEditFlags.NoInputs))
                 {
                     Plugin.Config.CurrentCharacterColor = color;
-                    ConfigHelper.Save(Plugin.Config);
                 }
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    ConfigHelper.Save(Plugin.Config);
             })
             .Unindent()
             .EndIf()

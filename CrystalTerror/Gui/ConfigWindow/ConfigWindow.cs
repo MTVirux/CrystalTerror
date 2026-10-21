@@ -113,9 +113,4 @@ public class ConfigWindow : Window, IDisposable
             this.containerComponent.Render();
         }
     }
-
-    public override void OnClose()
-    {
-        ConfigHelper.Save(this.plugin.Config);
-    }
 }

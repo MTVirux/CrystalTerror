@@ -57,7 +57,6 @@ public class CharacterSorting : ConfigEntry
                 if (ImGui.Button(editButtonText))
                 {
                     Plugin.Config.IsEditMode = !Plugin.Config.IsEditMode;
-                    ConfigHelper.Save(Plugin.Config);
 
                     // Open main window when entering edit mode
                     if (Plugin.Config.IsEditMode)

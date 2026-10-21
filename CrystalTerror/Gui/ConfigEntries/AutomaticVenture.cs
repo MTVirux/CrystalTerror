@@ -118,8 +118,9 @@ public class AutomaticVenture : ConfigEntry
                 {
                     if (val < 1) val = 1;
                     Plugin.Config.AutoVentureCreditThreshold = val;
-                    ConfigHelper.Save(Plugin.Config);
                 }
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    ConfigHelper.Save(Plugin.Config);
                 if (ImGui.IsItemHovered())
                 {
                     ImGui.SetTooltip("Minimum venture credits required to assign crystal/shard ventures.\n" +
@@ -175,8 +176,9 @@ public class AutomaticVenture : ConfigEntry
                 {
                     if (val < 1) val = 1;
                     Plugin.Config.AutoVentureRewardAmount = val;
-                    ConfigHelper.Save(Plugin.Config);
                 }
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    ConfigHelper.Save(Plugin.Config);
                 if (ImGui.IsItemHovered())
                 {
                     ImGui.SetTooltip("Expected number of crystals/shards per venture.\nUsed to estimate pending rewards from active ventures.\nDefault: 120 (standard 1-hour gathering venture yield).");
@@ -193,8 +195,9 @@ public class AutomaticVenture : ConfigEntry
                 {
                     if (val < 0) val = 0;
                     Plugin.Config.AutoVentureThreshold = val;
-                    ConfigHelper.Save(Plugin.Config);
                 }
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    ConfigHelper.Save(Plugin.Config);
                 if (ImGui.IsItemHovered())
                 {
                     ImGui.SetTooltip("Global threshold for all crystal/shard types.\n" +
@@ -314,8 +317,9 @@ public class AutomaticVenture : ConfigEntry
                     {
                         if (threshold < 0) threshold = 0;
                         setting.Threshold = threshold;
-                        ConfigHelper.Save(Plugin.Config);
                     }
+                    if (ImGui.IsItemDeactivatedAfterEdit())
+                        ConfigHelper.Save(Plugin.Config);
                     if (ImGui.IsItemHovered())
                     {
                         ImGui.SetTooltip($"Threshold for {typeName}.\n" +

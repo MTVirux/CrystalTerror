@@ -58,10 +58,7 @@ public static class RetainerLevelingSection
                 var maxLevel = tier.MaxLevel;
                 ImGui.SetNextItemWidth(70);
                 if (ImGui.InputInt("##MaxLevel", ref maxLevel))
-                {
                     tier.MaxLevel = Math.Clamp(maxLevel, 1, MaxRetainerLevel);
-                    ConfigHelper.Save(config);
-                }
                 if (ImGui.IsItemDeactivatedAfterEdit())
                     resort = true;
 

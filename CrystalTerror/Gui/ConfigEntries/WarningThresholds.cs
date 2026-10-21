@@ -39,8 +39,9 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.SliderInt("##threshold1value", ref val, 1, 9999))
                 {
                     Plugin.Config.RetainerCrystalThreshold1Value = val;
-                    ConfigHelper.Save(Plugin.Config);
                 }
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    ConfigHelper.Save(Plugin.Config);
                 if (ImGui.IsItemHovered())
                 {
                     ImGui.SetTooltip("Values at or above this threshold will be colored (1-9999)");
@@ -54,8 +55,9 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.ColorEdit4("##retainerThreshold1Color", ref color, ImGuiColorEditFlags.NoInputs))
                 {
                     Plugin.Config.RetainerCrystalThreshold1Color = color;
-                    ConfigHelper.Save(Plugin.Config);
                 }
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    ConfigHelper.Save(Plugin.Config);
             })
             .Unindent()
             .EndIf()
@@ -81,8 +83,9 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.SliderInt("##threshold2value", ref val, 1, 9999))
                 {
                     Plugin.Config.RetainerCrystalThreshold2Value = val;
-                    ConfigHelper.Save(Plugin.Config);
                 }
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    ConfigHelper.Save(Plugin.Config);
                 if (ImGui.IsItemHovered())
                 {
                     ImGui.SetTooltip("Values at or above this threshold will be colored (1-9999)");
@@ -96,8 +99,9 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.ColorEdit4("##retainerThreshold2Color", ref color, ImGuiColorEditFlags.NoInputs))
                 {
                     Plugin.Config.RetainerCrystalThreshold2Color = color;
-                    ConfigHelper.Save(Plugin.Config);
                 }
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    ConfigHelper.Save(Plugin.Config);
             })
             .Unindent()
             .EndIf()
@@ -123,8 +127,9 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.SliderInt("##threshold3value", ref val, 1, 9999))
                 {
                     Plugin.Config.RetainerCrystalThreshold3Value = val;
-                    ConfigHelper.Save(Plugin.Config);
                 }
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    ConfigHelper.Save(Plugin.Config);
                 if (ImGui.IsItemHovered())
                 {
                     ImGui.SetTooltip("Values at or above this threshold will be colored (1-9999)");
@@ -138,8 +143,9 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.ColorEdit4("##retainerThreshold3Color", ref color, ImGuiColorEditFlags.NoInputs))
                 {
                     Plugin.Config.RetainerCrystalThreshold3Color = color;
-                    ConfigHelper.Save(Plugin.Config);
                 }
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    ConfigHelper.Save(Plugin.Config);
             })
             .Unindent()
             .EndIf()
@@ -168,8 +174,9 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.SliderInt("##charThreshold1value", ref val, 1, 599940))
                 {
                     Plugin.Config.CharacterTotalThreshold1Value = val;
-                    ConfigHelper.Save(Plugin.Config);
                 }
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    ConfigHelper.Save(Plugin.Config);
                 if (ImGui.IsItemHovered())
                 {
                     ImGui.SetTooltip("Character totals at or above this threshold will be colored (1-599940)");
@@ -183,8 +190,9 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.ColorEdit4("##charTotalThreshold1Color", ref color, ImGuiColorEditFlags.NoInputs))
                 {
                     Plugin.Config.CharacterTotalThreshold1Color = color;
-                    ConfigHelper.Save(Plugin.Config);
                 }
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    ConfigHelper.Save(Plugin.Config);
             })
             .Unindent()
             .EndIf()
@@ -210,8 +218,9 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.SliderInt("##charThreshold2value", ref val, 1, 599940))
                 {
                     Plugin.Config.CharacterTotalThreshold2Value = val;
-                    ConfigHelper.Save(Plugin.Config);
                 }
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    ConfigHelper.Save(Plugin.Config);
                 if (ImGui.IsItemHovered())
                 {
                     ImGui.SetTooltip("Character totals at or above this threshold will be colored (1-599940)");
@@ -225,8 +234,9 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.ColorEdit4("##charTotalThreshold2Color", ref color, ImGuiColorEditFlags.NoInputs))
                 {
                     Plugin.Config.CharacterTotalThreshold2Color = color;
-                    ConfigHelper.Save(Plugin.Config);
                 }
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    ConfigHelper.Save(Plugin.Config);
             })
             .Unindent()
             .EndIf()
@@ -252,8 +262,9 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.SliderInt("##charThreshold3value", ref val, 1, 599940))
                 {
                     Plugin.Config.CharacterTotalThreshold3Value = val;
-                    ConfigHelper.Save(Plugin.Config);
                 }
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    ConfigHelper.Save(Plugin.Config);
                 if (ImGui.IsItemHovered())
                 {
                     ImGui.SetTooltip("Character totals at or above this threshold will be colored (1-599940)");
@@ -267,8 +278,9 @@ public class WarningThresholds : ConfigEntry
                 if (ImGui.ColorEdit4("##charTotalThreshold3Color", ref color, ImGuiColorEditFlags.NoInputs))
                 {
                     Plugin.Config.CharacterTotalThreshold3Color = color;
-                    ConfigHelper.Save(Plugin.Config);
                 }
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    ConfigHelper.Save(Plugin.Config);
             })
             .Unindent()
             .EndIf();

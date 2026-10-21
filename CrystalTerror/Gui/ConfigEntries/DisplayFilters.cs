@@ -63,50 +63,77 @@ public class DisplayFilters : ConfigEntry
             .Widget(() =>
             {
                 var val = Plugin.Config.ShowFireElement;
-                ImGui.Checkbox("Fire", ref val);
-                Plugin.Config.ShowFireElement = val;
+                if (ImGui.Checkbox("Fire", ref val))
+                {
+                    Plugin.Config.ShowFireElement = val;
+                    ConfigHelper.Save(Plugin.Config);
+                }
                 ImGui.SameLine();
-                
+
                 val = Plugin.Config.ShowIceElement;
-                ImGui.Checkbox("Ice", ref val);
-                Plugin.Config.ShowIceElement = val;
+                if (ImGui.Checkbox("Ice", ref val))
+                {
+                    Plugin.Config.ShowIceElement = val;
+                    ConfigHelper.Save(Plugin.Config);
+                }
                 ImGui.SameLine();
-                
+
                 val = Plugin.Config.ShowWindElement;
-                ImGui.Checkbox("Wind", ref val);
-                Plugin.Config.ShowWindElement = val;
-                
+                if (ImGui.Checkbox("Wind", ref val))
+                {
+                    Plugin.Config.ShowWindElement = val;
+                    ConfigHelper.Save(Plugin.Config);
+                }
+
                 val = Plugin.Config.ShowLightningElement;
-                ImGui.Checkbox("Lightning", ref val);
-                Plugin.Config.ShowLightningElement = val;
+                if (ImGui.Checkbox("Lightning", ref val))
+                {
+                    Plugin.Config.ShowLightningElement = val;
+                    ConfigHelper.Save(Plugin.Config);
+                }
                 ImGui.SameLine();
-                
+
                 val = Plugin.Config.ShowEarthElement;
-                ImGui.Checkbox("Earth", ref val);
-                Plugin.Config.ShowEarthElement = val;
+                if (ImGui.Checkbox("Earth", ref val))
+                {
+                    Plugin.Config.ShowEarthElement = val;
+                    ConfigHelper.Save(Plugin.Config);
+                }
                 ImGui.SameLine();
-                
+
                 val = Plugin.Config.ShowWaterElement;
-                ImGui.Checkbox("Water", ref val);
-                Plugin.Config.ShowWaterElement = val;
+                if (ImGui.Checkbox("Water", ref val))
+                {
+                    Plugin.Config.ShowWaterElement = val;
+                    ConfigHelper.Save(Plugin.Config);
+                }
             })
 
             .Section("Crystal Types")
             .Widget(() =>
             {
                 var val = Plugin.Config.ShowShards;
-                ImGui.Checkbox("Shards", ref val);
-                Plugin.Config.ShowShards = val;
+                if (ImGui.Checkbox("Shards", ref val))
+                {
+                    Plugin.Config.ShowShards = val;
+                    ConfigHelper.Save(Plugin.Config);
+                }
                 ImGui.SameLine();
-                
+
                 val = Plugin.Config.ShowCrystals;
-                ImGui.Checkbox("Crystals", ref val);
-                Plugin.Config.ShowCrystals = val;
+                if (ImGui.Checkbox("Crystals", ref val))
+                {
+                    Plugin.Config.ShowCrystals = val;
+                    ConfigHelper.Save(Plugin.Config);
+                }
                 ImGui.SameLine();
-                
+
                 val = Plugin.Config.ShowClusters;
-                ImGui.Checkbox("Clusters", ref val);
-                Plugin.Config.ShowClusters = val;
+                if (ImGui.Checkbox("Clusters", ref val))
+                {
+                    Plugin.Config.ShowClusters = val;
+                    ConfigHelper.Save(Plugin.Config);
+                }
             });
     }
 }

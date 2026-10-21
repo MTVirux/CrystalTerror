@@ -128,6 +128,7 @@ public class Configuration : IPluginConfiguration
     /// <summary>
     /// Whether the main window is in edit mode for custom character ordering.
     /// </summary>
+    [Newtonsoft.Json.JsonIgnore]
     public bool IsEditMode { get; set; } = false;
 
     // ===== Warning Thresholds =====
