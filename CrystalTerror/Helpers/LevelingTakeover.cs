@@ -237,8 +237,11 @@ public sealed class LevelingTakeover : IDisposable
         if (retainer != null)
         {
             if (liveLevel != retainer.Level)
+            {
                 Svc.Log.Information($"[LevelingTakeover] {retainer.Name} is now Lv{liveLevel} (was Lv{retainer.Level})");
-            retainer.Level = liveLevel;
+                retainer.Level = liveLevel;
+                ConfigHelper.MarkCharactersDirty();
+            }
 
             picked = VentureHelper.DetermineVenture(arm.Character, retainer, this.config, Svc.Log);
         }
@@ -302,6 +305,7 @@ public sealed class LevelingTakeover : IDisposable
         {
             retainer.CurrentVentureId = ventureId;
             retainer.VentureEndsAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + (venture?.MaxTimeMinutes ?? 60) * 60;
+            ConfigHelper.MarkCharactersDirty();
         }
 
         Svc.Log.Information($"[LevelingTakeover] ✓ Assigned {venture?.Name ?? ventureId.ToString()} to {arm.RetainerName}");

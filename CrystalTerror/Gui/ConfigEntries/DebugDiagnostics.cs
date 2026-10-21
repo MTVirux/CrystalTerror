@@ -44,14 +44,13 @@ public class DebugDiagnostics : ConfigEntry
                     return;
                 }
 
-                if (ImGui.BeginTable("ct_perf_table", 8,
+                if (ImGui.BeginTable("ct_perf_table", 7,
                         ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
                 {
                     ImGui.TableSetupColumn("Time");
                     ImGui.TableSetupColumn("Source");
                     ImGui.TableSetupColumn("Import");
                     ImGui.TableSetupColumn("Merge");
-                    ImGui.TableSetupColumn("Save");
                     ImGui.TableSetupColumn("Total");
                     ImGui.TableSetupColumn("Ret");
                     ImGui.TableSetupColumn("RetIPC");
@@ -70,8 +69,6 @@ public class DebugDiagnostics : ConfigEntry
                         ImGui.TextUnformatted(s.ImportMs.ToString("F1"));
                         ImGui.TableNextColumn();
                         ImGui.TextUnformatted(s.MergeMs.ToString("F1"));
-                        ImGui.TableNextColumn();
-                        ImGui.TextUnformatted(s.SaveMs.ToString("F1"));
                         ImGui.TableNextColumn();
                         if (s.TotalMs >= SlowThresholdMs)
                             ImGui.TextColored(SlowColor, s.TotalMs.ToString("F1"));

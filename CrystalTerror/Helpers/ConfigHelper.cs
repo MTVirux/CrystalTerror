@@ -14,14 +14,12 @@ internal static class ConfigHelper
     private static readonly object _characterLock = new();
 
     /// <summary>
-    /// Timestamp of last save operation (for throttling).
+    /// How long imported character changes stay in memory before <see cref="SaveIfDue"/> writes them.
     /// </summary>
-    private static DateTime _lastSaveTime = DateTime.MinValue;
+    private const double CharacterSaveDelaySeconds = 30;
 
-    /// <summary>
-    /// Minimum interval between saves in milliseconds (similar to AutoRetainer's approach).
-    /// </summary>
-    private const int MinSaveIntervalMs = 1000;
+    /// <summary>When character data first changed since the last save; null when nothing is unsaved.</summary>
+    private static DateTime? _charactersDirtySince;
 
     /// <summary>
     /// Serializes the background config writer state. Distinct from <see cref="_characterLock"/>
@@ -114,28 +112,63 @@ internal static class ConfigHelper
     }
 
     /// <summary>
-    /// Saves the plugin configuration and syncs the character list.
-    /// Thread-safe with locking and throttling to prevent race conditions.
+    /// Records that character data changed in memory. The write is deferred to <see cref="SaveIfDue"/>
+    /// or <see cref="SaveIfDirty"/>, so frequent imports (inventory events, retainer menus) don't each
+    /// rewrite the whole config.
+    /// </summary>
+    public static void MarkCharactersDirty()
+    {
+        lock (_characterLock)
+            _charactersDirtySince ??= DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Writes unsaved character changes once they are <see cref="CharacterSaveDelaySeconds"/> old.
+    /// Held while at a summoning bell so an AutoRetainer pass ends in a single write.
+    /// </summary>
+    public static void SaveIfDue(Configuration config, List<StoredCharacter> characters)
+    {
+        DateTime? dirtySince;
+        lock (_characterLock)
+            dirtySince = _charactersDirtySince;
+
+        if (dirtySince == null || Svc.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.OccupiedSummoningBell])
+            return;
+
+        if ((DateTime.UtcNow - dirtySince.Value).TotalSeconds >= CharacterSaveDelaySeconds)
+            SaveAndSync(config, characters);
+    }
+
+    /// <summary>
+    /// Writes unsaved character changes right away, if there are any.
+    /// </summary>
+    public static void SaveIfDirty(Configuration config, List<StoredCharacter> characters)
+    {
+        bool dirty;
+        lock (_characterLock)
+            dirty = _charactersDirtySince != null;
+
+        if (dirty)
+            SaveAndSync(config, characters);
+    }
+
+    /// <summary>
+    /// Syncs the character list into the config and queues a write. Rapid calls coalesce in the
+    /// background writer, so no save is ever dropped.
     /// </summary>
     /// <param name="config">The configuration to save.</param>
     /// <param name="characters">The character list to sync (will be updated in-place atomically).</param>
-    /// <param name="force">If true, bypasses throttling and forces an immediate save.</param>
-    public static bool SaveAndSync(Configuration config, List<StoredCharacter> characters, bool force = false)
+    public static bool SaveAndSync(Configuration config, List<StoredCharacter> characters)
     {
         lock (_characterLock)
         {
             try
             {
-                // Throttle saves unless forced (similar to AutoRetainer's EzThrottler pattern)
-                var now = DateTime.UtcNow;
-                if (!force && (now - _lastSaveTime).TotalMilliseconds < MinSaveIntervalMs)
-                {
-                    Svc.Log.Debug($"[ConfigHelper] Save throttled (last save {(now - _lastSaveTime).TotalMilliseconds:F0}ms ago)");
-                    return true; // Not an error, just throttled
-                }
+                // Cleared up front so a failed save isn't retried by SaveIfDue on every frame.
+                _charactersDirtySince = null;
 
                 var originalCount = characters.Count;
-                Svc.Log.Debug($"[ConfigHelper] SaveAndSync: Starting with {originalCount} characters (force={force})");
+                Svc.Log.Debug($"[ConfigHelper] SaveAndSync: Starting with {originalCount} characters");
 
                 // Deduplicate characters before persisting
                 var deduped = DeduplicateCharacters(characters);
@@ -185,17 +218,6 @@ internal static class ConfigHelper
                 
                 // Sync to config
                 config.Characters = new List<StoredCharacter>(characters);
-                _lastSaveTime = now;
-
-                if (force)
-                {
-                    // Durable synchronous write (used on shutdown). Flush the async writer first so
-                    // we don't race the background thread writing the same file.
-                    FlushPendingWrites();
-                    Svc.PluginInterface.SavePluginConfig(config);
-                    Svc.Log.Debug($"[ConfigHelper] SaveAndSync: forced synchronous save with {characters.Count} characters");
-                    return true;
-                }
 
                 // Hand the (potentially slow) disk write to a background writer so it never blocks
                 // the framework thread. Serialize an isolated snapshot under the lock so the writer
@@ -269,17 +291,13 @@ internal static class ConfigHelper
     }
 
     /// <summary>
-    /// Cancels any queued snapshot and waits (bounded) for an in-flight background write to finish,
-    /// so a forced synchronous save can take over the file without racing the writer thread.
+    /// Waits (bounded) for the background writer to finish everything queued so far.
     /// </summary>
-    private static void FlushPendingWrites()
+    private static void WaitForWriter()
     {
         Task task;
         lock (_writerLock)
-        {
-            _pendingSnapshot = null;
             task = _writerTask;
-        }
 
         try { task.Wait(TimeSpan.FromSeconds(5)); } catch { }
     }
@@ -357,8 +375,9 @@ internal static class ConfigHelper
     public static object CharacterLock => _characterLock;
 
     /// <summary>
-    /// Saves the configuration without syncing the character list.
-    /// Thread-safe with locking.
+    /// Queues a save of the configuration without syncing the character list.
+    /// Goes through the same writer as character saves so an older queued snapshot can't land
+    /// after this one and revert the setting on disk.
     /// </summary>
     public static bool Save(Configuration config)
     {
@@ -366,8 +385,8 @@ internal static class ConfigHelper
         {
             try
             {
-                Svc.PluginInterface.SavePluginConfig(config);
-                Svc.Log.Debug("[ConfigHelper] Config saved (settings only)");
+                QueueBackgroundSave(CloneConfiguration(config));
+                Svc.Log.Debug("[ConfigHelper] Config save queued (settings only)");
                 return true;
             }
             catch (Exception ex)
@@ -379,12 +398,12 @@ internal static class ConfigHelper
     }
 
     /// <summary>
-    /// Forces an immediate save, bypassing throttling.
-    /// Use for critical saves like plugin shutdown.
+    /// Final save on plugin unload: queues unsaved character changes, if any, then waits for the
+    /// background writer to finish.
     /// </summary>
-    public static bool ForceSave(Configuration config, List<StoredCharacter> characters)
+    public static void SaveOnShutdown(Configuration config, List<StoredCharacter> characters)
     {
-        Svc.Log.Information("[ConfigHelper] Force save requested");
-        return SaveAndSync(config, characters, force: true);
+        SaveIfDirty(config, characters);
+        WaitForWriter();
     }
 }

@@ -162,10 +162,13 @@ public static class RetainerStatsHelper
                 if (retainer == null)
                     return;
 
-                // Update stats
+                if (retainer.Ilvl == itemLevel.Value && retainer.Gathering == gathering && retainer.Perception == perception)
+                    return;
+
                 retainer.Ilvl = itemLevel.Value;
                 retainer.Gathering = gathering;
                 retainer.Perception = perception;
+                ConfigHelper.MarkCharactersDirty();
 
                 Svc.Log.Debug($"Updated stats for retainer {retainer.Name}: Ilvl={itemLevel}, Gathering={gathering}, Perception={perception}");
             }

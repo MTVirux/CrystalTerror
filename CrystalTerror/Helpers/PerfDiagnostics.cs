@@ -16,7 +16,6 @@ public static class PerfDiagnostics
         public string Source = string.Empty;
         public double ImportMs;
         public double MergeMs;
-        public double SaveMs;
         public double TotalMs;
         public int RetainerCount;
         public double RetainerTotalMs;
@@ -43,7 +42,7 @@ public static class PerfDiagnostics
 
     /// <summary>Records a completed import sample, folding in any pending retainer sub-timing.</summary>
     [Conditional("DEBUG")]
-    public static void RecordImport(string source, double importMs, double mergeMs, double saveMs)
+    public static void RecordImport(string source, double importMs, double mergeMs)
     {
         var rt = _pendingRetainer;
         _pendingRetainer = null;
@@ -54,8 +53,7 @@ public static class PerfDiagnostics
             Source = source,
             ImportMs = importMs,
             MergeMs = mergeMs,
-            SaveMs = saveMs,
-            TotalMs = importMs + mergeMs + saveMs,
+            TotalMs = importMs + mergeMs,
             RetainerCount = rt?.Count ?? 0,
             RetainerTotalMs = rt?.TotalMs ?? 0,
             RetainerIpcMs = rt?.IpcMs ?? 0,
@@ -93,8 +91,8 @@ public static class PerfDiagnostics
         sb.AppendLine($"CrystalTerror import-timing report (v{ver})");
         sb.AppendLine($"Generated {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}Z - {samples.Count} sample(s) - all times in ms");
         sb.AppendLine();
-        sb.AppendLine(Row("Time(UTC)", "Source", "Import", "Merge", "Save", "Total", "Ret", "RetIPC", "RetTot"));
-        sb.AppendLine(new string('-', 96));
+        sb.AppendLine(Row("Time(UTC)", "Source", "Import", "Merge", "Total", "Ret", "RetIPC", "RetTot"));
+        sb.AppendLine(new string('-', 87));
         foreach (var s in samples)
         {
             sb.AppendLine(Row(
@@ -102,7 +100,6 @@ public static class PerfDiagnostics
                 s.Source,
                 s.ImportMs.ToString("F1"),
                 s.MergeMs.ToString("F1"),
-                s.SaveMs.ToString("F1"),
                 s.TotalMs.ToString("F1"),
                 s.RetainerCount.ToString(),
                 s.RetainerIpcMs.ToString("F1"),
@@ -111,6 +108,6 @@ public static class PerfDiagnostics
         return sb.ToString();
     }
 
-    private static string Row(string time, string src, string import, string merge, string save, string total, string ret, string retIpc, string retTot)
-        => $"{time,-9}  {src,-16}  {import,8}  {merge,7}  {save,7}  {total,8}  {ret,4}  {retIpc,8}  {retTot,8}";
+    private static string Row(string time, string src, string import, string merge, string total, string ret, string retIpc, string retTot)
+        => $"{time,-9}  {src,-16}  {import,8}  {merge,7}  {total,8}  {ret,4}  {retIpc,8}  {retTot,8}";
 }

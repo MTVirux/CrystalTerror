@@ -143,11 +143,10 @@ public static class AutoRetainerHelper
     }
 
     /// <summary>
-    /// Handler for RetainerList addon opening. Imports current character and retainer data.
+    /// Handler for RetainerList addon opening. Imports current character and retainer data into memory;
+    /// the write happens once the player leaves the summoning bell.
     /// </summary>
-    public static void HandleRetainerListSetup(
-        List<StoredCharacter> characters,
-        Configuration config)
+    public static void HandleRetainerListSetup(List<StoredCharacter> characters)
     {
         try
         {
@@ -157,7 +156,6 @@ public static class AutoRetainerHelper
             if (sc != null)
             {
                 CharacterHelper.MergeInto(characters, new[] { sc }, CharacterHelper.MergePolicy.Merge);
-                ConfigHelper.SaveAndSync(config, characters);
             }
         }
         catch (Exception ex)
@@ -257,6 +255,7 @@ public static class AutoRetainerHelper
                 // Update local retainer state for immediate re-calculation accuracy
                 retainer.CurrentVentureId = ventureId;
                 retainer.VentureEndsAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + (venture?.MaxTimeMinutes ?? 60) * 60;
+                ConfigHelper.MarkCharactersDirty();
             }
             else
             {

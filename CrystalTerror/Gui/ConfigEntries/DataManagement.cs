@@ -19,8 +19,7 @@ public class DataManagement : ConfigEntry
             {
                 if (ImGui.Button("Force Import Current Character"))
                 {
-                    var sc = CharacterHelper.ImportMergeSaveTimed("Manual", Plugin.Characters, Plugin.Config, CharacterHelper.MergePolicy.Merge);
-                    if (sc != null)
+                    if (CharacterHelper.ImportCurrentCharacterAndSave(Plugin.Characters, Plugin.Config, CharacterHelper.MergePolicy.Merge))
                         Plugin.InvalidateSortCache();
                 }
 

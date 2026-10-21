@@ -12,7 +12,7 @@ public static class InventoryHelper
 {
     private static CrystalTerrorPlugin? plugin;
     private static DateTime lastUpdate = DateTime.MinValue;
-    private const double UpdateThrottleMs = 500; // Throttle updates to prevent excessive saves
+    private const double UpdateThrottleMs = 500;
 
     public static void Initialize(CrystalTerrorPlugin owner)
     {
@@ -77,7 +77,6 @@ public static class InventoryHelper
             if (inventory1 != GameInventoryType.Crystals && inventory2 != GameInventoryType.Crystals)
                 return;
 
-            // Throttle updates to prevent excessive saves
             var now = DateTime.UtcNow;
             if ((now - lastUpdate).TotalMilliseconds < UpdateThrottleMs)
                 return;
@@ -88,7 +87,7 @@ public static class InventoryHelper
 
             lastUpdate = now;
 
-            CharacterHelper.ImportCurrentCharacterAndSave(plugin.Characters, plugin.Config, source: "Inventory");
+            CharacterHelper.ImportAndMergeTimed("Inventory", plugin.Characters, CharacterHelper.MergePolicy.Overwrite);
         }
         catch (Exception ex)
         {

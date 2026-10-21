@@ -73,44 +73,42 @@ public static class CharacterHelper
     }
 
     /// <summary>
-    /// Imports the current character, merges into the character list, and saves the config.
-    /// This is a convenience method that combines the common pattern of import + merge + save.
+    /// Imports the current character, merges into the character list, and saves right away if
+    /// anything changed. For explicit user actions; automatic imports use <see cref="ImportAndMergeTimed"/>.
     /// </summary>
     /// <param name="characters">The character list to merge into.</param>
     /// <param name="config">The configuration to save.</param>
     /// <param name="policy">The merge policy to use (defaults to Overwrite).</param>
-    /// <returns>True if a character was successfully imported and saved.</returns>
+    /// <returns>True if a character was successfully imported.</returns>
     public static bool ImportCurrentCharacterAndSave(List<StoredCharacter> characters, Configuration config, MergePolicy policy = MergePolicy.Overwrite, string source = "Manual")
     {
-        return ImportMergeSaveTimed(source, characters, config, policy) != null;
+        var sc = ImportAndMergeTimed(source, characters, policy);
+        ConfigHelper.SaveIfDirty(config, characters);
+        return sc != null;
     }
 
     /// <summary>
-    /// Imports the current character, merges, and saves - timing each stage and recording a
-    /// diagnostics sample (DEBUG builds only) tagged by <paramref name="source"/>.
+    /// Imports the current character and merges it in memory - timing each stage and recording a
+    /// diagnostics sample (DEBUG builds only) tagged by <paramref name="source"/>. Changes are
+    /// marked dirty and written later by <see cref="ConfigHelper.SaveIfDue"/>.
     /// Returns the imported character, or null if the player was unavailable.
     /// </summary>
-    public static StoredCharacter? ImportMergeSaveTimed(string source, List<StoredCharacter> characters, Configuration config, MergePolicy policy)
+    public static StoredCharacter? ImportAndMergeTimed(string source, List<StoredCharacter> characters, MergePolicy policy)
     {
         var swImport = System.Diagnostics.Stopwatch.StartNew();
         var sc = ImportCurrentCharacter();
         swImport.Stop();
 
-        double mergeMs = 0, saveMs = 0;
+        double mergeMs = 0;
         if (sc != null)
         {
             var swMerge = System.Diagnostics.Stopwatch.StartNew();
             MergeInto(characters, new[] { sc }, policy);
             swMerge.Stop();
             mergeMs = swMerge.Elapsed.TotalMilliseconds;
-
-            var swSave = System.Diagnostics.Stopwatch.StartNew();
-            ConfigHelper.SaveAndSync(config, characters);
-            swSave.Stop();
-            saveMs = swSave.Elapsed.TotalMilliseconds;
         }
 
-        PerfDiagnostics.RecordImport(source, swImport.Elapsed.TotalMilliseconds, mergeMs, saveMs);
+        PerfDiagnostics.RecordImport(source, swImport.Elapsed.TotalMilliseconds, mergeMs);
         return sc;
     }
 
@@ -409,15 +407,18 @@ public static class CharacterHelper
     /// Merge imported characters into an existing target list using the given policy.
     /// Now uses ContentId as the primary identifier when available.
     /// Thread-safe: acquires the character lock during merge operations.
+    /// Marks the character data dirty when the merge changed anything other than timestamps.
     /// </summary>
-    public static void MergeInto(List<StoredCharacter> target, IEnumerable<StoredCharacter> imported, MergePolicy policy = MergePolicy.Merge)
+    /// <returns>True if the merge changed any persisted character data.</returns>
+    public static bool MergeInto(List<StoredCharacter> target, IEnumerable<StoredCharacter> imported, MergePolicy policy = MergePolicy.Merge)
     {
         if (target == null) throw new ArgumentNullException(nameof(target));
-        if (imported == null) return;
+        if (imported == null) return false;
 
         lock (ConfigHelper.CharacterLock)
         {
             var originalCount = target.Count;
+            var changed = false;
             Svc.Log.Debug($"[CrystalTerror] MergeInto: Starting with {originalCount} characters, policy={policy}");
 
             foreach (var sc in imported)
@@ -429,10 +430,12 @@ public static class CharacterHelper
                 {
                     RetainerHelper.SetOwnerForRetainers(sc);
                     target.Add(sc);
+                    changed = true;
                     Svc.Log.Debug($"[CrystalTerror] Added new character: {sc.Name}@{sc.World} (CID={sc.ContentId:X16})");
                     continue;
                 }
 
+                var before = DataFingerprint(existing);
                 Svc.Log.Debug($"[CrystalTerror] Merging into existing character: {existing.Name}@{existing.World} (CID={existing.ContentId:X16})");
 
                 // Update existing character's ContentId if it was missing
@@ -462,11 +465,21 @@ public static class CharacterHelper
                         MergeMerge(existing, sc);
                         break;
                 }
+
+                if (DataFingerprint(existing) != before)
+                    changed = true;
             }
 
-            Svc.Log.Debug($"[CrystalTerror] MergeInto: Finished with {target.Count} characters (was {originalCount})");
+            Svc.Log.Debug($"[CrystalTerror] MergeInto: Finished with {target.Count} characters (was {originalCount}), changed={changed}");
+            if (changed)
+                ConfigHelper.MarkCharactersDirty();
+            return changed;
         }
     }
+
+    // LastUpdateUtc is left out because every import bumps it.
+    private static string DataFingerprint(StoredCharacter c)
+        => JsonConvert.SerializeObject(new { c.ContentId, c.Name, c.World, c.HomeWorldId, c.ServiceAccount, c.Inventory, c.Retainers });
 
     /// <summary>
     /// Finds an existing character in the list by ContentId or Name+World.
